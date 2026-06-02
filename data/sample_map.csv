@@ -1,0 +1,25 @@
+# Sample road network for Traffic Event System
+# Format: type,id,param1,param2,param3,param4,param5
+#
+# Intersection: intersection,id,name,x,y
+# Road: road,id,startIntersectionId,endIntersectionId,distance,speedLimit
+
+intersection,INT-01,Nguyen Hue - Le Loi,100,300
+intersection,INT-02,Le Loi - Pasteur,300,300
+intersection,INT-03,Pasteur - Nguyen Thi Minh Khai,300,100
+intersection,INT-04,Nguyen Hue - Ton Duc Thang,100,500
+intersection,INT-05,Hai Ba Trung - Le Loi,500,300
+intersection,INT-06,Hai Ba Trung - NTMK,500,100
+
+road,RD-01,INT-01,INT-02,200,50
+road,RD-02,INT-02,INT-01,200,50
+road,RD-03,INT-02,INT-03,200,40
+road,RD-04,INT-03,INT-02,200,40
+road,RD-05,INT-01,INT-04,200,60
+road,RD-06,INT-04,INT-01,200,60
+road,RD-07,INT-02,INT-05,200,50
+road,RD-08,INT-05,INT-02,200,50
+road,RD-09,INT-05,INT-06,200,40
+road,RD-10,INT-06,INT-05,200,40
+road,RD-11,INT-03,INT-06,200,50
+road,RD-12,INT-06,INT-03,200,50

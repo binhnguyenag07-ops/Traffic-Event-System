@@ -1,0 +1,25 @@
+{
+  "description": "Sample road network for Traffic Event System",
+  "intersections": [
+    { "id": "INT-01", "name": "Nguyen Hue - Le Loi", "x": 100, "y": 300 },
+    { "id": "INT-02", "name": "Le Loi - Pasteur", "x": 300, "y": 300 },
+    { "id": "INT-03", "name": "Pasteur - Nguyen Thi Minh Khai", "x": 300, "y": 100 },
+    { "id": "INT-04", "name": "Nguyen Hue - Ton Duc Thang", "x": 100, "y": 500 },
+    { "id": "INT-05", "name": "Hai Ba Trung - Le Loi", "x": 500, "y": 300 },
+    { "id": "INT-06", "name": "Hai Ba Trung - NTMK", "x": 500, "y": 100 }
+  ],
+  "roads": [
+    { "id": "RD-01", "startIntersectionId": "INT-01", "endIntersectionId": "INT-02", "distance": 200, "speedLimit": 50 },
+    { "id": "RD-02", "startIntersectionId": "INT-02", "endIntersectionId": "INT-01", "distance": 200, "speedLimit": 50 },
+    { "id": "RD-03", "startIntersectionId": "INT-02", "endIntersectionId": "INT-03", "distance": 200, "speedLimit": 40 },
+    { "id": "RD-04", "startIntersectionId": "INT-03", "endIntersectionId": "INT-02", "distance": 200, "speedLimit": 40 },
+    { "id": "RD-05", "startIntersectionId": "INT-01", "endIntersectionId": "INT-04", "distance": 200, "speedLimit": 60 },
+    { "id": "RD-06", "startIntersectionId": "INT-04", "endIntersectionId": "INT-01", "distance": 200, "speedLimit": 60 },
+    { "id": "RD-07", "startIntersectionId": "INT-02", "endIntersectionId": "INT-05", "distance": 200, "speedLimit": 50 },
+    { "id": "RD-08", "startIntersectionId": "INT-05", "endIntersectionId": "INT-02", "distance": 200, "speedLimit": 50 },
+    { "id": "RD-09", "startIntersectionId": "INT-05", "endIntersectionId": "INT-06", "distance": 200, "speedLimit": 40 },
+    { "id": "RD-10", "startIntersectionId": "INT-06", "endIntersectionId": "INT-05", "distance": 200, "speedLimit": 40 },
+    { "id": "RD-11", "startIntersectionId": "INT-03", "endIntersectionId": "INT-06", "distance": 200, "speedLimit": 50 },
+    { "id": "RD-12", "startIntersectionId": "INT-06", "endIntersectionId": "INT-03", "distance": 200, "speedLimit": 50 }
+  ]
+}
