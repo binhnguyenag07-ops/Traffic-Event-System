@@ -31,16 +31,16 @@ Frontend (React) ──→ Backend API ──→ Service ──→ Domain / Rout
 | Frontend View | `frontend/src/components/` | Hiển thị map, vehicle, event, statistics |
 | Frontend State | `frontend/src/hooks/` | State management & API call |
 | Frontend API | `frontend/src/api/` | HTTP client contract |
-| API | `hyo.traffic.api` | HttpServer, controllers, DTOs |
-| Service | `hyo.traffic.service` | Use-case boundary (interface) |
-| Service Impl | `hyo.traffic.service.impl` | Triển khai service |
-| Domain | `hyo.traffic.domain.*` | Model nghiệp vụ cốt lõi |
-| Routing | `hyo.traffic.routing` | Strategy tìm đường |
-| Simulation | `hyo.traffic.simulation` | Tick engine, snapshot |
-| Observer | `hyo.traffic.observer` | Event bus, listener |
-| Persistence | `hyo.traffic.persistence` | Map loading/generation |
-| Exception | `hyo.traffic.exception` | Lỗi nghiệp vụ |
-| Config | `hyo.traffic.config` | Cấu hình runtime |
+| API | `team.traffic.api` | HttpServer, controllers, DTOs |
+| Service | `team.traffic.service` | Use-case boundary (interface) |
+| Service Impl | `team.traffic.service.impl` | Triển khai service |
+| Domain | `team.traffic.domain.*` | Model nghiệp vụ cốt lõi |
+| Routing | `team.traffic.routing` | Strategy tìm đường |
+| Simulation | `team.traffic.simulation` | Tick engine, snapshot |
+| Observer | `team.traffic.observer` | Event bus, listener |
+| Persistence | `team.traffic.persistence` | Map loading/generation |
+| Exception | `team.traffic.exception` | Lỗi nghiệp vụ |
+| Config | `team.traffic.config` | Cấu hình runtime |
 
 ### Nguyên tắc
 
@@ -58,42 +58,102 @@ Frontend (React) ──→ Backend API ──→ Service ──→ Domain / Rout
 classDiagram
     direction LR
 
+    %% Network Domain
     class RoadNetwork {
         +addIntersection()
+        +removeIntersection()
         +addRoad()
+        +removeRoad()
         +findOutgoingRoads()
+        +findIncomingRoads()
         +updateRoadCondition()
+        +loadMap()
+        +generateSyntheticMap()
     }
-
     class Intersection {
         -id: String
         -name: String
         -x: double
         -y: double
     }
-
     class Road {
         -id: String
+        -startIntersectionId: String
+        -endIntersectionId: String
         -distance: double
         -speedLimit: double
+        -travelCost: double
         -condition: RoadCondition
         +isAvailable(): boolean
     }
+    class RoadCondition {
+        -congestionLevel: double
+        -vehicleDensity: double
+        -status: RoadStatus
+    }
+    class RoadStatus {
+        <<enumeration>>
+        OPEN
+        CONGESTED
+        BLOCKED
+        CLOSED
+    }
 
+    %% Vehicle Domain
     class Vehicle {
         <<abstract>>
         -id: String
         -currentIntersectionId: String
         -destinationIntersectionId: String
         -currentRoute: Route
+        -movementSpeed: double
+        -status: VehicleStatus
         +getType(): VehicleType*
         +moveOneStep()
         +recomputeRoute()
     }
     class Car
-    class Bus
-    class EmergencyVehicle
+    class Bus {
+        -passengerCapacity: int
+    }
+    class EmergencyVehicle {
+        -priorityLevel: int
+    }
+    class VehicleFactory {
+        +createVehicle()
+        +createCar()
+        +createBus()
+        +createEmergencyVehicle()
+    }
+    class VehicleType {
+        <<enumeration>>
+        CAR
+        BUS
+        EMERGENCY
+    }
 
+    %% Routing Domain
+    class Route {
+        -steps: List~RouteStep~
+        -totalDistance: double
+        -estimatedTravelTime: double
+        -totalCost: double
+    }
+    class RouteRequest {
+        -vehicleId: String
+        -preference: RoutePreference
+    }
+    class RouteResult {
+        -route: Route
+        -computationTimeMillis: long
+    }
+    class RoutePreference {
+        <<enumeration>>
+        SHORTEST_DISTANCE
+        SHORTEST_TIME
+        CONGESTION_AWARE
+    }
+    
     class PathFindingStrategy {
         <<interface>>
         +getName(): String
@@ -103,54 +163,85 @@ classDiagram
     class BfsPathFindingStrategy
     class DijkstraPathFindingStrategy
     class AStarPathFindingStrategy
+    class Heuristic {
+        <<interface>>
+        +estimate(Intersection, Intersection): double
+    }
+    class RoutingStrategyRegistry
 
+    %% Event Domain
     class TrafficEvent {
         <<abstract>>
+        -id: String
         -affectedRoadId: String
         -startTick: long
+        -durationTicks: long
+        -status: TrafficEventStatus
         +getType(): TrafficEventType*
         +apply()
         +resolve()
     }
-    class CongestionEvent
-    class AccidentEvent
+    class CongestionEvent {
+        -congestionIncrease: double
+    }
+    class AccidentEvent {
+        -capacityReduction: double
+    }
     class RoadClosureEvent
     class TrafficLightDelayEvent
+    class TrafficEventBus {
+        +publish(TrafficEvent)
+        +subscribe(TrafficEventListener)
+    }
 
+    %% Simulation & Stats Domain
     class TrafficSimulator {
         +start()
         +pause()
         +advanceOneTick()
         +createSnapshot()
     }
+    class SimulationSnapshot
+    class TrafficStatistics
+    class AlgorithmStatistics
 
-    class TrafficEventBus {
-        +publish(TrafficEvent)
-        +subscribe(TrafficEventListener)
-    }
+    %% Services
+    class RoadNetworkService { <<interface>> }
+    class RoutingService { <<interface>> }
+    class VehicleService { <<interface>> }
+    class TrafficEventService { <<interface>> }
+    class SimulationService { <<interface>> }
+    class StatisticsService { <<interface>> }
 
-    RoadNetwork "1" o-- "*" Intersection
-    RoadNetwork "1" o-- "*" Road
+    %% Relationships
+    RoadNetwork "1" *-- "*" Intersection
+    RoadNetwork "1" *-- "*" Road
     Road --> RoadCondition
+    RoadCondition --> RoadStatus
 
     Vehicle <|-- Car
     Vehicle <|-- Bus
     Vehicle <|-- EmergencyVehicle
     Vehicle --> Route
-    Vehicle --> RoadNetwork
+    VehicleFactory --> Vehicle
 
     PathFindingStrategy <|.. BfsPathFindingStrategy
     PathFindingStrategy <|.. DijkstraPathFindingStrategy
     PathFindingStrategy <|.. AStarPathFindingStrategy
+    AStarPathFindingStrategy --> Heuristic
+    RoutingStrategyRegistry "1" *-- "*" PathFindingStrategy
 
     TrafficEvent <|-- CongestionEvent
     TrafficEvent <|-- AccidentEvent
     TrafficEvent <|-- RoadClosureEvent
     TrafficEvent <|-- TrafficLightDelayEvent
-
     TrafficSimulator --> RoadNetwork
     TrafficSimulator --> TrafficEventBus
     TrafficEventBus --> TrafficEvent
+
+    RoutingService --> RoutingStrategyRegistry
+    VehicleService --> VehicleFactory
+    TrafficEventService --> TrafficEventBus
 ```
 
 ---
@@ -223,7 +314,7 @@ Traffic-Event-System/
 │       ├── hooks/
 │       └── components/
 └── src/
-    ├── main/java/hyo/traffic/
+    ├── main/java/team/traffic/
     │   ├── App.java                 # Entry point
     │   ├── api/                     # Controllers, DTOs, HttpServer
     │   ├── config/                  # ApplicationConfig
@@ -240,7 +331,7 @@ Traffic-Event-System/
     │   ├── service/                 # Service interfaces
     │   │   └── impl/                # Service implementations (skeleton)
     │   └── simulation/              # TrafficSimulator, Clock, Snapshot
-    └── test/java/hyo/traffic/
+    └── test/java/team/traffic/
         └── AppTest.java
 ```
 
