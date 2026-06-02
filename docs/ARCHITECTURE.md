@@ -59,6 +59,15 @@ classDiagram
     direction LR
 
     %% Network Domain
+    class LocationType {
+        <<enumeration>>
+        SCHOOL
+        HOSPITAL
+        BAR
+        RESIDENTIAL
+        COMMERCIAL
+        NORMAL
+    }
     class RoadNetwork {
         +addIntersection()
         +removeIntersection()
@@ -75,6 +84,7 @@ classDiagram
         -name: String
         -x: double
         -y: double
+        -locationType: LocationType
     }
     class Road {
         -id: String
@@ -83,6 +93,8 @@ classDiagram
         -distance: double
         -speedLimit: double
         -travelCost: double
+        -capacity: int
+        -currentVehicleCount: int
         -condition: RoadCondition
         +isAvailable(): boolean
     }
@@ -108,6 +120,8 @@ classDiagram
         -currentRoute: Route
         -movementSpeed: double
         -status: VehicleStatus
+        -accidentProbabilityModifier: double
+        -lastVisitedLocation: LocationType
         +getType(): VehicleType*
         +moveOneStep()
         +recomputeRoute()
@@ -186,6 +200,7 @@ classDiagram
     }
     class AccidentEvent {
         -capacityReduction: double
+        -causingVehicleId: String
     }
     class RoadClosureEvent
     class TrafficLightDelayEvent
@@ -243,6 +258,25 @@ classDiagram
     VehicleService --> VehicleFactory
     TrafficEventService --> TrafficEventBus
 ```
+
+---
+
+## 3.1 Luồng hoạt động Tai nạn & Ùn tắc (Accident & Congestion Workflow)
+
+Hệ thống mô phỏng nâng cao hỗ trợ các logic thực tế sau:
+
+1. **Sinh lưu lượng theo Địa điểm (Location-based Traffic Demand)**:
+   - Các `Intersection` được gắn `LocationType` (Trường học, Bệnh viện, Quán nhậu...). Mỗi loại địa điểm sẽ có mức độ sinh ra/thu hút xe cộ khác nhau.
+2. **Hệ số Tai nạn theo Hành vi (Behavioral Accident Probability)**:
+   - Khi xe đi qua một địa điểm (VD: `BAR`), `LocationType` được lưu vào `lastVisitedLocation` của xe.
+   - Các địa điểm đặc biệt như quán nhậu sẽ làm tăng mạnh `accidentProbabilityModifier` (tỷ lệ gây tai nạn) của chiếc xe đó.
+3. **Giới hạn Sức chứa & Tắc nghẽn tự động (Capacity & Auto-Congestion)**:
+   - Mỗi `Road` có giới hạn `capacity`. 
+   - Khi `currentVehicleCount` vượt mức an toàn của `capacity`, `RoadCondition` tự động cập nhật `congestionLevel` và chuyển trạng thái sang `CONGESTED` (Tắc đường).
+4. **Tai nạn gây Giảm sức chứa (Accidents Reduce Capacity)**:
+   - Hệ thống random dựa trên `accidentProbabilityModifier` sinh ra `AccidentEvent`.
+   - Khi `AccidentEvent` được kích hoạt trên một con đường, sức chứa của con đường đó (hiệu dụng) bị sụt giảm mạnh (ví dụ giảm 50%).
+   - Việc sức chứa giảm đột ngột trong khi số lượng xe trên đường không đổi sẽ đẩy `currentVehicleCount` vượt `capacity` mới, ngay lập tức gây ra `CongestionEvent` (Tắc đường do tai nạn).
 
 ---
 
