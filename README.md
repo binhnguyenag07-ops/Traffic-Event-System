@@ -6,7 +6,7 @@ Urban traffic simulator — OOP project simulating roads, vehicles, routing algo
 
 | Component | Technology |
 |---|---|
-| Backend | Java 17, Maven, JDK HttpServer |
+| Backend | Java 25, Maven, JDK HttpServer |
 | JSON | Jackson 2.17 |
 | Testing | JUnit 5 |
 | Frontend | React 19, Vite 7, CSS |
@@ -60,3 +60,5 @@ Sample road networks are in `data/`:
 ## Documentation
 
 See `docs/ARCHITECTURE.md` for full architecture, design patterns, task assignments, and timeline.
+
+For new contributors starting from a fresh machine, see `docs/SETUP_FROM_ZERO_VI.md`.

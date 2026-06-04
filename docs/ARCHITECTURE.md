@@ -12,7 +12,7 @@ trên một graph. Hệ thống hoạt động theo tick-based simulation.
 
 | Thành phần | Công nghệ |
 |---|---|
-| Backend | Java 17, Maven, JDK HttpServer |
+| Backend | Java 25, Maven, JDK HttpServer |
 | JSON | Jackson 2.17 |
 | Test | JUnit 5 (Jupiter) |
 | Frontend | React 19, Vite 7, CSS thuần |
@@ -328,7 +328,7 @@ Hệ thống mô phỏng nâng cao hỗ trợ các logic thực tế sau:
 
 ```text
 Traffic-Event-System/
-├── pom.xml                          # Maven config (Java 17, JUnit 5, Jackson)
+├── pom.xml                          # Maven config (Java 25, JUnit 5, Jackson)
 ├── .editorconfig                    # Coding style
 ├── .gitignore
 ├── README.md

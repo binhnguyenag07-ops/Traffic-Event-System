@@ -1,5 +1,6 @@
 # Build output
 target/
+.tools/
 
 # Frontend
 frontend/node_modules/
