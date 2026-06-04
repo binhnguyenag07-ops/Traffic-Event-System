@@ -1,0 +1,173 @@
+Traffic-Event-System/
+├── pom.xml
+├── README.md
+├── .gitignore
+├── .editorconfig
+│
+├── data/
+│   ├── sample_map.csv
+│   ├── sample_map.json
+│   ├── small_city.json
+│   ├── congestion_demo.json
+│   └── accident_demo.json
+│
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── CLASS_DIAGRAM.md
+│   ├── API_CONTRACT.md
+│   ├── ALGORITHM_EXPLANATION.md
+│   ├── EXPERIMENT_RESULTS.md
+│   └── PRESENTATION_SCRIPT.md
+│
+├── frontend/
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── index.html
+│   └── src/
+│       ├── main.jsx
+│       ├── App.jsx
+│       ├── styles.css
+│       │
+│       ├── api/
+│       │   └── trafficApi.js
+│       │
+│       ├── hooks/
+│       │   ├── useRoadNetwork.js
+│       │   ├── useSimulation.js
+│       │   └── useAlgorithms.js
+│       │
+│       └── components/
+│           ├── MapViewport.jsx
+│           ├── ControlPanel.jsx
+│           ├── AlgorithmPanel.jsx
+│           ├── EventPanel.jsx
+│           ├── VehiclePanel.jsx
+│           └── StatisticsPanel.jsx
+│
+└── src/
+    ├── main/
+    │   └── java/
+    │       └── team/
+    │           └── traffic/
+    │               ├── App.java
+    │               │
+    │               ├── config/
+    │               │   └── ApplicationConfig.java
+    │               │
+    │               ├── api/
+    │               │   ├── TrafficApiServer.java
+    │               │   ├── ApiRouteRegistry.java
+    │               │   │
+    │               │   ├── controller/
+    │               │   │   ├── HealthController.java
+    │               │   │   ├── NetworkController.java
+    │               │   │   ├── RoutingController.java
+    │               │   │   ├── VehicleController.java
+    │               │   │   ├── TrafficEventController.java
+    │               │   │   ├── SimulationController.java
+    │               │   │   └── StatisticsController.java
+    │               │   │
+    │               │   └── dto/
+    │               │       ├── ApiResponse.java
+    │               │       ├── RouteRequestDto.java
+    │               │       ├── RouteResultDto.java
+    │               │       ├── VehicleDto.java
+    │               │       ├── TrafficEventDto.java
+    │               │       └── SimulationSnapshotDto.java
+    │               │
+    │               ├── domain/
+    │               │   ├── network/
+    │               │   │   ├── RoadNetwork.java
+    │               │   │   ├── Intersection.java
+    │               │   │   ├── Road.java
+    │               │   │   ├── RoadCondition.java
+    │               │   │   ├── RoadStatus.java
+    │               │   │   └── LocationType.java
+    │               │   │
+    │               │   ├── vehicle/
+    │               │   │   ├── Vehicle.java
+    │               │   │   ├── Car.java
+    │               │   │   ├── Bus.java
+    │               │   │   ├── EmergencyVehicle.java
+    │               │   │   ├── VehicleFactory.java
+    │               │   │   ├── VehicleType.java
+    │               │   │   └── VehicleStatus.java
+    │               │   │
+    │               │   ├── routing/
+    │               │   │   ├── Route.java
+    │               │   │   ├── RouteStep.java
+    │               │   │   ├── RouteRequest.java
+    │               │   │   ├── RouteResult.java
+    │               │   │   └── RoutePreference.java
+    │               │   │
+    │               │   ├── event/
+    │               │   │   ├── TrafficEvent.java
+    │               │   │   ├── CongestionEvent.java
+    │               │   │   ├── AccidentEvent.java
+    │               │   │   ├── RoadClosureEvent.java
+    │               │   │   ├── TrafficLightDelayEvent.java
+    │               │   │   ├── TrafficEventType.java
+    │               │   │   └── TrafficEventStatus.java
+    │               │   │
+    │               │   └── statistics/
+    │               │       ├── TrafficStatistics.java
+    │               │       └── AlgorithmStatistics.java
+    │               │
+    │               ├── routing/
+    │               │   ├── PathFindingStrategy.java
+    │               │   ├── BfsPathFindingStrategy.java
+    │               │   ├── DijkstraPathFindingStrategy.java
+    │               │   ├── AStarPathFindingStrategy.java
+    │               │   ├── RoutingStrategyRegistry.java
+    │               │   └── Heuristic.java
+    │               │
+    │               ├── simulation/
+    │               │   ├── TrafficSimulator.java
+    │               │   ├── TickProcessor.java
+    │               │   ├── SimulationClock.java
+    │               │   ├── SimulationSnapshot.java
+    │               │   ├── SimulationCommand.java
+    │               │   └── SimulationStatus.java
+    │               │
+    │               ├── service/
+    │               │   ├── RoadNetworkService.java
+    │               │   ├── RoutingService.java
+    │               │   ├── VehicleService.java
+    │               │   ├── TrafficEventService.java
+    │               │   ├── SimulationService.java
+    │               │   ├── StatisticsService.java
+    │               │   │
+    │               │   └── impl/
+    │               │       ├── RoadNetworkServiceImpl.java
+    │               │       ├── RoutingServiceImpl.java
+    │               │       ├── VehicleServiceImpl.java
+    │               │       ├── TrafficEventServiceImpl.java
+    │               │       ├── SimulationServiceImpl.java
+    │               │       └── StatisticsServiceImpl.java
+    │               │
+    │               ├── observer/
+    │               │   ├── TrafficEventBus.java
+    │               │   └── TrafficEventListener.java
+    │               │
+    │               ├── persistence/
+    │               │   ├── MapLoader.java
+    │               │   ├── CsvMapLoader.java
+    │               │   ├── JsonMapLoader.java
+    │               │   ├── MapSaver.java
+    │               │   └── SyntheticMapGenerator.java
+    │               │
+    │               └── exception/
+    │                   ├── InvalidMapException.java
+    │                   ├── RouteNotFoundException.java
+    │                   └── SimulationException.java
+    │
+    └── test/
+        └── java/
+            └── team/
+                └── traffic/
+                    ├── RoadNetworkTest.java
+                    ├── MapLoaderTest.java
+                    ├── RoutingStrategyTest.java
+                    ├── VehicleTest.java
+                    ├── TrafficEventTest.java
+                    └── SimulationTest.java
