@@ -1,0 +1,189 @@
+
+# Project's Architecture
+
+```text
+src/main/java/team/traffic/
+├── App.java
+├── config/
+│   └── ApplicationConfig.java
+├── api/
+│   ├── TrafficApiServer.java
+│   ├── ApiRouteRegistry.java
+│   ├── controller/
+│   │   ├── HealthController.java
+│   │   ├── NetworkController.java
+│   │   ├── RoutingController.java
+│   │   ├── VehicleController.java
+│   │   ├── TrafficEventController.java
+│   │   ├── SimulationController.java
+│   │   └── StatisticsController.java
+│   └── dto/
+│       ├── ApiResponse.java
+│       ├── RouteRequestDto.java
+│       ├── RouteResultDto.java
+│       ├── VehicleDto.java
+│       ├── TrafficEventDto.java
+│       └── SimulationSnapshotDto.java
+├── simulation/
+│   ├── TrafficSimulator.java
+│   ├── TickProcessor.java
+│   ├── SimulationClock.java
+│   ├── SimulationSnapshot.java
+│   ├── SimulationCommand.java
+│   └── SimulationStatus.java
+├── service/
+│   ├── RoadNetworkService.java
+│   ├── RoutingService.java
+│   ├── VehicleService.java
+│   ├── TrafficEventService.java
+│   ├── SimulationService.java
+│   └── StatisticsService.java
+│   └── impl/
+│       ├── RoadNetworkServiceImpl.java
+│       ├── RoutingServiceImpl.java
+│       ├── VehicleServiceImpl.java
+│       ├── TrafficEventServiceImpl.java
+│       ├── SimulationServiceImpl.java
+│       └── StatisticsServiceImpl.java
+└── domain/
+    └── statistics/
+        ├── TrafficStatistics.java
+        └── AlgorithmStatistics.java
+
+frontend/src/
+├── App.jsx
+├── main.jsx
+├── styles.css
+├── api/
+│   └── trafficApi.js
+├── hooks/
+│   ├── useRoadNetwork.js
+│   ├── useSimulation.js
+│   └── useAlgorithms.js
+└── components/
+    ├── MapViewport.jsx
+    ├── ControlPanel.jsx
+    ├── AlgorithmPanel.jsx
+    ├── EventPanel.jsx
+    ├── VehiclePanel.jsx
+    └── StatisticsPanel.jsx
+```
+Class Diagram
+```mermaid
+classDiagram
+    class TrafficSimulator {
+        -RoadNetwork roadNetwork
+        -List~Vehicle~ vehicles
+        -List~TrafficEvent~ events
+        -SimulationClock clock
+        -SimulationStatus status
+        +start()
+        +pause()
+        +resume()
+        +reset()
+        +advanceOneTick()
+        +createSnapshot() SimulationSnapshot
+    }
+
+    class TickProcessor {
+        +processTick(TrafficSimulator)
+        +moveVehicles()
+        +processEvents()
+        +updateCongestion()
+    }
+
+    class SimulationClock {
+        -long currentTick
+        +tick()
+        +reset()
+        +getCurrentTick() long
+    }
+
+    class SimulationSnapshot {
+        -long tick
+        -SimulationStatus status
+        -List~Vehicle~ vehicles
+        -RoadNetwork roadNetwork
+        -TrafficStatistics statistics
+    }
+
+    class SimulationStatus {
+        <<enumeration>>
+        READY
+        RUNNING
+        PAUSED
+        FINISHED
+    }
+
+    TrafficSimulator --> RoadNetwork
+    TrafficSimulator --> Vehicle
+    TrafficSimulator --> TrafficEvent
+    TrafficSimulator --> SimulationClock
+    TrafficSimulator --> SimulationSnapshot
+    TrafficSimulator --> SimulationStatus
+    TickProcessor --> TrafficSimulator
+
+    class TrafficStatistics {
+        -int totalVehicles
+        -int arrivedVehicles
+        -double averageTravelTime
+        -double averageCongestionLevel
+        -int blockedRoadCount
+    }
+
+    class AlgorithmStatistics {
+        -String algorithmName
+        -long averageComputationTime
+        -int routeRecalculationCount
+        -double averageRouteCost
+        -int successfulRoutes
+        -int failedRoutes
+    }
+
+    SimulationSnapshot --> TrafficStatistics
+
+    class RoadNetworkService {
+        <<interface>>
+    }
+
+    class RoutingService {
+        <<interface>>
+    }
+
+    class VehicleService {
+        <<interface>>
+    }
+
+    class TrafficEventService {
+        <<interface>>
+    }
+
+    class SimulationService {
+        <<interface>>
+    }
+
+    class StatisticsService {
+        <<interface>>
+    }
+
+    class RoadNetworkServiceImpl
+    class RoutingServiceImpl
+    class VehicleServiceImpl
+    class TrafficEventServiceImpl
+    class SimulationServiceImpl
+    class StatisticsServiceImpl
+
+    RoadNetworkService <|.. RoadNetworkServiceImpl
+    RoutingService <|.. RoutingServiceImpl
+    VehicleService <|.. VehicleServiceImpl
+    TrafficEventService <|.. TrafficEventServiceImpl
+    SimulationService <|.. SimulationServiceImpl
+    StatisticsService <|.. StatisticsServiceImpl
+
+    RoutingServiceImpl --> RoutingStrategyRegistry
+    VehicleServiceImpl --> VehicleFactory
+    TrafficEventServiceImpl --> TrafficEventBus
+    SimulationServiceImpl --> TrafficSimulator
+    StatisticsServiceImpl --> TrafficStatistics
+    StatisticsServiceImpl --> AlgorithmStatistics
+    ```
