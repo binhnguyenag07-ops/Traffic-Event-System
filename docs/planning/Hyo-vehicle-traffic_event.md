@@ -1,8 +1,6 @@
 # Planning for project's architecture & class diagram in module vehicle & traffic event
 ## Project's Architecture
 
-Cấu trúc thư mục của dự án được tổ chức thành ba module chính:
-
 ```
 src/main/java/team/traffic/
 ├── domain/
