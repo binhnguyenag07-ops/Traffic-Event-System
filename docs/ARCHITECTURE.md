@@ -30,6 +30,7 @@ Traffic-Event-System/
 |-- docs/
 |   |-- ARCHITECTURE.md
 |   |-- CLASS_DIAGRAM.md
+|   |-- PLANNING_OVERVIEW.md
 |   |-- API_CONTRACT.md
 |   |-- ALGORITHM_EXPLANATION.md
 |   |-- EXPERIMENT_RESULTS.md
@@ -38,8 +39,7 @@ Traffic-Event-System/
 |       |-- Binh-network-persistence.md
 |       |-- nguynie-routing-algorithms.md
 |       |-- Hyo-vehicle-traffic_event.md
-|       |-- An-simulation-API-services-frontend.md
-|       `-- final-folder-structure-and-class-diagram.md
+|       `-- An-simulation-API-services-frontend.md
 |
 |-- frontend/
 |   |-- package.json
