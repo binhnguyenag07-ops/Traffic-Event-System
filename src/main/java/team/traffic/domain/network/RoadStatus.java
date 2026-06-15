@@ -1,4 +1,4 @@
-package main.java.team.traffic.domain.network;
+package team.traffic.domain.network;
 
 public enum RoadStatus {
     OPEN,
