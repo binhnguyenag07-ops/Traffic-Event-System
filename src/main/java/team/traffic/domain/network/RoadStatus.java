@@ -4,5 +4,9 @@ public enum RoadStatus {
     OPEN,
     CONGESTED,
     BLOCKED,
-    CLOSED
+    CLOSED;
+
+    public boolean isRoutable() {
+        return this == OPEN || this == CONGESTED;
+    }
 }
