@@ -45,24 +45,34 @@ public class Road {
         this.condition = condition == null ? new RoadCondition(0, 0, RoadStatus.OPEN) : condition;
     }
     
-    // Estimates travel time with extra cost for congestion and vehicle density.
+    // Estimates routing cost from free-flow travel time and current road condition.
     public double calculateTravelCost() {
         if (!isAvailable()) {
             return Double.POSITIVE_INFINITY;
         }
 
-        double baseTravelTime = distance / speedLimit;
-        double capacityDensity = (double) currentVehicleCount / capacity;
-        double densityFactor = Math.max(condition.getVehicleDensity(), capacityDensity);
-        return baseTravelTime * (1 + condition.getCongestionLevel()) * (1 + densityFactor);
+        return getFreeFlowTravelTime() * condition.getTravelCostMultiplier() * getCapacityLoadMultiplier();
+    }
+
+    public double getFreeFlowTravelTime() {
+        return distance / speedLimit;
+    }
+
+    public double getCapacityLoadMultiplier() {
+        return 1 + getCapacityUsage();
+    }
+
+    public double getCapacityUsage() {
+        return (double) currentVehicleCount / capacity;
     }
 
     // A road can be used only when it is open enough and still has capacity.
     public boolean isAvailable() {
-        RoadStatus status = condition.getRoadStatus();
-        return status != RoadStatus.BLOCKED
-                && status != RoadStatus.CLOSED
-                && currentVehicleCount < capacity;
+        return condition.isRoutable() && hasRemainingCapacity();
+    }
+
+    public boolean hasRemainingCapacity() {
+        return currentVehicleCount < capacity;
     }
 
     public String getId() {

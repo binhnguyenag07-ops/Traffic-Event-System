@@ -25,6 +25,17 @@ public class RoadCondition {
         return congestionLevel;
     }
 
+    public double getTravelCostMultiplier() {
+        if (!isRoutable()) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return 1 + congestionLevel + vehicleDensity;
+    }
+
+    public boolean isRoutable() {
+        return roadStatus.isRoutable();
+    }
+
     // Blocks the road and treats it as fully congested.
     public void markBlocked() {
         roadStatus = RoadStatus.BLOCKED;
