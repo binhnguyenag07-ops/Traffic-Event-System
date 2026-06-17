@@ -2,7 +2,6 @@ package team.traffic.domain.event;
 
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
-import team.traffic.domain.network.RoadStatus;
 
 public class AccidentEvent extends TrafficEvent {
     private final double capacityReduction;
@@ -30,17 +29,17 @@ public class AccidentEvent extends TrafficEvent {
 
     @Override
     public void apply(RoadNetwork roadNetwork) {
-        RoadCondition accidentCondition = new RoadCondition(capacityReduction, 1.0, RoadStatus.BLOCKED);
+        super.apply(roadNetwork);
+        rememberCurrentRoadCondition(roadNetwork);
+        RoadCondition accidentCondition = copyCurrentRoadCondition(roadNetwork);
+        accidentCondition.setVehicleDensity(Math.max(accidentCondition.getVehicleDensity(), capacityReduction));
         accidentCondition.markBlocked();
         roadNetwork.updateRoadCondition(getAffectedRoadId(), accidentCondition);
-        super.apply(roadNetwork);
     }
 
     @Override
     public void resolve(RoadNetwork roadNetwork) {
-        RoadCondition openCondition = new RoadCondition(0.0, 0.0, RoadStatus.OPEN);
-        openCondition.markOpen();
-        roadNetwork.updateRoadCondition(getAffectedRoadId(), openCondition);
+        restorePreviousRoadCondition(roadNetwork);
         super.resolve(roadNetwork);
     }
 

@@ -16,17 +16,17 @@ public class RoadClosureEvent extends TrafficEvent {
 
     @Override
     public void apply(RoadNetwork roadNetwork) {
-        RoadCondition closedCondition = new RoadCondition(1.0, 1.0, RoadStatus.CLOSED);
-        closedCondition.markBlocked();
-        roadNetwork.updateRoadCondition(getAffectedRoadId(), closedCondition);
         super.apply(roadNetwork);
+        rememberCurrentRoadCondition(roadNetwork);
+        RoadCondition closedCondition = copyCurrentRoadCondition(roadNetwork);
+        closedCondition.setCongestionLevel(1.0);
+        closedCondition.setRoadStatus(RoadStatus.CLOSED);
+        roadNetwork.updateRoadCondition(getAffectedRoadId(), closedCondition);
     }
 
     @Override
     public void resolve(RoadNetwork roadNetwork) {
-        RoadCondition openCondition = new RoadCondition(0.0, 0.0, RoadStatus.OPEN);
-        openCondition.markOpen();
-        roadNetwork.updateRoadCondition(getAffectedRoadId(), openCondition);
+        restorePreviousRoadCondition(roadNetwork);
         super.resolve(roadNetwork);
     }
 }
