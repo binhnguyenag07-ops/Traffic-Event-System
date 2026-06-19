@@ -23,11 +23,11 @@ public class Road {
         if (endIntersectionId == null || endIntersectionId.isBlank()) {
             throw new IllegalArgumentException("End intersection id is required");
         }
-        if (distance <= 0) {
-            throw new IllegalArgumentException("Distance must be greater than 0");
+        if (!Double.isFinite(distance) || distance <= 0) {
+            throw new IllegalArgumentException("Distance must be finite and greater than 0");
         }
-        if (speedLimit <= 0) {
-            throw new IllegalArgumentException("Speed limit must be greater than 0");
+        if (!Double.isFinite(speedLimit) || speedLimit <= 0) {
+            throw new IllegalArgumentException("Speed limit must be finite and greater than 0");
         }
         if (capacity <= 0) {
             throw new IllegalArgumentException("Capacity must be greater than 0");

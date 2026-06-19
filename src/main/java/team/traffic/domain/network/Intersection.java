@@ -7,13 +7,19 @@ public class Intersection {
     private final double y;
     private final LocationType locationType;
 
-    // Creates one map point with a required id and name.
+    // Creates one valid map point that can safely be used by routing and visualization.
     public Intersection(String id, String name, double x, double y, LocationType locationType) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Intersection id is required");
         }
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Intersection name is required");
+        }
+        if (!Double.isFinite(x) || !Double.isFinite(y)) {
+            throw new IllegalArgumentException("Intersection coordinates must be finite");
+        }
+        if (locationType == null) {
+            throw new IllegalArgumentException("Location type is required");
         }
         this.id = id;
         this.name = name;
