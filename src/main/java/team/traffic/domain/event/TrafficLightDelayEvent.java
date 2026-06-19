@@ -26,11 +26,11 @@ public class TrafficLightDelayEvent extends TrafficEvent {
 
     @Override
     public void apply(RoadNetwork roadNetwork) {
-        super.apply(roadNetwork);
         rememberCurrentRoadCondition(roadNetwork);
         RoadCondition delayedCondition = copyCurrentRoadCondition(roadNetwork);
         delayedCondition.increaseCongestion(calculateDelayImpact());
         roadNetwork.updateRoadCondition(getAffectedRoadId(), delayedCondition);
+        super.apply(roadNetwork);
     }
 
     @Override

@@ -18,6 +18,9 @@ public class AccidentEvent extends TrafficEvent {
         if (capacityReduction < 0 || capacityReduction > 1) {
             throw new IllegalArgumentException("Capacity reduction must be between 0 and 1.");
         }
+        if (causingVehicleId == null || causingVehicleId.isBlank()) {
+            throw new IllegalArgumentException("Causing vehicle id must not be blank.");
+        }
         this.capacityReduction = capacityReduction;
         this.causingVehicleId = causingVehicleId;
     }
@@ -29,12 +32,12 @@ public class AccidentEvent extends TrafficEvent {
 
     @Override
     public void apply(RoadNetwork roadNetwork) {
-        super.apply(roadNetwork);
         rememberCurrentRoadCondition(roadNetwork);
         RoadCondition accidentCondition = copyCurrentRoadCondition(roadNetwork);
         accidentCondition.setVehicleDensity(Math.max(accidentCondition.getVehicleDensity(), capacityReduction));
         accidentCondition.markBlocked();
         roadNetwork.updateRoadCondition(getAffectedRoadId(), accidentCondition);
+        super.apply(roadNetwork);
     }
 
     @Override
