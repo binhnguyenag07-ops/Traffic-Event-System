@@ -13,6 +13,15 @@ public abstract class TrafficEvent {
     private RoadCondition previousRoadCondition;
 
     protected TrafficEvent(String id, String affectedRoadId, long startTick, long durationTicks) {
+        if (id == null || id.isBlank()) {
+            throw new IllegalArgumentException("Event id must not be blank.");
+        }
+        if (affectedRoadId == null || affectedRoadId.isBlank()) {
+            throw new IllegalArgumentException("Affected road id must not be blank.");
+        }
+        if (startTick < 0) {
+            throw new IllegalArgumentException("Start tick must not be negative.");
+        }
         if (durationTicks < 0) {
             throw new IllegalArgumentException("Duration ticks must not be negative.");
         }

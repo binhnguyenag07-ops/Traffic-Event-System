@@ -21,11 +21,11 @@ public class CongestionEvent extends TrafficEvent {
 
     @Override
     public void apply(RoadNetwork roadNetwork) {
-        super.apply(roadNetwork);
         rememberCurrentRoadCondition(roadNetwork);
         RoadCondition congestedCondition = copyCurrentRoadCondition(roadNetwork);
         congestedCondition.increaseCongestion(congestionIncrease);
         roadNetwork.updateRoadCondition(getAffectedRoadId(), congestedCondition);
+        super.apply(roadNetwork);
     }
 
     @Override

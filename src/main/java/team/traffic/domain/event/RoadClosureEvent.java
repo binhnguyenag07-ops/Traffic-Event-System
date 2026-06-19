@@ -16,12 +16,12 @@ public class RoadClosureEvent extends TrafficEvent {
 
     @Override
     public void apply(RoadNetwork roadNetwork) {
-        super.apply(roadNetwork);
         rememberCurrentRoadCondition(roadNetwork);
         RoadCondition closedCondition = copyCurrentRoadCondition(roadNetwork);
         closedCondition.setCongestionLevel(1.0);
         closedCondition.setRoadStatus(RoadStatus.CLOSED);
         roadNetwork.updateRoadCondition(getAffectedRoadId(), closedCondition);
+        super.apply(roadNetwork);
     }
 
     @Override
