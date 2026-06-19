@@ -45,23 +45,42 @@ public class Road {
         this.condition = condition == null ? new RoadCondition(0, 0, RoadStatus.OPEN) : condition;
     }
     
-    // Estimates routing cost from free-flow travel time and current road condition.
+    /**
+     * Calculates a congestion-aware routing cost in equivalent travel hours.
+     *
+     * <p>Distance is measured in kilometres and speed limit in kilometres per
+     * hour. Congestion level and vehicle density are normalized values in the
+     * range 0..1. Vehicle density is the traffic-load input to the cost formula,
+     * so capacity usage is not multiplied into the cost a second time.</p>
+     *
+     * @return positive infinity when the road cannot accept a route; otherwise
+     *         free-flow hours multiplied by the road-condition cost multiplier
+     */
     public double calculateTravelCost() {
         if (!isAvailable()) {
             return Double.POSITIVE_INFINITY;
         }
 
-        return getFreeFlowTravelTime() * condition.getTravelCostMultiplier() * getCapacityLoadMultiplier();
+        return getFreeFlowTravelTimeHours() * condition.getTravelCostMultiplier();
     }
 
+    /**
+     * Returns free-flow travel time in hours.
+     *
+     * @deprecated Prefer {@link #getFreeFlowTravelTimeHours()} so the unit is
+     *             explicit at the call site.
+     */
+    @Deprecated
     public double getFreeFlowTravelTime() {
+        return getFreeFlowTravelTimeHours();
+    }
+
+    // Distance is kilometres and speed is kilometres per hour.
+    public double getFreeFlowTravelTimeHours() {
         return distance / speedLimit;
     }
 
-    public double getCapacityLoadMultiplier() {
-        return 1 + getCapacityUsage();
-    }
-
+    // Capacity usage is retained for availability checks and traffic statistics.
     public double getCapacityUsage() {
         return (double) currentVehicleCount / capacity;
     }
