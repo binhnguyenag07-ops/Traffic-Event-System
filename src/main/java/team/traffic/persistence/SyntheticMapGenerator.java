@@ -8,8 +8,18 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 
 public class SyntheticMapGenerator {
+    private static final double DEFAULT_ROAD_DISTANCE_KM = 1.0;
+    private static final double DEFAULT_SPEED_LIMIT_KMH = 50.0;
+    private static final int DEFAULT_ROAD_CAPACITY = 100;
+    private static final LocationType[] LOCATION_TYPES = LocationType.values();
 
-    // Creates a rectangular grid where each neighbor pair has two directed roads.
+    /**
+     * Creates a rectangular grid where every horizontal or vertical neighbor
+     * pair is connected by two directed roads.
+     *
+     * <p>Intersection coordinates use one grid unit per kilometre. Generated
+     * roads therefore have a distance of 1 km and start open with no traffic.</p>
+     */
     public RoadNetwork generateGridMap(int rows, int columns) {
         if (rows <= 0 || columns <= 0) {
             throw new IllegalArgumentException("Rows and columns must be greater than 0");
@@ -63,17 +73,17 @@ public class SyntheticMapGenerator {
                 id,
                 startIntersectionId,
                 endIntersectionId,
-                1.0,
-                50.0,
-                100,
+                DEFAULT_ROAD_DISTANCE_KM,
+                DEFAULT_SPEED_LIMIT_KMH,
+                DEFAULT_ROAD_CAPACITY,
                 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN));
     }
 
     // Gives demo maps a small mix of location types.
     private LocationType chooseLocationType(int row, int column) {
-        int value = Math.abs(row + column) % 6;
-        return LocationType.values()[value];
+        int value = (row + column) % LOCATION_TYPES.length;
+        return LOCATION_TYPES[value];
     }
 
     private String intersectionId(int row, int column) {
