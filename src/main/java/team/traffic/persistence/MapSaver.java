@@ -1,8 +1,10 @@
 package team.traffic.persistence;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,8 +28,16 @@ public class MapSaver {
         if (roadNetwork == null) {
             throw new IllegalArgumentException("Road network is required");
         }
+        if (filePath == null || filePath.isBlank()) {
+            throw new IllegalArgumentException("Map file path is required");
+        }
 
-        objectMapper.writeValue(Path.of(filePath).toFile(), MapData.from(roadNetwork));
+        Path path = Path.of(filePath);
+        Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        objectMapper.writeValue(path.toFile(), MapData.from(roadNetwork));
     }
 
     static class MapData {
@@ -38,11 +48,15 @@ public class MapSaver {
         static MapData from(RoadNetwork roadNetwork) {
             MapData mapData = new MapData();
 
-            for (Intersection intersection : roadNetwork.getIntersections().values()) {
+            List<Intersection> intersections = new ArrayList<>(roadNetwork.getIntersections().values());
+            intersections.sort(Comparator.comparing(Intersection::getId));
+            for (Intersection intersection : intersections) {
                 mapData.intersections.add(IntersectionData.from(intersection));
             }
 
-            for (Road road : roadNetwork.getRoads().values()) {
+            List<Road> roads = new ArrayList<>(roadNetwork.getRoads().values());
+            roads.sort(Comparator.comparing(Road::getId));
+            for (Road road : roads) {
                 mapData.roads.add(RoadData.from(road));
             }
 
