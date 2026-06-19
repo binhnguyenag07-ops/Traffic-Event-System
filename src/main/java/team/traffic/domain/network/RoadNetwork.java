@@ -15,10 +15,13 @@ public class RoadNetwork {
         this.roads = new HashMap<>();
     }
 
-    // Adds or replaces an intersection by its id.
+    // Adds an intersection while preserving the graph-wide unique-id invariant.
     public void addIntersection(Intersection intersection) {
         if (intersection == null) {
             throw new IllegalArgumentException("Intersection is required");
+        }
+        if (intersections.containsKey(intersection.getId())) {
+            throw new IllegalArgumentException("Duplicate intersection id: " + intersection.getId());
         }
         intersections.put(intersection.getId(), intersection);
     }
@@ -41,6 +44,9 @@ public class RoadNetwork {
     public void addRoad(Road road) {
         if (road == null) {
             throw new IllegalArgumentException("Road is required");
+        }
+        if (roads.containsKey(road.getId())) {
+            throw new IllegalArgumentException("Duplicate road id: " + road.getId());
         }
         if (!intersections.containsKey(road.getStartIntersectionId())) {
             throw new IllegalArgumentException("Start intersection does not exist: " + road.getStartIntersectionId());
