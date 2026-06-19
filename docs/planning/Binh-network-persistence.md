@@ -77,6 +77,24 @@ Consumers that display seconds should convert hours using:
 seconds = hours * 3600
 ```
 
+## Map Validation Rules
+
+Both CSV and JSON loaders enforce the same domain rules:
+
+- a map contains at least one intersection;
+- intersection and road IDs are unique;
+- every road endpoint references an existing intersection;
+- all required numeric, enum, and identity fields are present and valid;
+- invalid records are reported as `InvalidMapException` with record or array-index context.
+
+CSV records may appear in any order. The loader reads the complete file and
+adds all intersections before adding roads. Unsupported record types and
+missing required headers are rejected instead of being ignored.
+
+`MapSaver` creates missing parent directories and sorts intersections and roads
+by ID. This produces deterministic JSON files and makes save/load round-trip
+tests and Git diffs stable.
+
 ## Class Diagram
 
 ```mermaid
