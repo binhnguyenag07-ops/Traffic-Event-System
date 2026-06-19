@@ -2,7 +2,6 @@ package team.traffic.domain.event;
 
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
-import team.traffic.domain.network.RoadStatus;
 
 public class TrafficLightDelayEvent extends TrafficEvent {
     private final long delayTicks;
@@ -27,17 +26,16 @@ public class TrafficLightDelayEvent extends TrafficEvent {
 
     @Override
     public void apply(RoadNetwork roadNetwork) {
-        RoadCondition delayedCondition = new RoadCondition(calculateDelayImpact(), 0.0, RoadStatus.CONGESTED);
+        super.apply(roadNetwork);
+        rememberCurrentRoadCondition(roadNetwork);
+        RoadCondition delayedCondition = copyCurrentRoadCondition(roadNetwork);
         delayedCondition.increaseCongestion(calculateDelayImpact());
         roadNetwork.updateRoadCondition(getAffectedRoadId(), delayedCondition);
-        super.apply(roadNetwork);
     }
 
     @Override
     public void resolve(RoadNetwork roadNetwork) {
-        RoadCondition openCondition = new RoadCondition(0.0, 0.0, RoadStatus.OPEN);
-        openCondition.markOpen();
-        roadNetwork.updateRoadCondition(getAffectedRoadId(), openCondition);
+        restorePreviousRoadCondition(roadNetwork);
         super.resolve(roadNetwork);
     }
 

@@ -23,11 +23,11 @@ public class Road {
         if (endIntersectionId == null || endIntersectionId.isBlank()) {
             throw new IllegalArgumentException("End intersection id is required");
         }
-        if (distance <= 0) {
-            throw new IllegalArgumentException("Distance must be greater than 0");
+        if (!Double.isFinite(distance) || distance <= 0) {
+            throw new IllegalArgumentException("Distance must be finite and greater than 0");
         }
-        if (speedLimit <= 0) {
-            throw new IllegalArgumentException("Speed limit must be greater than 0");
+        if (!Double.isFinite(speedLimit) || speedLimit <= 0) {
+            throw new IllegalArgumentException("Speed limit must be finite and greater than 0");
         }
         if (capacity <= 0) {
             throw new IllegalArgumentException("Capacity must be greater than 0");
@@ -45,24 +45,53 @@ public class Road {
         this.condition = condition == null ? new RoadCondition(0, 0, RoadStatus.OPEN) : condition;
     }
     
-    // Estimates travel time with extra cost for congestion and vehicle density.
+    /**
+     * Calculates a congestion-aware routing cost in equivalent travel hours.
+     *
+     * <p>Distance is measured in kilometres and speed limit in kilometres per
+     * hour. Congestion level and vehicle density are normalized values in the
+     * range 0..1. Vehicle density is the traffic-load input to the cost formula,
+     * so capacity usage is not multiplied into the cost a second time.</p>
+     *
+     * @return positive infinity when the road cannot accept a route; otherwise
+     *         free-flow hours multiplied by the road-condition cost multiplier
+     */
     public double calculateTravelCost() {
         if (!isAvailable()) {
             return Double.POSITIVE_INFINITY;
         }
 
-        double baseTravelTime = distance / speedLimit;
-        double capacityDensity = (double) currentVehicleCount / capacity;
-        double densityFactor = Math.max(condition.getVehicleDensity(), capacityDensity);
-        return baseTravelTime * (1 + condition.getCongestionLevel()) * (1 + densityFactor);
+        return getFreeFlowTravelTimeHours() * condition.getTravelCostMultiplier();
+    }
+
+    /**
+     * Returns free-flow travel time in hours.
+     *
+     * @deprecated Prefer {@link #getFreeFlowTravelTimeHours()} so the unit is
+     *             explicit at the call site.
+     */
+    @Deprecated
+    public double getFreeFlowTravelTime() {
+        return getFreeFlowTravelTimeHours();
+    }
+
+    // Distance is kilometres and speed is kilometres per hour.
+    public double getFreeFlowTravelTimeHours() {
+        return distance / speedLimit;
+    }
+
+    // Capacity usage is retained for availability checks and traffic statistics.
+    public double getCapacityUsage() {
+        return (double) currentVehicleCount / capacity;
     }
 
     // A road can be used only when it is open enough and still has capacity.
     public boolean isAvailable() {
-        RoadStatus status = condition.getRoadStatus();
-        return status != RoadStatus.BLOCKED
-                && status != RoadStatus.CLOSED
-                && currentVehicleCount < capacity;
+        return condition.isRoutable() && hasRemainingCapacity();
+    }
+
+    public boolean hasRemainingCapacity() {
+        return currentVehicleCount < capacity;
     }
 
     public String getId() {

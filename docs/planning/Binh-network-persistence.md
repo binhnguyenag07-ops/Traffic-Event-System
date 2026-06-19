@@ -45,6 +45,38 @@ data/
 | `MapSaver` | Saves the current road network to a file. |
 | `SyntheticMapGenerator` | Generates automatic demo maps for simulation and testing. |
 
+## Road Data and Travel-Cost Contract
+
+The network and routing modules use the following units:
+
+| Field | Unit / range |
+|---|---|
+| `distance` | kilometres |
+| `speedLimit` | kilometres per hour |
+| free-flow travel time | hours |
+| `congestionLevel` | normalized ratio from `0.0` to `1.0` |
+| `vehicleDensity` | normalized ratio from `0.0` to `1.0` |
+| routing travel cost | equivalent travel hours |
+
+For a routable road with remaining capacity:
+
+```text
+freeFlowTimeHours = distance / speedLimit
+conditionMultiplier = 1 + congestionLevel + vehicleDensity
+travelCost = freeFlowTimeHours * conditionMultiplier
+```
+
+`vehicleDensity` is already the traffic-load input to this formula. The
+`currentVehicleCount / capacity` ratio is therefore not multiplied into the
+cost again; it is used for capacity checks and traffic statistics. A blocked,
+closed, or full road has an infinite routing cost.
+
+Consumers that display seconds should convert hours using:
+
+```text
+seconds = hours * 3600
+```
+
 ## Class Diagram
 
 ```mermaid
