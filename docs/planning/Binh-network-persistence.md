@@ -95,6 +95,24 @@ missing required headers are rejected instead of being ignored.
 by ID. This produces deterministic JSON files and makes save/load round-trip
 tests and Git diffs stable.
 
+## Synthetic and Sample Maps
+
+`SyntheticMapGenerator.generateGridMap(rows, columns)` creates a rectangular
+grid with predictable IDs such as `I_0_0`. Every horizontal and vertical
+neighbor pair receives two directed roads. Generated roads are 1 km long, use a
+50 km/h speed limit, have capacity 100, and start open with zero traffic.
+
+The number of directed roads is:
+
+```text
+2 * [rows * (columns - 1) + columns * (rows - 1)]
+```
+
+`data/small_city.json` is the Week 3 routing dataset. It contains six
+intersections, all supported location types, alternative paths, four congested
+roads, and one blocked direct road. `congestion_demo.json` and
+`accident_demo.json` remain reserved for the Week 5 event implementation.
+
 ## Class Diagram
 
 ```mermaid
