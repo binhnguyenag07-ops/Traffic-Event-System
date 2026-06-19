@@ -3,6 +3,8 @@ package team.traffic.domain.network;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,15 +53,125 @@ class RoadNetworkTest {
                 .hasMessage("Start intersection does not exist: UNKNOWN");
     }
 
+    @Test
+    void indexesIncomingAndOutgoingRoadsWhenRoadIsAdded() {
+        Road road = road("R1", 5);
+
+        roadNetwork.addRoad(road);
+
+        assertThat(roadNetwork.findOutgoingRoads("I1")).containsExactly(road);
+        assertThat(roadNetwork.findIncomingRoads("I2")).containsExactly(road);
+        assertThat(roadNetwork.findIncomingRoads("I1")).isEmpty();
+        assertThat(roadNetwork.findOutgoingRoads("I2")).isEmpty();
+    }
+
+    @Test
+    void removesRoadFromBothIndexes() {
+        Road road = road("R1", 5);
+        roadNetwork.addRoad(road);
+
+        roadNetwork.removeRoad("R1");
+
+        assertThat(roadNetwork.containsRoad("R1")).isFalse();
+        assertThat(roadNetwork.findOutgoingRoads("I1")).isEmpty();
+        assertThat(roadNetwork.findIncomingRoads("I2")).isEmpty();
+    }
+
+    @Test
+    void removingIntersectionRemovesEveryConnectedRoadFromIndexes() {
+        roadNetwork.addIntersection(intersection("I3", "Third"));
+        roadNetwork.addRoad(road("R1", "I1", "I2"));
+        roadNetwork.addRoad(road("R2", "I2", "I1"));
+        roadNetwork.addRoad(road("R3", "I3", "I1"));
+        roadNetwork.addRoad(road("R4", "I2", "I3"));
+
+        roadNetwork.removeIntersection("I1");
+
+        assertThat(roadNetwork.containsIntersection("I1")).isFalse();
+        assertThat(roadNetwork.getRoads()).containsOnlyKeys("R4");
+        assertThat(roadNetwork.findOutgoingRoads("I2"))
+                .extracting(Road::getId)
+                .containsExactly("R4");
+        assertThat(roadNetwork.findIncomingRoads("I3"))
+                .extracting(Road::getId)
+                .containsExactly("R4");
+        assertThat(roadNetwork.findIncomingRoads("I1")).isEmpty();
+        assertThat(roadNetwork.findOutgoingRoads("I1")).isEmpty();
+    }
+
+    @Test
+    void handlesSelfLoopWhenIntersectionIsRemoved() {
+        Road selfLoop = road("R1", "I1", "I1");
+        roadNetwork.addRoad(selfLoop);
+
+        roadNetwork.removeIntersection("I1");
+
+        assertThat(roadNetwork.containsRoad("R1")).isFalse();
+        assertThat(roadNetwork.getRoadCount()).isZero();
+    }
+
+    @Test
+    void returnsImmutableRoadIndexViews() {
+        Road road = road("R1", 5);
+        roadNetwork.addRoad(road);
+
+        List<Road> outgoing = roadNetwork.findOutgoingRoads("I1");
+        List<Road> incoming = roadNetwork.findIncomingRoads("I2");
+
+        assertThatThrownBy(() -> outgoing.add(road("R2", 10)))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(incoming::clear)
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void returnsUniqueOutgoingNeighborsInRoadInsertionOrder() {
+        roadNetwork.addIntersection(intersection("I3", "Third"));
+        roadNetwork.addRoad(road("R1", "I1", "I2"));
+        roadNetwork.addRoad(road("R2", "I1", "I3"));
+        roadNetwork.addRoad(road("R3", "I1", "I2"));
+
+        assertThat(roadNetwork.findOutgoingNeighbors("I1"))
+                .extracting(Intersection::getId)
+                .containsExactly("I2", "I3");
+    }
+
+    @Test
+    void exposesGraphMembershipAndCounts() {
+        roadNetwork.addRoad(road("R1", 5));
+
+        assertThat(roadNetwork.containsIntersection("I1")).isTrue();
+        assertThat(roadNetwork.containsIntersection("UNKNOWN")).isFalse();
+        assertThat(roadNetwork.containsRoad("R1")).isTrue();
+        assertThat(roadNetwork.containsRoad("UNKNOWN")).isFalse();
+        assertThat(roadNetwork.getIntersectionCount()).isEqualTo(2);
+        assertThat(roadNetwork.getRoadCount()).isEqualTo(1);
+    }
+
+    @Test
+    void returnsEmptyQueriesForUnknownIntersection() {
+        assertThat(roadNetwork.findOutgoingRoads("UNKNOWN")).isEmpty();
+        assertThat(roadNetwork.findIncomingRoads("UNKNOWN")).isEmpty();
+        assertThat(roadNetwork.findOutgoingNeighbors("UNKNOWN")).isEmpty();
+    }
+
     private Intersection intersection(String id, String name) {
         return new Intersection(id, name, 0, 0, LocationType.NORMAL);
     }
 
     private Road road(String id, double distance) {
+        return road(id, "I1", "I2", distance);
+    }
+
+    private Road road(String id, String startIntersectionId, String endIntersectionId) {
+        return road(id, startIntersectionId, endIntersectionId, 5);
+    }
+
+    private Road road(String id, String startIntersectionId, String endIntersectionId, double distance) {
         return new Road(
                 id,
-                "I1",
-                "I2",
+                startIntersectionId,
+                endIntersectionId,
                 distance,
                 50,
                 100,
