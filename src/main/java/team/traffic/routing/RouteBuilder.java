@@ -15,6 +15,7 @@ public final class RouteBuilder {
         return switch (preference) {
             case SHORTEST_TIME -> road.getDistance() / road.getSpeedLimit();
             case CONGESTION_AWARE -> road.calculateTravelCost();
+            case MINIMUM_HOPS -> 1.0;
             default -> road.getDistance();
         };
     }
