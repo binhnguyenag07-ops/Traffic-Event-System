@@ -3,7 +3,7 @@
  * Handles HTTP communication with the backend server
  */
 class ApiClient {
-  constructor(baseUrl = 'http://localhost:8080/api') {
+  constructor(baseUrl = 'http://localhost:7070/api') {
     this.baseUrl = baseUrl
     this.headers = {
       'Content-Type': 'application/json',
@@ -115,11 +115,11 @@ class NetworkService extends ApiClient {
  * Routing Service
  */
 class RoutingService extends ApiClient {
-  findRoute(startIntersectionId, endIntersectionId, algorithm = 'dijkstra') {
-    return this.post('/routing/find-route', {
+  findRoute(startIntersectionId, destinationIntersectionId, preference = 'SHORTEST_TIME') {
+    return this.post('/routes', {
       startIntersectionId,
-      endIntersectionId,
-      algorithm,
+      destinationIntersectionId,
+      preference: preference.toUpperCase(),
     })
   }
 
@@ -127,8 +127,8 @@ class RoutingService extends ApiClient {
     return this.get('/routing/algorithms')
   }
 
-  recalculateRoute(vehicleId, algorithm = 'dijkstra') {
-    return this.post(`/routing/recalculate/${vehicleId}`, { algorithm })
+  recalculateRoute(vehicleId, preference = 'SHORTEST_TIME') {
+    return this.post(`/routing/recalculate/${vehicleId}`, { preference })
   }
 }
 
@@ -290,7 +290,7 @@ class StatisticsService extends ApiClient {
  * API Facade - Aggregates all services for easy access
  */
 class TrafficApiClient {
-  constructor(baseUrl = 'http://localhost:8080/api') {
+  constructor(baseUrl = 'http://localhost:7070/api') {
     this.health = new HealthService(baseUrl)
     this.network = new NetworkService(baseUrl)
     this.routing = new RoutingService(baseUrl)
