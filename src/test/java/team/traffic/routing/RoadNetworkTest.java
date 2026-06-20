@@ -45,12 +45,16 @@ class RoadNetworkTest {
 
         @Test
         @DisplayName("duplicate intersection ID throws")
-        void duplicateIntersectionThrows() {
+        void duplicateIntersectionIdThrows() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            assertThatThrownBy(() -> network.addIntersection(new Intersection("A", "A_renamed", 5, 5, LocationType.HOSPITAL)))
+            network.addIntersection(new Intersection("A", "Old", 0, 0, LocationType.NORMAL));
+
+            assertThatThrownBy(() ->
+                    network.addIntersection(new Intersection("A", "New", 1, 1, LocationType.NORMAL)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Duplicate intersection id");
+
+            assertThat(network.getIntersection("A").getName()).isEqualTo("Old");
         }
 
         @Test
@@ -174,14 +178,19 @@ class RoadNetworkTest {
 
         @Test
         @DisplayName("duplicate road ID throws")
-        void duplicateRoadThrows() {
+        void duplicateRoadIdThrows() {
             RoadNetwork network = new RoadNetwork();
             network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
-            assertThatThrownBy(() -> network.addRoad(new Road("AB", "A", "B", 10, 100, 200, 0, null)))
+
+            assertThatThrownBy(() ->
+                    network.addRoad(new Road("AB", "A", "B", 10, 100, 200, 0, null)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Duplicate road id");
+
+            assertThat(network.getRoad("AB").getDistance()).isEqualTo(5.0);
         }
 
         @Test
