@@ -44,15 +44,13 @@ class RoadNetworkTest {
         }
 
         @Test
-        @DisplayName("duplicate intersection ID replaces existing")
-        void duplicateIntersectionReplaces() {
+        @DisplayName("duplicate intersection ID throws")
+        void duplicateIntersectionThrows() {
             RoadNetwork network = new RoadNetwork();
             network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("A", "A_renamed", 5, 5, LocationType.HOSPITAL));
-
-            assertThat(network.getIntersections()).hasSize(1);
-            assertThat(network.getIntersection("A").getName()).isEqualTo("A_renamed");
-            assertThat(network.getIntersection("A").getX()).isEqualTo(5.0);
+            assertThatThrownBy(() -> network.addIntersection(new Intersection("A", "A_renamed", 5, 5, LocationType.HOSPITAL)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Duplicate intersection id");
         }
 
         @Test
@@ -175,16 +173,15 @@ class RoadNetworkTest {
         }
 
         @Test
-        @DisplayName("duplicate road ID replaces existing")
-        void duplicateRoadReplaces() {
+        @DisplayName("duplicate road ID throws")
+        void duplicateRoadThrows() {
             RoadNetwork network = new RoadNetwork();
             network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
             network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
-            network.addRoad(new Road("AB", "A", "B", 10, 100, 200, 0, null));
-
-            assertThat(network.getRoads()).hasSize(1);
-            assertThat(network.getRoad("AB").getDistance()).isEqualTo(10.0);
+            assertThatThrownBy(() -> network.addRoad(new Road("AB", "A", "B", 10, 100, 200, 0, null)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Duplicate road id");
         }
 
         @Test

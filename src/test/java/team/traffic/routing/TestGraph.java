@@ -165,6 +165,28 @@ final class TestGraph {
         return network;
     }
 
+    // Builds a graph where BFS (minimum hops) and Dijkstra (shortest distance) find different paths.
+    //
+    //   A ---long(100km, 1 hop)--> D
+    //   |                          ^
+    //   +---short(5km)--> B --short(5km)--+
+    //
+    // BFS finds A->D (1 hop, 100km)
+    // Dijkstra finds A->B->D (2 hops, 10km)
+    static RoadNetwork buildHopsVsDistanceGraph() {
+        RoadNetwork network = new RoadNetwork();
+
+        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("D", "D", 10, 0, LocationType.NORMAL));
+
+        network.addRoad(road("AD", "A", "D", 100, 50));
+        network.addRoad(road("AB", "A", "B", 5, 50));
+        network.addRoad(road("BD", "B", "D", 5, 50));
+
+        return network;
+    }
+
     private static Road road(String id, String from, String to, double distance, double speedLimit) {
         return new Road(id, from, to, distance, speedLimit, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN));

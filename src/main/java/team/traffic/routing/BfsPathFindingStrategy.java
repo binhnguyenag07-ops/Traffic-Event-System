@@ -17,7 +17,7 @@ public class BfsPathFindingStrategy implements PathFindingStrategy {
 
     @Override
     public boolean supports(RoutePreference preference) {
-        return preference == RoutePreference.SHORTEST_DISTANCE;
+        return preference == RoutePreference.MINIMUM_HOPS;
     }
 
     @Override
@@ -73,7 +73,7 @@ public class BfsPathFindingStrategy implements PathFindingStrategy {
             throw new NoSuchElementException("No route found from " + startId + " to " + destId);
         }
 
-        Route route = RouteBuilder.reconstructRoute(network, startId, destId, parent, parentRoad, RoutePreference.SHORTEST_DISTANCE);
+        Route route = RouteBuilder.reconstructRoute(network, startId, destId, parent, parentRoad, RoutePreference.MINIMUM_HOPS);
 
         long elapsed = System.currentTimeMillis() - startTime;
         return new RouteResult(route, NAME, elapsed, visitedNodes);

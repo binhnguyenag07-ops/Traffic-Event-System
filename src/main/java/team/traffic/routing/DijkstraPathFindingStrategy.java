@@ -17,7 +17,9 @@ public class DijkstraPathFindingStrategy implements PathFindingStrategy {
 
     @Override
     public boolean supports(RoutePreference preference) {
-        return preference == RoutePreference.SHORTEST_TIME || preference == RoutePreference.CONGESTION_AWARE;
+        return preference == RoutePreference.SHORTEST_DISTANCE
+                || preference == RoutePreference.SHORTEST_TIME
+                || preference == RoutePreference.CONGESTION_AWARE;
     }
 
     @Override

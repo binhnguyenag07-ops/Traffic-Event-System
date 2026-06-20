@@ -41,24 +41,23 @@ class RoutingStrategyTest {
         private final BfsPathFindingStrategy bfs = new BfsPathFindingStrategy();
 
         @Test
-        @DisplayName("finds shortest path by hop count")
-        void findsShortestPathByHops() {
-            RoadNetwork network = TestGraph.buildSmallGraph();
-            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
+        @DisplayName("finds path with minimum hops")
+        void findsMinimumHops() {
+            RoadNetwork network = TestGraph.buildHopsVsDistanceGraph();
+            RouteRequest request = new RouteRequest("A", "D", RoutePreference.MINIMUM_HOPS);
             RouteResult result = bfs.findRoute(network, request);
 
             assertThat(result.getAlgorithmName()).isEqualTo("BFS");
-            assertThat(result.getRoute().getSteps()).isNotEmpty();
-            List<team.traffic.domain.routing.RouteStep> steps = result.getRoute().getSteps();
-            assertThat(steps.get(0).getFromIntersectionId()).isEqualTo("A");
-            assertThat(steps.get(steps.size() - 1).getToIntersectionId()).isEqualTo("D");
+            // BFS picks A->D (1 hop, 100km) because it minimizes hops
+            assertThat(result.getRoute().getStepCount()).isEqualTo(1);
+            assertThat(result.getRoute().getTotalDistance()).isEqualTo(100.0);
         }
 
         @Test
         @DisplayName("returns empty route when start equals destination")
         void sameStartAndDest() {
             RoadNetwork network = TestGraph.buildSmallGraph();
-            RouteRequest request = new RouteRequest("A", "A", RoutePreference.SHORTEST_DISTANCE);
+            RouteRequest request = new RouteRequest("A", "A", RoutePreference.MINIMUM_HOPS);
             RouteResult result = bfs.findRoute(network, request);
 
             assertThat(result.getRoute().isEmpty()).isTrue();
@@ -74,7 +73,7 @@ class RoutingStrategyTest {
             network.addIntersection(new team.traffic.domain.network.Intersection(
                     "Y", "Y", 10, 0, team.traffic.domain.network.LocationType.NORMAL));
 
-            RouteRequest request = new RouteRequest("X", "Y", RoutePreference.SHORTEST_DISTANCE);
+            RouteRequest request = new RouteRequest("X", "Y", RoutePreference.MINIMUM_HOPS);
             assertThatThrownBy(() -> bfs.findRoute(network, request))
                     .isInstanceOf(NoSuchElementException.class);
         }
@@ -83,7 +82,7 @@ class RoutingStrategyTest {
         @DisplayName("skips blocked roads")
         void skipsBlockedRoads() {
             RoadNetwork network = TestGraph.buildBlockedRoadGraph();
-            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
+            RouteRequest request = new RouteRequest("A", "D", RoutePreference.MINIMUM_HOPS);
             RouteResult result = bfs.findRoute(network, request);
 
             assertThat(result.getRoute().isEmpty()).isFalse();
@@ -94,7 +93,7 @@ class RoutingStrategyTest {
         @DisplayName("visits nodes in BFS order")
         void visitsInBfsOrder() {
             RoadNetwork network = TestGraph.buildSmallGraph();
-            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
+            RouteRequest request = new RouteRequest("A", "D", RoutePreference.MINIMUM_HOPS);
             RouteResult result = bfs.findRoute(network, request);
 
             assertThat(result.getVisitedNodes()).isGreaterThan(0);
@@ -104,7 +103,7 @@ class RoutingStrategyTest {
         @DisplayName("handles linear graph correctly")
         void linearGraph() {
             RoadNetwork network = TestGraph.buildLinearGraph();
-            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
+            RouteRequest request = new RouteRequest("A", "D", RoutePreference.MINIMUM_HOPS);
             RouteResult result = bfs.findRoute(network, request);
 
             assertThat(result.getRoute().getStepCount()).isEqualTo(3);
@@ -308,6 +307,7 @@ class RoutingStrategyTest {
             assertThat(registry.findForPreference(RoutePreference.SHORTEST_DISTANCE)).isPresent();
             assertThat(registry.findForPreference(RoutePreference.SHORTEST_TIME)).isPresent();
             assertThat(registry.findForPreference(RoutePreference.CONGESTION_AWARE)).isPresent();
+            assertThat(registry.findForPreference(RoutePreference.MINIMUM_HOPS)).isPresent();
         }
 
         @Test
@@ -327,11 +327,12 @@ class RoutingStrategyTest {
         @DisplayName("empty network throws for all algorithms")
         void emptyNetwork() {
             RoadNetwork network = new RoadNetwork();
-            RouteRequest request = new RouteRequest("A", "B", RoutePreference.SHORTEST_DISTANCE);
+            RouteRequest bfsReq = new RouteRequest("A", "B", RoutePreference.MINIMUM_HOPS);
+            RouteRequest dijkstraReq = new RouteRequest("A", "B", RoutePreference.SHORTEST_DISTANCE);
 
-            assertThatThrownBy(() -> new BfsPathFindingStrategy().findRoute(network, request))
+            assertThatThrownBy(() -> new BfsPathFindingStrategy().findRoute(network, bfsReq))
                     .isInstanceOf(NoSuchElementException.class);
-            assertThatThrownBy(() -> new DijkstraPathFindingStrategy().findRoute(network, request))
+            assertThatThrownBy(() -> new DijkstraPathFindingStrategy().findRoute(network, dijkstraReq))
                     .isInstanceOf(NoSuchElementException.class);
         }
 
@@ -339,15 +340,17 @@ class RoutingStrategyTest {
         @DisplayName("single node: same start and end returns empty route")
         void singleNodeSameStartEnd() {
             RoadNetwork network = TestGraph.buildSingleNodeGraph();
-            RouteRequest request = new RouteRequest("A", "A", RoutePreference.SHORTEST_DISTANCE);
 
-            var bfsResult = new BfsPathFindingStrategy().findRoute(network, request);
+            var bfsResult = new BfsPathFindingStrategy().findRoute(network,
+                    new RouteRequest("A", "A", RoutePreference.MINIMUM_HOPS));
             assertThat(bfsResult.getRoute().isEmpty()).isTrue();
 
-            var dijkstraResult = new DijkstraPathFindingStrategy().findRoute(network, request);
+            var dijkstraResult = new DijkstraPathFindingStrategy().findRoute(network,
+                    new RouteRequest("A", "A", RoutePreference.SHORTEST_DISTANCE));
             assertThat(dijkstraResult.getRoute().isEmpty()).isTrue();
 
-            var astarResult = new AStarPathFindingStrategy((a, b) -> 0.0).findRoute(network, request);
+            var astarResult = new AStarPathFindingStrategy((a, b) -> 0.0).findRoute(network,
+                    new RouteRequest("A", "A", RoutePreference.SHORTEST_TIME));
             assertThat(astarResult.getRoute().isEmpty()).isTrue();
         }
 
@@ -355,11 +358,12 @@ class RoutingStrategyTest {
         @DisplayName("disconnected graph throws NoSuchElementException")
         void disconnectedGraph() {
             RoadNetwork network = TestGraph.buildDisconnectedGraph();
-            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
 
-            assertThatThrownBy(() -> new BfsPathFindingStrategy().findRoute(network, request))
+            assertThatThrownBy(() -> new BfsPathFindingStrategy().findRoute(network,
+                    new RouteRequest("A", "D", RoutePreference.MINIMUM_HOPS)))
                     .isInstanceOf(NoSuchElementException.class);
-            assertThatThrownBy(() -> new DijkstraPathFindingStrategy().findRoute(network, request))
+            assertThatThrownBy(() -> new DijkstraPathFindingStrategy().findRoute(network,
+                    new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE)))
                     .isInstanceOf(NoSuchElementException.class);
         }
 
@@ -367,8 +371,8 @@ class RoutingStrategyTest {
         @DisplayName("self-loop graph: route A->B goes through self-loop")
         void selfLoopGraph() {
             RoadNetwork network = TestGraph.buildSelfLoopGraph();
-            RouteRequest request = new RouteRequest("A", "B", RoutePreference.SHORTEST_DISTANCE);
-            RouteResult result = new BfsPathFindingStrategy().findRoute(network, request);
+            RouteResult result = new BfsPathFindingStrategy().findRoute(network,
+                    new RouteRequest("A", "B", RoutePreference.MINIMUM_HOPS));
 
             assertThat(result.getRoute().isEmpty()).isFalse();
             assertThat(result.getRoute().getSteps().get(0).getFromIntersectionId()).isEqualTo("A");
@@ -378,8 +382,8 @@ class RoutingStrategyTest {
         @DisplayName("cyclic graph: finds path without infinite loop")
         void cyclicGraph() {
             RoadNetwork network = TestGraph.buildCyclicGraph();
-            RouteRequest request = new RouteRequest("A", "C", RoutePreference.SHORTEST_DISTANCE);
-            RouteResult result = new BfsPathFindingStrategy().findRoute(network, request);
+            RouteResult result = new BfsPathFindingStrategy().findRoute(network,
+                    new RouteRequest("A", "C", RoutePreference.MINIMUM_HOPS));
 
             assertThat(result.getRoute().isEmpty()).isFalse();
             assertThat(result.getRoute().getSteps().get(0).getFromIntersectionId()).isEqualTo("A");
@@ -389,8 +393,8 @@ class RoutingStrategyTest {
         @DisplayName("route steps reference correct road IDs")
         void routeStepsCorrectRoadIds() {
             RoadNetwork network = TestGraph.buildSmallGraph();
-            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
-            RouteResult result = new BfsPathFindingStrategy().findRoute(network, request);
+            RouteResult result = new BfsPathFindingStrategy().findRoute(network,
+                    new RouteRequest("A", "D", RoutePreference.MINIMUM_HOPS));
 
             for (team.traffic.domain.routing.RouteStep step : result.getRoute().getSteps()) {
                 team.traffic.domain.network.Road road = network.getRoad(step.getRoadId());
@@ -406,8 +410,8 @@ class RoutingStrategyTest {
             // All roads have same distance and speed, so all algorithms should produce same cost
             RoadNetwork network = TestGraph.buildLinearGraph();
 
-            RouteRequest bfsReq = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
-            RouteRequest dijkstraReq = new RouteRequest("A", "D", RoutePreference.SHORTEST_TIME);
+            RouteRequest bfsReq = new RouteRequest("A", "D", RoutePreference.MINIMUM_HOPS);
+            RouteRequest dijkstraReq = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
 
             RouteResult bfsResult = new BfsPathFindingStrategy().findRoute(network, bfsReq);
             RouteResult dijkstraResult = new DijkstraPathFindingStrategy().findRoute(network, dijkstraReq);
@@ -419,11 +423,29 @@ class RoutingStrategyTest {
         }
 
         @Test
+        @DisplayName("BFS and Dijkstra find different paths on hops-vs-distance graph")
+        void bfsVsDijkstraDifferentPaths() {
+            RoadNetwork network = TestGraph.buildHopsVsDistanceGraph();
+
+            RouteRequest bfsReq = new RouteRequest("A", "D", RoutePreference.MINIMUM_HOPS);
+            RouteRequest dijkstraReq = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
+
+            RouteResult bfsResult = new BfsPathFindingStrategy().findRoute(network, bfsReq);
+            RouteResult dijkstraResult = new DijkstraPathFindingStrategy().findRoute(network, dijkstraReq);
+
+            // BFS picks 1-hop path (A->D, 100km), Dijkstra picks 2-hop path (A->B->D, 10km)
+            assertThat(bfsResult.getRoute().getStepCount()).isEqualTo(1);
+            assertThat(dijkstraResult.getRoute().getStepCount()).isEqualTo(2);
+            assertThat(bfsResult.getRoute().getTotalDistance()).isEqualTo(100.0);
+            assertThat(dijkstraResult.getRoute().getTotalDistance()).isEqualTo(10.0);
+        }
+
+        @Test
         @DisplayName("route cost and distance are consistent")
         void costDistanceConsistency() {
             RoadNetwork network = TestGraph.buildSmallGraph();
-            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
-            RouteResult result = new BfsPathFindingStrategy().findRoute(network, request);
+            RouteResult result = new BfsPathFindingStrategy().findRoute(network,
+                    new RouteRequest("A", "D", RoutePreference.MINIMUM_HOPS));
 
             assertThat(result.getRoute().getTotalDistance()).isGreaterThan(0);
             assertThat(result.getRoute().getEstimatedTravelTime()).isGreaterThan(0);
