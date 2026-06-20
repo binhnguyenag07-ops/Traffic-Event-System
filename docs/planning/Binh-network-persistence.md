@@ -45,6 +45,74 @@ data/
 | `MapSaver` | Saves the current road network to a file. |
 | `SyntheticMapGenerator` | Generates automatic demo maps for simulation and testing. |
 
+## Road Data and Travel-Cost Contract
+
+The network and routing modules use the following units:
+
+| Field | Unit / range |
+|---|---|
+| `distance` | kilometres |
+| `speedLimit` | kilometres per hour |
+| free-flow travel time | hours |
+| `congestionLevel` | normalized ratio from `0.0` to `1.0` |
+| `vehicleDensity` | normalized ratio from `0.0` to `1.0` |
+| routing travel cost | equivalent travel hours |
+
+For a routable road with remaining capacity:
+
+```text
+freeFlowTimeHours = distance / speedLimit
+conditionMultiplier = 1 + congestionLevel + vehicleDensity
+travelCost = freeFlowTimeHours * conditionMultiplier
+```
+
+`vehicleDensity` is already the traffic-load input to this formula. The
+`currentVehicleCount / capacity` ratio is therefore not multiplied into the
+cost again; it is used for capacity checks and traffic statistics. A blocked,
+closed, or full road has an infinite routing cost.
+
+Consumers that display seconds should convert hours using:
+
+```text
+seconds = hours * 3600
+```
+
+## Map Validation Rules
+
+Both CSV and JSON loaders enforce the same domain rules:
+
+- a map contains at least one intersection;
+- intersection and road IDs are unique;
+- every road endpoint references an existing intersection;
+- all required numeric, enum, and identity fields are present and valid;
+- invalid records are reported as `InvalidMapException` with record or array-index context.
+
+CSV records may appear in any order. The loader reads the complete file and
+adds all intersections before adding roads. Unsupported record types and
+missing required headers are rejected instead of being ignored.
+
+`MapSaver` creates missing parent directories and sorts intersections and roads
+by ID. This produces deterministic JSON files and makes save/load round-trip
+tests and Git diffs stable.
+
+## Synthetic and Sample Maps
+
+`SyntheticMapGenerator.generateGridMap(rows, columns)` creates a rectangular
+grid with predictable IDs such as `I_0_0`. Every horizontal and vertical
+neighbor pair receives two directed roads. Generated roads are 1 km long, use a
+50 km/h speed limit, have capacity 100, and start open with zero traffic.
+
+The number of directed roads is:
+
+```text
+2 * [rows * (columns - 1) + columns * (rows - 1)]
+```
+
+`data/small_city.json` is the Week 3 routing dataset. It contains six
+intersections, all supported location types, alternative paths, four congested
+roads, and one blocked direct road. `congestion_demo.json` and
+`accident_demo.json` remain reserved for the Week 5 event implementation.
+
 ## Class Diagram
 
 ```mermaid

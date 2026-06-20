@@ -68,7 +68,7 @@ frontend/src/
     ├── VehiclePanel.jsx
     └── StatisticsPanel.jsx
 ```
-Class Diagram
+# Class Diagram
 ```mermaid
 classDiagram
     class TrafficSimulator {

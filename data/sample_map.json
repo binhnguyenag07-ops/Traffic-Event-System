@@ -1,0 +1,63 @@
+{
+  "intersections": [
+    {
+      "id": "I1",
+      "name": "Campus Gate",
+      "x": 0.0,
+      "y": 0.0,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "I2",
+      "name": "Library Junction",
+      "x": 1.2,
+      "y": 0.4,
+      "locationType": "SCHOOL"
+    },
+    {
+      "id": "I3",
+      "name": "Main Avenue",
+      "x": 2.4,
+      "y": 1.1,
+      "locationType": "COMMERCIAL"
+    }
+  ],
+  "roads": [
+    {
+      "id": "R1",
+      "startIntersectionId": "I1",
+      "endIntersectionId": "I2",
+      "distance": 1.5,
+      "speedLimit": 40.0,
+      "capacity": 60,
+      "currentVehicleCount": 12,
+      "congestionLevel": 0.10,
+      "vehicleDensity": 0.20,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R2",
+      "startIntersectionId": "I2",
+      "endIntersectionId": "I3",
+      "distance": 2.0,
+      "speedLimit": 35.0,
+      "capacity": 45,
+      "currentVehicleCount": 30,
+      "congestionLevel": 0.55,
+      "vehicleDensity": 0.65,
+      "roadStatus": "CONGESTED"
+    },
+    {
+      "id": "R3",
+      "startIntersectionId": "I1",
+      "endIntersectionId": "I3",
+      "distance": 3.8,
+      "speedLimit": 50.0,
+      "capacity": 50,
+      "currentVehicleCount": 0,
+      "congestionLevel": 1.0,
+      "vehicleDensity": 0.0,
+      "roadStatus": "BLOCKED"
+    }
+  ]
+}
