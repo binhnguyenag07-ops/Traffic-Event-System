@@ -148,6 +148,10 @@ intersections, all supported location types, alternative paths, four congested
 roads, and one blocked direct road. `congestion_demo.json` and
 `accident_demo.json` remain reserved for the Week 5 event implementation.
 
+`data/density_demo.json` is the Week 4 road-density dataset. It contains four
+roads with low, medium, high, and full density levels so the team can demo how
+capacity usage changes road availability and congestion-aware cost.
+
 ## Class Diagram
 
 ```mermaid
