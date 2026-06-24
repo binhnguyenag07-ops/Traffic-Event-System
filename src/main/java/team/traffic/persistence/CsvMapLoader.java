@@ -150,9 +150,14 @@ public class CsvMapLoader implements MapLoader {
 
     // Creates a road and its condition from one CSV record.
     private Road createRoad(CSVRecord record) {
+        int capacity = Integer.parseInt(record.get("capacity"));
+        int currentVehicleCount = Integer.parseInt(record.get("currentVehicleCount"));
+        double vehicleDensity = Double.parseDouble(record.get("vehicleDensity"));
+        RoadDensityValidator.validate(record.get("id"), capacity, currentVehicleCount, vehicleDensity);
+
         RoadCondition condition = new RoadCondition(
                 Double.parseDouble(record.get("congestionLevel")),
-                Double.parseDouble(record.get("vehicleDensity")),
+                vehicleDensity,
                 RoadStatus.valueOf(record.get("roadStatus").toUpperCase()));
 
         return new Road(
@@ -161,8 +166,8 @@ public class CsvMapLoader implements MapLoader {
                 record.get("endIntersectionId"),
                 Double.parseDouble(record.get("distance")),
                 Double.parseDouble(record.get("speedLimit")),
-                Integer.parseInt(record.get("capacity")),
-                Integer.parseInt(record.get("currentVehicleCount")),
+                capacity,
+                currentVehicleCount,
                 condition);
     }
 }

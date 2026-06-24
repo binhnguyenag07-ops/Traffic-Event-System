@@ -44,7 +44,7 @@
       "capacity": 45,
       "currentVehicleCount": 30,
       "congestionLevel": 0.55,
-      "vehicleDensity": 0.65,
+      "vehicleDensity": 0.667,
       "roadStatus": "CONGESTED"
     },
     {

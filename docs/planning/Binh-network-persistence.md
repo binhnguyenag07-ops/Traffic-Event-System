@@ -101,6 +101,11 @@ Density statistics available to other modules:
 - `findRoadsAtOrAboveDensity(minimumDensity)` returns dense roads in insertion
   order for heatmaps, congestion checks, or later simulation rules.
 
+CSV and JSON map loaders also validate density consistency. A road's stored
+`vehicleDensity` must match `currentVehicleCount / capacity` within a small
+rounding tolerance, so demo maps and saved maps do not drift away from the
+runtime density contract.
+
 Consumers that display seconds should convert hours using:
 
 ```text

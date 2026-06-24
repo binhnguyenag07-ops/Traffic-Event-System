@@ -128,9 +128,14 @@ public class JsonMapLoader implements MapLoader {
 
         // Converts JSON data into the domain model.
         public Road toRoad() {
+            int requiredCapacity = requireField(capacity, "capacity");
+            int requiredVehicleCount = requireField(currentVehicleCount, "currentVehicleCount");
+            double requiredVehicleDensity = requireField(vehicleDensity, "vehicleDensity");
+            RoadDensityValidator.validate(id, requiredCapacity, requiredVehicleCount, requiredVehicleDensity);
+
             RoadCondition condition = new RoadCondition(
                     requireField(congestionLevel, "congestionLevel"),
-                    requireField(vehicleDensity, "vehicleDensity"),
+                    requiredVehicleDensity,
                     requireField(roadStatus, "roadStatus"));
             return new Road(
                     id,
@@ -138,8 +143,8 @@ public class JsonMapLoader implements MapLoader {
                     endIntersectionId,
                     requireField(distance, "distance"),
                     requireField(speedLimit, "speedLimit"),
-                    requireField(capacity, "capacity"),
-                    requireField(currentVehicleCount, "currentVehicleCount"),
+                    requiredCapacity,
+                    requiredVehicleCount,
                     condition);
         }
     }
