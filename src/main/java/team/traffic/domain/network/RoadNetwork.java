@@ -109,11 +109,48 @@ public class RoadNetwork {
 
     // Replaces the current condition of one road.
     public void updateRoadCondition(String roadId, RoadCondition condition) {
-        Road road = roads.get(roadId);
-        if (road == null) {
-            throw new IllegalArgumentException("Road does not exist: " + roadId);
-        }
+        Road road = requireRoad(roadId);
         road.setCondition(condition);
+    }
+
+    public Road recordVehicleEnteringRoad(String roadId) {
+        Road road = requireRoad(roadId);
+        road.enterVehicle();
+        return road;
+    }
+
+    public Road recordVehicleLeavingRoad(String roadId) {
+        Road road = requireRoad(roadId);
+        road.leaveVehicle();
+        return road;
+    }
+
+    public double updateVehicleDensity(String roadId) {
+        return requireRoad(roadId).refreshVehicleDensity();
+    }
+
+    public double getAverageVehicleDensity() {
+        if (roads.isEmpty()) {
+            return 0;
+        }
+
+        double totalDensity = 0;
+        for (Road road : roads.values()) {
+            totalDensity += road.getCondition().getVehicleDensity();
+        }
+        return totalDensity / roads.size();
+    }
+
+    public List<Road> findRoadsAtOrAboveDensity(double minimumDensity) {
+        validateDensityThreshold(minimumDensity);
+
+        List<Road> denseRoads = new ArrayList<>();
+        for (Road road : roads.values()) {
+            if (road.getCondition().getVehicleDensity() >= minimumDensity) {
+                denseRoads.add(road);
+            }
+        }
+        return List.copyOf(denseRoads);
     }
 
     public Intersection getIntersection(String intersectionId) {
@@ -146,5 +183,19 @@ public class RoadNetwork {
 
     public Map<String, Road> getRoads() {
         return Collections.unmodifiableMap(roads);
+    }
+
+    private Road requireRoad(String roadId) {
+        Road road = roads.get(roadId);
+        if (road == null) {
+            throw new IllegalArgumentException("Road does not exist: " + roadId);
+        }
+        return road;
+    }
+
+    private void validateDensityThreshold(double minimumDensity) {
+        if (!Double.isFinite(minimumDensity) || minimumDensity < 0 || minimumDensity > 1) {
+            throw new IllegalArgumentException("Minimum density must be finite and between 0 and 1");
+        }
     }
 }

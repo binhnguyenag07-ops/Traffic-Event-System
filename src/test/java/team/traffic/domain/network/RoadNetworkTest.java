@@ -149,6 +149,47 @@ class RoadNetworkTest {
     }
 
     @Test
+    void recordsVehicleMovementOnRoadAndRefreshesDensity() {
+        Road road = road("R1", 5);
+        roadNetwork.addRoad(road);
+
+        Road enteredRoad = roadNetwork.recordVehicleEnteringRoad("R1");
+        Road leftRoad = roadNetwork.recordVehicleLeavingRoad("R1");
+
+        assertThat(enteredRoad).isSameAs(road);
+        assertThat(leftRoad).isSameAs(road);
+        assertThat(road.getCurrentVehicleCount()).isZero();
+        assertThat(road.getCondition().getVehicleDensity()).isZero();
+    }
+
+    @Test
+    void updatesAndQueriesRoadDensity() {
+        Road lowDensityRoad = road("R1", "I1", "I2", 5);
+        Road highDensityRoad = road("R2", "I2", "I1", 5);
+        roadNetwork.addRoad(lowDensityRoad);
+        roadNetwork.addRoad(highDensityRoad);
+
+        lowDensityRoad.setCurrentVehicleCount(20);
+        highDensityRoad.setCurrentVehicleCount(75);
+
+        assertThat(roadNetwork.updateVehicleDensity("R1")).isEqualTo(0.2);
+        assertThat(roadNetwork.getAverageVehicleDensity()).isEqualTo(0.475);
+        assertThat(roadNetwork.findRoadsAtOrAboveDensity(0.5))
+                .extracting(Road::getId)
+                .containsExactly("R2");
+    }
+
+    @Test
+    void rejectsInvalidDensityThreshold() {
+        assertThatThrownBy(() -> roadNetwork.findRoadsAtOrAboveDensity(Double.NaN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Minimum density must be finite and between 0 and 1");
+        assertThatThrownBy(() -> roadNetwork.findRoadsAtOrAboveDensity(1.1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Minimum density must be finite and between 0 and 1");
+    }
+
+    @Test
     void returnsEmptyQueriesForUnknownIntersection() {
         assertThat(roadNetwork.findOutgoingRoads("UNKNOWN")).isEmpty();
         assertThat(roadNetwork.findIncomingRoads("UNKNOWN")).isEmpty();

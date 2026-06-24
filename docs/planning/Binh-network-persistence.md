@@ -71,6 +71,36 @@ travelCost = freeFlowTimeHours * conditionMultiplier
 cost again; it is used for capacity checks and traffic statistics. A blocked,
 closed, or full road has an infinite routing cost.
 
+## Week 4 Road Density Contract
+
+Student A owns the road-density foundation used by the simulation and routing
+layers. The domain model keeps density as a normalized `0.0..1.0` value:
+
+```text
+vehicleDensity = currentVehicleCount / capacity
+```
+
+Runtime vehicle movement should update density through the road-network
+contract instead of mutating fields directly:
+
+```java
+network.recordVehicleEnteringRoad("R1");
+network.recordVehicleLeavingRoad("R1");
+network.updateVehicleDensity("R1");
+```
+
+`recordVehicleEnteringRoad` rejects blocked, closed, and full roads. Leaving a
+road is allowed only when at least one vehicle is currently recorded on that
+road. These methods intentionally do not move `Vehicle` objects, recompute
+routes, process ticks, or trigger traffic events; those remain the boundaries
+of the vehicle, routing, simulation, and event modules.
+
+Density statistics available to other modules:
+
+- `getAverageVehicleDensity()` returns the mean density across all roads.
+- `findRoadsAtOrAboveDensity(minimumDensity)` returns dense roads in insertion
+  order for heatmaps, congestion checks, or later simulation rules.
+
 Consumers that display seconds should convert hours using:
 
 ```text
