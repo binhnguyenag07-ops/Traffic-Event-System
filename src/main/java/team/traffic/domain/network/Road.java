@@ -85,6 +85,26 @@ public class Road {
         return (double) currentVehicleCount / capacity;
     }
 
+    public double refreshVehicleDensity() {
+        double density = getCapacityUsage();
+        condition.setVehicleDensity(density);
+        return density;
+    }
+
+    public void enterVehicle() {
+        if (!isAvailable()) {
+            throw new IllegalStateException("Road is not available: " + id);
+        }
+        setCurrentVehicleCount(currentVehicleCount + 1);
+    }
+
+    public void leaveVehicle() {
+        if (currentVehicleCount == 0) {
+            throw new IllegalStateException("Cannot remove vehicle from empty road: " + id);
+        }
+        setCurrentVehicleCount(currentVehicleCount - 1);
+    }
+
     // A road can be used only when it is open enough and still has capacity.
     public boolean isAvailable() {
         return condition.isRoutable() && hasRemainingCapacity();
@@ -127,6 +147,7 @@ public class Road {
             throw new IllegalArgumentException("Current vehicle count must be between 0 and capacity");
         }
         this.currentVehicleCount = currentVehicleCount;
+        refreshVehicleDensity();
     }
 
     public RoadCondition getCondition() {
