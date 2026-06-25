@@ -1,82 +1,82 @@
-# Báo Cáo Audit Tiến Độ Backend
+# Backend Progress Audit
 
-Ngày: 2026-06-25
+Date: 2026-06-25
 
-## Mục Đích
+## Purpose
 
-Tài liệu này kiểm chứng nhận định của Student C:
+This document verifies Student C's claim:
 
-> Student A, B, C đã vô tình làm nhanh tiến độ nên gần như đã xong backend của các tuần 4, 5, 6, 7, trong khi frontend mới ở mức tuần 3.
+> Students A, B, and C accidentally worked ahead, so the backend for weeks 4, 5, 6, and 7 is almost finished, while the frontend is still around week 3.
 
-Phạm vi audit:
+Audit scope:
 
-- Dùng ảnh roadmap của nhóm để so tiến độ theo tuần.
-- Dùng file `OOP - Group Project.pdf` để chấm yêu cầu chức năng và description của project.
-- Dùng code và test hiện tại trong repo làm bằng chứng triển khai.
+- Use the team's roadmap image as the source of truth for weekly progress.
+- Use `OOP - Group Project.pdf` as the source of truth for project requirements and expected functionality.
+- Use the current repository code and tests as implementation evidence.
 
-Lưu ý: roadmap trong PDF không được dùng để kết luận tiến độ theo thời gian. Roadmap dùng để so tiến độ là roadmap trong ảnh của nhóm.
+Note: the timeline inside the PDF is not used to judge schedule progress. The weekly progress comparison is based on the team's roadmap image.
 
-## Kết Luận Nhanh
+## Executive Summary
 
-Student C đúng một phần. Backend của A, B, C có nhiều module lõi đã đi trước frontend: road density, blocked/congested road states, BFS/Dijkstra/A*, congestion-aware routing, vehicle domain movement, traffic event domain classes, observer/factory/strategy patterns, và nhiều unit tests.
+Student C is partially correct. Students A, B, and C have implemented several backend foundations ahead of the frontend: road density, blocked and congested road states, BFS/Dijkstra/A*, congestion-aware routing, vehicle domain movement, traffic event domain classes, observer/factory/strategy patterns, and many unit tests.
 
-Nhưng nhận định "backend tuần 4-7 gần như đã xong" là quá lạc quan nếu xét ở cấp ứng dụng hoàn chỉnh. Nhiều class quan trọng ở tầng service, simulation, API, DTO, và statistics hiện vẫn rỗng hoặc chưa được nối lại với nhau.
+However, the claim that the backend for weeks 4 to 7 is "almost finished" is too optimistic at application level. Many important classes in the service, simulation, API, DTO, and statistics layers are still empty or not wired together.
 
-Kết luận nên dùng cho team:
+Team-level conclusion:
 
-> Backend có nền tảng tốt và một số phần đã đi trước, nhưng chưa thể coi là xong basic project. Team nên đóng gói một demo end-to-end tối thiểu trước, sau đó mới đẩy nhanh frontend và nâng cấp project cho "xịn".
+> The backend has a strong foundation and some modules are ahead of the frontend, but the basic project should not be considered finished yet. The team should first complete a minimal end-to-end demo, then accelerate frontend work and improve the project quality.
 
-## Kết Quả Kiểm Thử
+## Test Result
 
-Đã chạy full Maven test suite:
+The full Maven test suite was run:
 
 ```text
 mvn test
 tests=201 failures=0 errors=0 skipped=0
 ```
 
-Đây là điểm rất tốt. Nó chứng minh các phần domain, persistence, routing đang được test hiện tại chạy ổn định.
+This is a strong positive signal. It shows that the currently tested domain, persistence, and routing code is stable.
 
-Tuy nhiên, test pass không có nghĩa là backend đã hoàn chỉnh, vì nhiều module chưa có implementation nên cũng chưa có test thật sự.
+However, passing tests does not prove that the backend is complete, because several important modules still have no implementation and therefore no real tests.
 
-## Đối Chiếu Theo Roadmap Của Nhóm
+## Progress Against The Team Roadmap
 
 ### Student A
 
-| Tuần | Hạng mục trong roadmap | Trạng thái hiện tại | Bằng chứng |
+| Week | Roadmap Item | Current Status | Evidence |
 |---|---|---|---|
-| 4 | Road density | Đạt | `RoadNetwork.recordVehicleEnteringRoad`, `recordVehicleLeavingRoad`, `updateVehicleDensity`, `getAverageVehicleDensity`, `findRoadsAtOrAboveDensity` |
-| 5 | Blocked/congested states | Đạt | `RoadStatus`, `RoadCondition`, `Road.isAvailable`, routing bỏ qua road bị blocked/closed |
-| 6 | Scenario maps | Một phần | Có `density_demo.json` và `small_city.json`; `congestion_demo.json` và `accident_demo.json` đang rỗng |
-| 7 | Unit tests | Khá tốt cho phần sở hữu | Network, persistence, density, routing liên quan đều có test pass |
+| 4 | Road density | Done | `RoadNetwork.recordVehicleEnteringRoad`, `recordVehicleLeavingRoad`, `updateVehicleDensity`, `getAverageVehicleDensity`, `findRoadsAtOrAboveDensity` |
+| 5 | Blocked/congested states | Done | `RoadStatus`, `RoadCondition`, `Road.isAvailable`, routing skips blocked and closed roads |
+| 6 | Scenario maps | Partial | `density_demo.json` and `small_city.json` exist; `congestion_demo.json` and `accident_demo.json` are empty |
+| 7 | Unit tests | Mostly done for owned modules | Network, persistence, density, and related routing tests pass |
 
-Nhận xét: Student A thật sự đã đi trước ở phần nền tảng backend. Phần cần bổ sung là scenario maps cho event/congestion/accident để demo simulation.
+Assessment: Student A is genuinely ahead on backend foundation work. The main missing piece is completing scenario maps for event, congestion, and accident demos.
 
 ### Student B
 
-| Tuần | Hạng mục trong roadmap | Trạng thái hiện tại | Bằng chứng |
+| Week | Roadmap Item | Current Status | Evidence |
 |---|---|---|---|
-| 4 | Dynamic routing | Một phần | Vehicle có thể gọi recompute route, nhưng simulation service chưa tự động trigger rerouting |
-| 5 | Avoid bad roads | Đạt ở cấp algorithm | `RouteBuilder.isRoadUsable` lọc road không khả dụng; BFS, Dijkstra, A* đều dùng hàm này |
-| 6 | Algorithm metrics | Một phần | `RouteResult` có computation time và visited nodes; `AlgorithmStatistics` đang rỗng |
-| 7 | Algorithm comparison table | Chưa đạt | Chưa có statistics module hoặc bảng/report so sánh algorithm |
+| 4 | Dynamic routing | Partial | Vehicles can call route recomputation, but no simulation service automatically triggers rerouting |
+| 5 | Avoid bad roads | Done at algorithm level | `RouteBuilder.isRoadUsable` filters unavailable roads; BFS, Dijkstra, and A* use it |
+| 6 | Algorithm metrics | Partial | `RouteResult` stores computation time and visited nodes; `AlgorithmStatistics` is empty |
+| 7 | Algorithm comparison table | Not done | No statistics module or comparison report/table exists yet |
 
-Nhận xét: Student B có phần algorithm mạnh và test tốt. Tuy nhiên các mục metrics và comparison mới dừng ở mức dữ liệu thấp, chưa thành chức năng ứng dụng.
+Assessment: Student B has strong algorithm work and good test coverage. However, metrics and comparison features are still not complete as application features.
 
 ### Student C
 
-| Tuần | Hạng mục trong roadmap | Trạng thái hiện tại | Bằng chứng |
+| Week | Roadmap Item | Current Status | Evidence |
 |---|---|---|---|
-| 4 | Vehicle movement | Một phần | `Vehicle.moveOneStep` có và được test; `VehicleService`/`VehicleServiceImpl` chưa implement |
-| 5 | Accident/congestion/closure | Đạt ở cấp domain, chưa đạt ở cấp app | Có `AccidentEvent`, `CongestionEvent`, `RoadClosureEvent`, `TrafficLightDelayEvent`; service và API cho event đang rỗng |
-| 6 | Multi-vehicle demo | Chưa đạt ở backend | Chưa có simulation engine hoặc vehicle service quản lý nhiều xe |
-| 7 | Event tests | Đạt ở unit level | `TrafficEventTest` test apply/resolve của event |
+| 4 | Vehicle movement | Partial | `Vehicle.moveOneStep` exists and is tested; `VehicleService`/`VehicleServiceImpl` are not implemented |
+| 5 | Accident/congestion/closure | Done at domain level, not done at app level | `AccidentEvent`, `CongestionEvent`, `RoadClosureEvent`, and `TrafficLightDelayEvent` exist; event service and API are empty |
+| 6 | Multi-vehicle demo | Not done in backend | No implemented simulation engine or vehicle service manages multiple vehicles |
+| 7 | Event tests | Done at unit level | `TrafficEventTest` covers event apply/resolve behavior |
 
-Nhận xét: Student C đã làm được các class domain quan trọng, nhưng feature chưa thành workflow backend chạy được. Event chưa được trigger theo tick, vehicle chưa tự động nhận thông báo và reroute.
+Assessment: Student C has implemented important domain classes, but the feature is not yet a runnable backend workflow. Events are not triggered by simulation ticks, and vehicles are not automatically notified or rerouted.
 
-## Các Khoảng Trống Backend
+## Backend Gaps
 
-Những file sau đang rỗng hoặc gần như chưa implement:
+The following source files are currently empty or effectively not implemented:
 
 ```text
 src/main/java/team/traffic/api/controller/SimulationController.java
@@ -103,43 +103,43 @@ src/main/java/team/traffic/simulation/TickProcessor.java
 src/main/java/team/traffic/simulation/TrafficSimulator.java
 ```
 
-Riêng `VehicleService.java` hiện mới là class rỗng. Nên cân nhắc chuyển nó thành interface để đồng bộ với pattern hiện có của `RoadNetworkService` và `RoutingService`.
+`VehicleService.java` currently exists as a nearly empty class. It should likely become an interface, matching the existing `RoadNetworkService` and `RoutingService` pattern.
 
-## Vấn Đề Chức Năng Đang Tồn Tại
+## Functional Issues
 
-### 1. Simulation engine chưa có
+### 1. Simulation engine is missing
 
-Theo PDF, ứng dụng cuối cùng phải có simulation engine để update state, advance time, process vehicle movement, handle traffic events, và collect statistics. Hiện các class trong package `simulation` mới là placeholder.
+The PDF requires the final application to have a simulation engine that updates state, advances time, processes vehicle movement, handles traffic events, and collects statistics. The classes in the `simulation` package are still placeholders.
 
-Tác động: chưa thể demo một traffic simulator thật sự.
+Impact: the project cannot yet demonstrate a real traffic simulator.
 
-### 2. Traffic event chưa nối vào runtime
+### 2. Traffic events are not connected to runtime flow
 
-Event domain có thể `apply` và `resolve` road condition, nhưng chưa có `TrafficEventService` hoặc `TickProcessor` để kích hoạt event đúng tick.
+The event domain can `apply` and `resolve` road conditions, but there is no implemented `TrafficEventService` or `TickProcessor` to trigger events at the correct tick.
 
-Tác động: accident/congestion/closure đã tồn tại như object, nhưng chưa thành kịch bản chạy trong simulation.
+Impact: accidents, congestion, and closures exist as objects, but not as running simulation scenarios.
 
-### 3. Dynamic rerouting chưa tự động
+### 3. Dynamic rerouting is not automatic
 
-`Vehicle.recomputeRoute(...)` đã có, nhưng không có simulation/service nào tự động gọi nó khi đường bị blocked, congested, closed, hoặc accident.
+`Vehicle.recomputeRoute(...)` exists, but no simulation or service layer automatically calls it when a road becomes blocked, congested, closed, or affected by an accident.
 
-Tác động: có khả năng recompute route, nhưng chưa thể gọi là dynamic rerouting trong ứng dụng.
+Impact: route recomputation is possible, but it is not yet dynamic rerouting inside the application.
 
-### 4. Multi-vehicle chưa được quản lý bởi backend
+### 4. Multiple vehicles are not managed by the backend
 
-Vehicle domain có, nhưng `VehicleServiceImpl` rỗng. Chưa có registry quản lý vehicles, API tạo vehicle, API lấy danh sách vehicle, hoặc simulation loop di chuyển nhiều vehicle.
+Vehicle domain objects exist, but `VehicleServiceImpl` is empty. There is no backend registry for vehicles, no API for creating vehicles, no API for listing vehicles, and no simulation loop that moves multiple vehicles.
 
-Tác động: Week 6 "multi-vehicle demo" chưa đạt.
+Impact: the Week 6 multi-vehicle demo is not complete.
 
-### 5. Statistics chưa có
+### 5. Statistics are missing
 
-`TrafficStatistics` và `AlgorithmStatistics` đang rỗng. PDF yêu cầu các metric như average travel time, total vehicles, congestion metrics, algorithm computation time, route recalculation count, blocked roads, và bảng/chart so sánh algorithm.
+`TrafficStatistics` and `AlgorithmStatistics` are empty. The PDF expects metrics such as average travel time, total vehicles, congestion metrics, algorithm computation time, route recalculation count, blocked roads, and algorithm comparison charts/tables.
 
-Tác động: statistics panel và experiment summary chưa có backend thật để chạy.
+Impact: the statistics panel and experiment summary cannot yet be backed by real backend data.
 
-### 6. Frontend và backend đang lệch API contract
+### 6. Frontend and backend API contracts do not match
 
-Frontend API client đang gọi nhiều endpoint như:
+The frontend API client already calls endpoints such as:
 
 ```text
 /api/vehicles
@@ -152,7 +152,7 @@ Frontend API client đang gọi nhiều endpoint như:
 /api/routing/algorithms
 ```
 
-Trong khi backend hiện mới đang register các endpoint:
+The backend currently registers only:
 
 ```text
 /api/health
@@ -162,47 +162,47 @@ Trong khi backend hiện mới đang register các endpoint:
 /api/routes
 ```
 
-Tác động: nhiều component frontend không thể hoạt động với backend hiện tại.
+Impact: many frontend components cannot work against the current backend.
 
-## Điểm Mạnh Hiện Có
+## Existing Strengths
 
-Project hiện có nhiều nền tảng tốt:
+The project already has a strong base:
 
-- Road graph, intersections, roads, và graph operations đã có.
-- JSON/CSV map loading đã có và được test.
-- Synthetic map generator đã có.
-- Road density và capacity behavior đã có.
-- Blocked, closed, congested, open road states đã có.
-- BFS, Dijkstra, A* đã có và được test.
-- Congestion-aware route cost đã có.
-- Vehicle movement và route recomputation methods đã có.
-- Traffic event domain classes đã có.
-- Observer pattern có nền tảng qua `TrafficEventBus`.
-- Factory pattern có nền tảng qua `VehicleFactory`.
-- Strategy pattern có nền tảng qua routing strategies.
-- Full test suite hiện tại pass.
+- Road graph, intersections, roads, and graph operations exist.
+- JSON/CSV map loading exists and is tested.
+- Synthetic map generation exists.
+- Road density and capacity behavior exist.
+- Blocked, closed, congested, and open road states exist.
+- BFS, Dijkstra, and A* exist and are tested.
+- Congestion-aware route cost exists.
+- Vehicle movement and route recomputation methods exist.
+- Traffic event domain classes exist.
+- Observer pattern foundation exists through `TrafficEventBus`.
+- Factory pattern foundation exists through `VehicleFactory`.
+- Strategy pattern foundation exists through routing strategies.
+- The full test suite currently passes.
 
-Điều này có nghĩa là team không phải làm lại từ đầu. Việc còn lại chủ yếu là nối các module thành ứng dụng chạy được.
+This means the team does not need to restart. The remaining work is mostly integration and application-level behavior.
 
-## Kế Hoạch Đề Xuất
+## Recommended Plan
 
-### Phase 1: Hoàn thiện backend cơ bản chạy được
+### Phase 1: Finish a basic runnable backend
 
-Mục tiêu: đảm bảo app có thể demo các yêu cầu chính trong PDF ở mức basic.
+Goal: make the app demonstrate the main PDF requirements at a basic level.
 
-Việc cần làm:
+Required tasks:
 
-1. Implement `SimulationStatus`, `SimulationClock`, `SimulationSnapshot`, `TrafficSimulator`, và `TickProcessor`.
-2. Implement `VehicleService` và `VehicleServiceImpl`.
-3. Implement `TrafficEventService` và `TrafficEventServiceImpl`.
-4. Implement `SimulationService` và `SimulationServiceImpl`.
-5. Implement `TrafficStatistics`, `AlgorithmStatistics`, `StatisticsService`, và `StatisticsServiceImpl`.
-6. Thêm DTO cho vehicles, events, snapshots, và statistics.
-7. Thêm controller cho vehicles, events, simulation, và statistics.
-8. Register các controller mới vào `ApiRouteRegistry`.
-9. Thêm tests cho service và simulation behavior.
+1. Implement `SimulationStatus`, `SimulationClock`, `SimulationSnapshot`, `TrafficSimulator`, and `TickProcessor`.
+2. Implement `VehicleService` and `VehicleServiceImpl`.
+3. Implement `TrafficEventService` and `TrafficEventServiceImpl`.
+4. Implement `SimulationService` and `SimulationServiceImpl`.
+5. Implement `TrafficStatistics`, `AlgorithmStatistics`, `StatisticsService`, and `StatisticsServiceImpl`.
+6. Add DTOs for vehicles, events, snapshots, and statistics.
+7. Add controllers for vehicles, events, simulation, and statistics.
+8. Register the new controllers in `ApiRouteRegistry`.
+9. Add tests for service and simulation behavior.
 
-Demo tối thiểu cần chạy được:
+Minimum demo flow:
 
 ```text
 load map
@@ -216,61 +216,61 @@ reroute affected vehicles
 show statistics
 ```
 
-### Phase 2: Đồng bộ frontend với backend thật
+### Phase 2: Align frontend with real backend endpoints
 
-Mục tiêu: frontend chỉ gọi các endpoint có thật, hoặc backend phải implement các endpoint frontend đang gọi.
+Goal: the frontend should call only real endpoints, or the backend should implement the endpoints the frontend already expects.
 
-Việc cần làm:
+Required tasks:
 
-1. Thêm backend endpoint cho `/api/network/roads`.
-2. Quyết định `/api/network/load`, `/api/network/generate`, và `/api/network/save` có nằm trong basic demo không.
-3. Nối vehicle panel với vehicle endpoints thật.
-4. Nối event panel với event endpoints thật.
-5. Nối control panel với simulation endpoints thật.
-6. Nối statistics panel với statistics endpoints thật.
-7. Ẩn hoặc xóa tạm thời các frontend controls cho feature chưa có backend.
+1. Add a backend endpoint for `/api/network/roads`.
+2. Decide whether `/api/network/load`, `/api/network/generate`, and `/api/network/save` are in scope for the basic demo.
+3. Connect the vehicle panel to real vehicle endpoints.
+4. Connect the event panel to real event endpoints.
+5. Connect the control panel to real simulation endpoints.
+6. Connect the statistics panel to real statistics endpoints.
+7. Hide or remove frontend controls for features that do not have backend support yet.
 
-### Phase 3: Sau đó mới làm cho project "xịn" hơn
+### Phase 3: Improve the project after the baseline works
 
-Chỉ nên sang phase này sau khi Phase 1 và Phase 2 đã có demo end-to-end.
+Only move to this phase after Phase 1 and Phase 2 produce an end-to-end demo.
 
-Các hướng nâng cấp:
+Possible upgrades:
 
-- map visualization đẹp hơn;
+- better map visualization;
 - vehicle animation;
 - congestion heatmap;
-- scenario maps phong phú hơn;
+- richer scenario maps;
 - algorithm comparison table;
-- charts cho experiment;
+- experiment charts;
 - large-scale synthetic networks;
-- presentation demo gọn và ổn định;
-- README và setup instructions rõ ràng hơn.
+- stable presentation demo;
+- clearer README and setup instructions.
 
-## Ý Kiến Về Đề Xuất Của Student C
+## Opinion On Student C's Proposal
 
-Đề xuất của Student C có hướng suy nghĩ đúng: nếu basic project đã ổn thì team nên ngừng loay hoay với việc "làm cho đúng" và chuyển sang "làm cho xịn".
+Student C's proposal has a good direction: if the basic project is stable, the team should stop only chasing "correctness" and start improving quality and polish.
 
-Nhưng điều kiện "basic project đã ổn" hiện chưa đúng. Backend có nhiều module lõi đi trước, nhưng full backend application chưa xong. Nếu kết thúc basic project ngay bây giờ thì rủi ro cao, vì project vẫn thiếu simulation, statistics, event runtime flow, vehicle services, và API integration.
+However, the condition "the basic project is stable" is not true yet. The backend has several domain modules ahead of schedule, but the full backend application is not done. Ending the basic project now would be risky because the project still lacks simulation, statistics, event runtime flow, vehicle services, and API integration.
 
-Quyết định nên đưa ra:
+Recommended team decision:
 
-> Chưa nên tuyên bố basic project đã xong. Nên dành sprint tiếp theo để đóng các backend integration gaps và nối frontend vào endpoint thật. Khi đã có một demo end-to-end hoàn chỉnh, lúc đó mới hợp lý để đẩy nhanh frontend polish và nâng cấp project.
+> Do not declare the basic project finished yet. Spend the next sprint closing backend integration gaps and connecting the frontend to real endpoints. Once there is a complete end-to-end demo, it becomes reasonable to accelerate frontend polish and advanced improvements.
 
-## Kết Luận Cuối
+## Final Verdict
 
-Student C đúng một phần, nhưng nói quá mức.
+Student C is partially correct, but the claim is overstated.
 
-Phần đúng:
+Correct:
 
-- A, B, C đã làm được nhiều backend domain foundations trước frontend.
-- Nền tảng backend đang được test hiện tại khá ổn.
-- Project có đủ cơ sở để tăng tốc frontend trong thời gian gần.
+- A, B, and C have implemented many backend domain foundations ahead of the frontend.
+- The tested backend foundation is currently stable.
+- The project has enough backend base to accelerate frontend work soon.
 
-Phần chưa đúng:
+Not correct:
 
-- Backend tuần 4-7 chưa gần như xong ở cấp ứng dụng.
-- Simulation, multi-vehicle runtime, traffic event orchestration, statistics, và nhiều API vẫn còn thiếu.
+- The backend for weeks 4 to 7 is not almost complete at application level.
+- Simulation, multi-vehicle runtime, traffic event orchestration, statistics, and several APIs are still missing.
 
-Kết luận hành động:
+Actionable conclusion:
 
-> Hoàn thiện minimal end-to-end backend trước, sau đó tăng tốc frontend và nâng cấp project.
+> Finish the minimal end-to-end backend first, then accelerate frontend work and project polish.

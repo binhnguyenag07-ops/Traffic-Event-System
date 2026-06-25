@@ -8,7 +8,7 @@ This file links the final planning documents for the Traffic Event System projec
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Complete project folder structure and layer summary. |
 | [CLASS_DIAGRAM.md](CLASS_DIAGRAM.md) | Complete Mermaid class diagram and design patterns. |
-| [BACKEND_PROGRESS_AUDIT.md](BACKEND_PROGRESS_AUDIT.md) | Báo cáo audit tiến độ backend theo roadmap của nhóm và yêu cầu project. |
+| [BACKEND_PROGRESS_AUDIT.md](BACKEND_PROGRESS_AUDIT.md) | Backend progress audit against the team roadmap and project requirements. |
 
 ## Individual Member Planning Files
 
