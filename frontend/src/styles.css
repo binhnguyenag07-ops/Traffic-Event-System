@@ -253,11 +253,151 @@ code {
   color: #1e40af;
 }
 
+/* ── Simulation Panel ──────────────────────────────────────────────────── */
+
+.sim-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 1.5rem;
+}
+
+.sim-panel h2 {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  color: #1e293b;
+}
+
+.sim-panel h3 {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.75rem;
+  color: #475569;
+}
+
+.sim-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.sim-badge {
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sim-tick {
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.sim-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sim-hint {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.sim-btn {
+  padding: 0.5rem 1.1rem;
+  border: none;
+  border-radius: 7px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.sim-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sim-btn.primary   { background: #6366f1; color: #fff; }
+.sim-btn.primary:hover:not(:disabled)   { background: #4f46e5; }
+
+.sim-btn.green     { background: #16a34a; color: #fff; }
+.sim-btn.green:hover:not(:disabled)     { background: #15803d; }
+
+.sim-btn.amber     { background: #d97706; color: #fff; }
+.sim-btn.amber:hover:not(:disabled)     { background: #b45309; }
+
+.sim-btn.red       { background: #dc2626; color: #fff; }
+.sim-btn.red:hover:not(:disabled)       { background: #b91c1c; }
+
+.sim-btn.secondary { background: #e2e8f0; color: #1e293b; }
+.sim-btn.secondary:hover:not(:disabled) { background: #cbd5e1; }
+
+.auto-label {
+  font-size: 0.85rem;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+.interval-select {
+  padding: 0.35rem 0.5rem;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.interval-select:disabled {
+  opacity: 0.5;
+}
+
+.sim-error {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+  border-radius: 8px;
+  padding: 0.65rem 1rem;
+  color: #b91c1c;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.vehicle-table-wrap {
+  overflow-x: auto;
+}
+
+.v-status {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.form-section h2 {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  color: #1e293b;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+
 @media (max-width: 600px) {
   .form-row {
     flex-direction: column;
   }
   .arrow {
     display: none;
+  }
+  .sim-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

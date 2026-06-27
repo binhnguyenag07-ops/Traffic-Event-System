@@ -5,6 +5,7 @@ import team.traffic.api.TrafficApiServer;
 import team.traffic.api.controller.HealthController;
 import team.traffic.api.controller.NetworkController;
 import team.traffic.api.controller.RoutingController;
+import team.traffic.api.controller.SimulationController;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.persistence.JsonMapLoader;
 import team.traffic.routing.AStarPathFindingStrategy;
@@ -13,6 +14,8 @@ import team.traffic.routing.DijkstraPathFindingStrategy;
 import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.impl.RoadNetworkServiceImpl;
 import team.traffic.service.impl.RoutingServiceImpl;
+import team.traffic.service.impl.SimulationServiceImpl;
+import team.traffic.simulation.TrafficSimulator;
 
 public class App {
     private static final int PORT = 7070;
@@ -37,15 +40,18 @@ public class App {
         // Create services
         RoadNetworkServiceImpl networkService = new RoadNetworkServiceImpl(network);
         RoutingServiceImpl routingService = new RoutingServiceImpl(registry);
+        TrafficSimulator simulator = new TrafficSimulator(network, routingService);
+        SimulationServiceImpl simulationService = new SimulationServiceImpl(simulator);
 
         // Create controllers
         HealthController healthController = new HealthController();
         NetworkController networkController = new NetworkController(networkService);
         RoutingController routingController = new RoutingController(routingService, networkService);
+        SimulationController simulationController = new SimulationController(simulationService);
 
         // Wire API routes
         ApiRouteRegistry routeRegistry = new ApiRouteRegistry(
-                healthController, networkController, routingController);
+                healthController, networkController, routingController, simulationController);
 
         // Start Javalin server
         TrafficApiServer server = new TrafficApiServer(routeRegistry, PORT);
@@ -55,5 +61,12 @@ public class App {
         System.out.println("  POST http://localhost:" + PORT + "/api/routes");
         System.out.println("  GET  http://localhost:" + PORT + "/api/health");
         System.out.println("  GET  http://localhost:" + PORT + "/api/network/intersections");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/initialize");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/start");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/pause");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/reset");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/tick");
+        System.out.println("  GET  http://localhost:" + PORT + "/api/simulation/status");
+        System.out.println("  GET  http://localhost:" + PORT + "/api/simulation/snapshot");
     }
 }
