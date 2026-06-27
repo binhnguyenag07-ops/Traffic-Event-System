@@ -36,12 +36,10 @@ public class VehicleServiceImpl implements VehicleService {
 
     @Override
     public Vehicle createVehicle(VehicleType type, String startIntersectionId, String destinationIntersectionId, RoadNetwork network) {
+        validateVehicleRequest(type, startIntersectionId, destinationIntersectionId, network);
+
         String id = "V-" + UUID.randomUUID().toString().substring(0, 8);
-        Vehicle vehicle = vehicleFactory.createVehicle(type, startIntersectionId, destinationIntersectionId);
-        // Using reflection or a specific method to set ID if possible, but VehicleFactory might not have overloaded method with ID in interface.
-        // Wait, VehicleFactory has createVehicle(VehicleType, String, String) and also createCar(String, String, String).
-        // Let's assume createVehicle handles ID generation internally, or we use it as is.
-        // I will use createVehicle directly.
+        Vehicle vehicle = vehicleFactory.createVehicle(type, id, startIntersectionId, destinationIntersectionId);
         vehicles.add(vehicle);
         return vehicle;
     }
@@ -53,18 +51,48 @@ public class VehicleServiceImpl implements VehicleService {
         }
 
         for (Vehicle vehicle : vehicles) {
-            if (vehicle.getStatus() == VehicleStatus.WAITING && vehicle.getCurrentRoute() == null) {
-                // Not initialized route
-                vehicle.requestRoute(network, routingService);
-            } else if (vehicle.getStatus() == VehicleStatus.MOVING || vehicle.getStatus() == VehicleStatus.WAITING) {
-                vehicle.moveOneStep(network);
-            } else if (vehicle.getStatus() == VehicleStatus.BLOCKED) {
-                vehicle.recomputeRoute(network, routingService);
-                if (vehicle.getStatus() == VehicleStatus.WAITING) {
-                    // Try to move again if recompute succeeded
-                    vehicle.moveOneStep(network);
-                }
+            if (vehicle.getStatus() == VehicleStatus.ARRIVED) {
+                continue;
             }
+
+            if (vehicle.getCurrentRoute() == null || vehicle.getStatus() == VehicleStatus.BLOCKED) {
+                vehicle.recomputeRoute(network, routingService);
+            }
+
+            moveIfReady(vehicle, network);
+
+            if (vehicle.getStatus() == VehicleStatus.BLOCKED && !vehicle.hasReachedDestination()) {
+                vehicle.recomputeRoute(network, routingService);
+                moveIfReady(vehicle, network);
+            }
+        }
+    }
+
+    private void moveIfReady(Vehicle vehicle, RoadNetwork network) {
+        if (vehicle.getStatus() == VehicleStatus.WAITING || vehicle.getStatus() == VehicleStatus.MOVING) {
+            vehicle.moveOneStep(network);
+        }
+    }
+
+    private void validateVehicleRequest(
+            VehicleType type,
+            String startIntersectionId,
+            String destinationIntersectionId,
+            RoadNetwork network) {
+        if (type == null) {
+            throw new IllegalArgumentException("Vehicle type is required");
+        }
+        if (startIntersectionId == null || startIntersectionId.isBlank()) {
+            throw new IllegalArgumentException("Start intersection id is required");
+        }
+        if (destinationIntersectionId == null || destinationIntersectionId.isBlank()) {
+            throw new IllegalArgumentException("Destination intersection id is required");
+        }
+        if (network != null && !network.containsIntersection(startIntersectionId)) {
+            throw new IllegalArgumentException("Start intersection not found: " + startIntersectionId);
+        }
+        if (network != null && !network.containsIntersection(destinationIntersectionId)) {
+            throw new IllegalArgumentException("Destination intersection not found: " + destinationIntersectionId);
         }
     }
 }

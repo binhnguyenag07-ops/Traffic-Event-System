@@ -35,11 +35,16 @@ class VehicleTest {
         vehicle.moveOneStep(network);
         assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("B");
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.MOVING);
+        assertThat(vehicle.getOccupiedRoadId()).isEqualTo("AB");
+        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isEqualTo(1);
 
         vehicle.moveOneStep(network);
         assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("C");
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.ARRIVED);
         assertThat(vehicle.getTravelHistory()).containsExactly("A", "B", "C");
+        assertThat(vehicle.getOccupiedRoadId()).isNull();
+        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
+        assertThat(network.getRoad("BC").getCurrentVehicleCount()).isZero();
     }
 
     @Test

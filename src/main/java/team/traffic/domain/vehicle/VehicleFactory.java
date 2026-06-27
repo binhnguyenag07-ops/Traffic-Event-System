@@ -12,6 +12,18 @@ public class VehicleFactory {
         };
     }
 
+    public Vehicle createVehicle(
+            VehicleType type,
+            String id,
+            String currentIntersectionId,
+            String destinationIntersectionId) {
+        return switch (type) {
+            case CAR -> createCar(id, currentIntersectionId, destinationIntersectionId);
+            case BUS -> createBus(id, currentIntersectionId, destinationIntersectionId);
+            case EMERGENCY -> createEmergencyVehicle(id, currentIntersectionId, destinationIntersectionId);
+        };
+    }
+
     public Car createCar(String currentIntersectionId, String destinationIntersectionId) {
         return createCar("car-" + currentIntersectionId + "-" + destinationIntersectionId,
                 currentIntersectionId,
