@@ -50,7 +50,8 @@ public class VehicleController {
             ctx.status(400).json(error("startIntersectionId is required"));
             return;
         }
-        if (request.destinationIntersectionId == null) {
+        String destinationIntersectionId = request.getDestinationIntersectionId();
+        if (destinationIntersectionId == null) {
             ctx.status(400).json(error("destinationIntersectionId is required"));
             return;
         }
@@ -67,9 +68,11 @@ public class VehicleController {
             Vehicle vehicle = vehicleService.createVehicle(
                     type,
                     request.startIntersectionId,
-                    request.destinationIntersectionId,
+                    destinationIntersectionId,
                     networkService.getNetwork());
             ctx.status(201).json(new VehicleDto(vehicle));
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).json(error(e.getMessage()));
         } catch (Exception e) {
             ctx.status(500).json(error("Error creating vehicle: " + e.getMessage()));
         }
@@ -83,5 +86,13 @@ public class VehicleController {
         public String type;
         public String startIntersectionId;
         public String destinationIntersectionId;
+        public String endIntersectionId;
+
+        public String getDestinationIntersectionId() {
+            if (destinationIntersectionId != null && !destinationIntersectionId.isBlank()) {
+                return destinationIntersectionId;
+            }
+            return endIntersectionId;
+        }
     }
 }

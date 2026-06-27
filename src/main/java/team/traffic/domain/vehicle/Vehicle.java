@@ -23,15 +23,29 @@ public abstract class Vehicle {
     private RoutePreference routePreference;
     private double movementSpeed;
     private VehicleStatus status;
+    private String occupiedRoadId;
     private final List<String> travelHistory;
 
     protected Vehicle(String id, String currentIntersectionId, String destinationIntersectionId, double movementSpeed) {
+        if (id == null || id.isBlank()) {
+            throw new IllegalArgumentException("Vehicle id must not be blank.");
+        }
+        if (currentIntersectionId == null || currentIntersectionId.isBlank()) {
+            throw new IllegalArgumentException("Current intersection id must not be blank.");
+        }
+        if (destinationIntersectionId == null || destinationIntersectionId.isBlank()) {
+            throw new IllegalArgumentException("Destination intersection id must not be blank.");
+        }
+        if (movementSpeed <= 0) {
+            throw new IllegalArgumentException("Movement speed must be positive.");
+        }
+
         this.id = id;
         this.currentIntersectionId = currentIntersectionId;
         this.destinationIntersectionId = destinationIntersectionId;
         this.movementSpeed = movementSpeed;
-        this.routePreference = RoutePreference.SHORTEST_TIME;
-        this.status = VehicleStatus.WAITING;
+        this.routePreference = RoutePreference.CONGESTION_AWARE;
+        this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
         this.travelHistory = new ArrayList<>();
         this.travelHistory.add(currentIntersectionId);
     }
@@ -87,25 +101,33 @@ public abstract class Vehicle {
 
     public void moveOneStep(RoadNetwork roadNetwork) {
         if (hasReachedDestination()) {
+            releaseOccupiedRoad(roadNetwork);
             this.status = VehicleStatus.ARRIVED;
             return;
         }
 
         RouteStep nextStep = getNextRouteStep();
         if (nextStep == null || !nextStep.getFromIntersectionId().equals(currentIntersectionId)) {
+            releaseOccupiedRoad(roadNetwork);
             status = VehicleStatus.BLOCKED;
             return;
         }
 
         if (roadNetwork != null && !isStepAvailable(roadNetwork, nextStep)) {
+            releaseOccupiedRoad(roadNetwork);
             status = VehicleStatus.BLOCKED;
             return;
         }
 
+        enterNextRoad(roadNetwork, nextStep);
         nextRouteStepIndex++;
         moveTo(nextStep.getToIntersectionId());
 
-        if (!hasReachedDestination() && nextRouteStepIndex >= currentRoute.getStepCount()) {
+        if (hasReachedDestination()) {
+            releaseOccupiedRoad(roadNetwork);
+            status = VehicleStatus.ARRIVED;
+        } else if (nextRouteStepIndex >= currentRoute.getStepCount()) {
+            releaseOccupiedRoad(roadNetwork);
             status = VehicleStatus.BLOCKED;
         }
     }
@@ -173,6 +195,10 @@ public abstract class Vehicle {
         return routePreference;
     }
 
+    public String getOccupiedRoadId() {
+        return occupiedRoadId;
+    }
+
     public double getMovementSpeed() {
         return movementSpeed;
     }
@@ -219,5 +245,27 @@ public abstract class Vehicle {
                 && road.getStartIntersectionId().equals(step.getFromIntersectionId())
                 && road.getEndIntersectionId().equals(step.getToIntersectionId())
                 && road.isAvailable();
+    }
+
+    private void enterNextRoad(RoadNetwork roadNetwork, RouteStep step) {
+        if (roadNetwork == null) {
+            return;
+        }
+
+        releaseOccupiedRoad(roadNetwork);
+        roadNetwork.recordVehicleEnteringRoad(step.getRoadId());
+        occupiedRoadId = step.getRoadId();
+    }
+
+    private void releaseOccupiedRoad(RoadNetwork roadNetwork) {
+        if (roadNetwork == null || occupiedRoadId == null) {
+            return;
+        }
+
+        Road occupiedRoad = roadNetwork.getRoad(occupiedRoadId);
+        if (occupiedRoad != null && occupiedRoad.getCurrentVehicleCount() > 0) {
+            roadNetwork.recordVehicleLeavingRoad(occupiedRoadId);
+        }
+        occupiedRoadId = null;
     }
 }
