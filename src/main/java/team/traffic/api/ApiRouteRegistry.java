@@ -4,6 +4,7 @@ import io.javalin.Javalin;
 import team.traffic.api.controller.HealthController;
 import team.traffic.api.controller.NetworkController;
 import team.traffic.api.controller.RoutingController;
+import team.traffic.api.controller.SimulationController;
 import team.traffic.api.controller.TrafficEventController;
 import team.traffic.api.controller.VehicleController;
 
@@ -11,6 +12,7 @@ public class ApiRouteRegistry {
     private final HealthController healthController;
     private final NetworkController networkController;
     private final RoutingController routingController;
+    private final SimulationController simulationController;
     private final VehicleController vehicleController;
     private final TrafficEventController trafficEventController;
 
@@ -18,6 +20,11 @@ public class ApiRouteRegistry {
             HealthController healthController,
             NetworkController networkController,
             RoutingController routingController,
+            SimulationController simulationController) {
+        this.healthController = healthController;
+        this.networkController = networkController;
+        this.routingController = routingController;
+        this.simulationController = simulationController;
             VehicleController vehicleController,
             TrafficEventController trafficEventController) {
         this.healthController = healthController;
@@ -31,6 +38,7 @@ public class ApiRouteRegistry {
         healthController.registerRoutes(app);
         networkController.registerRoutes(app);
         routingController.registerRoutes(app);
+        simulationController.registerRoutes(app);
         vehicleController.registerRoutes(app);
         trafficEventController.registerRoutes(app);
     }

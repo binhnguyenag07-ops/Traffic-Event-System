@@ -5,6 +5,7 @@ import team.traffic.api.TrafficApiServer;
 import team.traffic.api.controller.HealthController;
 import team.traffic.api.controller.NetworkController;
 import team.traffic.api.controller.RoutingController;
+import team.traffic.api.controller.SimulationController;
 import team.traffic.api.controller.TrafficEventController;
 import team.traffic.api.controller.VehicleController;
 import team.traffic.domain.network.RoadNetwork;
@@ -16,6 +17,8 @@ import team.traffic.routing.DijkstraPathFindingStrategy;
 import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.impl.RoadNetworkServiceImpl;
 import team.traffic.service.impl.RoutingServiceImpl;
+import team.traffic.service.impl.SimulationServiceImpl;
+import team.traffic.simulation.TrafficSimulator;
 import team.traffic.service.impl.TrafficEventServiceImpl;
 import team.traffic.service.impl.VehicleServiceImpl;
 
@@ -45,6 +48,8 @@ public class App {
         // Create services
         RoadNetworkServiceImpl networkService = new RoadNetworkServiceImpl(network);
         RoutingServiceImpl routingService = new RoutingServiceImpl(registry);
+        TrafficSimulator simulator = new TrafficSimulator(network, routingService);
+        SimulationServiceImpl simulationService = new SimulationServiceImpl(simulator);
         VehicleServiceImpl vehicleService = new VehicleServiceImpl();
         TrafficEventServiceImpl trafficEventService = new TrafficEventServiceImpl(eventBus);
 
@@ -52,6 +57,11 @@ public class App {
         HealthController healthController = new HealthController();
         NetworkController networkController = new NetworkController(networkService);
         RoutingController routingController = new RoutingController(routingService, networkService);
+        SimulationController simulationController = new SimulationController(simulationService);
+
+        // Wire API routes
+        ApiRouteRegistry routeRegistry = new ApiRouteRegistry(
+                healthController, networkController, routingController, simulationController);
         VehicleController vehicleController = new VehicleController(vehicleService, networkService);
         TrafficEventController trafficEventController = new TrafficEventController(trafficEventService);
 
@@ -67,6 +77,13 @@ public class App {
         System.out.println("  POST http://localhost:" + PORT + "/api/routes");
         System.out.println("  GET  http://localhost:" + PORT + "/api/health");
         System.out.println("  GET  http://localhost:" + PORT + "/api/network/intersections");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/initialize");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/start");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/pause");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/reset");
+        System.out.println("  POST http://localhost:" + PORT + "/api/simulation/tick");
+        System.out.println("  GET  http://localhost:" + PORT + "/api/simulation/status");
+        System.out.println("  GET  http://localhost:" + PORT + "/api/simulation/snapshot");
         System.out.println("  GET  http://localhost:" + PORT + "/api/vehicles");
         System.out.println("  GET  http://localhost:" + PORT + "/api/events");
     }
