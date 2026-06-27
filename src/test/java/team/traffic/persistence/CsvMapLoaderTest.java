@@ -107,6 +107,20 @@ class CsvMapLoaderTest {
     }
 
     @Test
+    void rejectsRoadDensityThatDoesNotMatchVehicleCountAndCapacity() throws IOException {
+        Path file = writeCsv(
+                "INTERSECTION,I1,First,0,0,NORMAL,,,,,,,,,",
+                "INTERSECTION,I2,Second,1,0,NORMAL,,,,,,,,,",
+                "ROAD,R1,,,,,I1,I2,10,50,10,5,0,0.1,OPEN");
+
+        assertThatThrownBy(() -> loader.load(file.toString()))
+                .isInstanceOf(InvalidMapException.class)
+                .hasMessageContaining("Invalid ROAD record 3")
+                .hasMessageContaining("Vehicle density for road R1 must match currentVehicleCount / capacity")
+                .hasMessageContaining("expected 0.500 but was 0.100");
+    }
+
+    @Test
     void rejectsCsvWithoutIntersections() throws IOException {
         Path file = writeCsv();
 

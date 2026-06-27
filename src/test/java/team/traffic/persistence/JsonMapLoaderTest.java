@@ -76,6 +76,38 @@ class JsonMapLoaderTest {
     }
 
     @Test
+    void rejectsRoadDensityThatDoesNotMatchVehicleCountAndCapacity() throws IOException {
+        Path file = writeJson("""
+                {
+                  "intersections": [
+                    {"id":"I1","name":"First","x":0,"y":0,"locationType":"NORMAL"},
+                    {"id":"I2","name":"Second","x":1,"y":0,"locationType":"NORMAL"}
+                  ],
+                  "roads": [
+                    {
+                      "id":"R1",
+                      "startIntersectionId":"I1",
+                      "endIntersectionId":"I2",
+                      "distance":10,
+                      "speedLimit":50,
+                      "capacity":10,
+                      "currentVehicleCount":5,
+                      "congestionLevel":0,
+                      "vehicleDensity":0.1,
+                      "roadStatus":"OPEN"
+                    }
+                  ]
+                }
+                """);
+
+        assertThatThrownBy(() -> loader.load(file.toString()))
+                .isInstanceOf(InvalidMapException.class)
+                .hasMessageContaining("Invalid JSON road at index 0")
+                .hasMessageContaining("Vehicle density for road R1 must match currentVehicleCount / capacity")
+                .hasMessageContaining("expected 0.500 but was 0.100");
+    }
+
+    @Test
     void rejectsMissingRoadStatusInsteadOfDefaultingIt() throws IOException {
         Path file = writeJson("""
                 {

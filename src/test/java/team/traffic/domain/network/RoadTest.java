@@ -67,6 +67,50 @@ class RoadTest {
         assertThat(fullRoad.calculateTravelCost()).isEqualTo(Double.POSITIVE_INFINITY);
     }
 
+    @Test
+    void updatesVehicleDensityWhenVehicleCountChanges() {
+        Road road = createRoad(10, 50);
+
+        road.setCurrentVehicleCount(25);
+
+        assertThat(road.getCapacityUsage()).isEqualTo(0.25);
+        assertThat(road.getCondition().getVehicleDensity()).isEqualTo(0.25);
+    }
+
+    @Test
+    void recordsVehicleEntryAndExitWithDensityRefresh() {
+        Road road = createRoad(10, 50);
+
+        road.enterVehicle();
+        road.enterVehicle();
+        road.leaveVehicle();
+
+        assertThat(road.getCurrentVehicleCount()).isEqualTo(1);
+        assertThat(road.getCondition().getVehicleDensity()).isEqualTo(0.01);
+    }
+
+    @Test
+    void rejectsVehicleEntryWhenRoadCannotAcceptMoreVehicles() {
+        Road blockedRoad = roadWithStatus(RoadStatus.BLOCKED, 0);
+        Road fullRoad = roadWithStatus(RoadStatus.OPEN, 100);
+
+        assertThatThrownBy(blockedRoad::enterVehicle)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Road is not available: R1");
+        assertThatThrownBy(fullRoad::enterVehicle)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Road is not available: R1");
+    }
+
+    @Test
+    void rejectsVehicleExitFromEmptyRoad() {
+        Road road = createRoad(10, 50);
+
+        assertThatThrownBy(road::leaveVehicle)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Cannot remove vehicle from empty road: R1");
+    }
+
     private Road createRoad(double distance, double speedLimit) {
         return new Road(
                 "R1",
