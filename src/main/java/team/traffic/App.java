@@ -59,15 +59,13 @@ public class App {
         RoutingController routingController = new RoutingController(routingService, networkService);
         SimulationController simulationController = new SimulationController(simulationService);
 
-        // Wire API routes
-        ApiRouteRegistry routeRegistry = new ApiRouteRegistry(
-                healthController, networkController, routingController, simulationController);
         VehicleController vehicleController = new VehicleController(vehicleService, networkService);
-        TrafficEventController trafficEventController = new TrafficEventController(trafficEventService);
+        TrafficEventController trafficEventController = new TrafficEventController(trafficEventService, simulationService);
 
         // Wire API routes
         ApiRouteRegistry routeRegistry = new ApiRouteRegistry(
-                healthController, networkController, routingController, vehicleController, trafficEventController);
+                healthController, networkController, routingController, simulationController,
+                vehicleController, trafficEventController);
 
         // Start Javalin server
         TrafficApiServer server = new TrafficApiServer(routeRegistry, PORT);

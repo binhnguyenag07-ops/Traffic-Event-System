@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-
-const API_BASE = 'http://localhost:7070/api'
+import { simulationApi, routingApi, trafficEventApi, networkApi } from './api/trafficAPI'
 
 const PREFERENCES = [
   { value: 'SHORTEST_TIME', label: 'Shortest Time' },
@@ -15,31 +14,103 @@ const DEFAULT_VEHICLES = [
   { id: 'v3', type: 'EMERGENCY', currentIntersectionId: 'I3', destinationIntersectionId: 'I4' },
 ]
 
-const STATUS_COLOR = { READY: '#6366f1', RUNNING: '#16a34a', PAUSED: '#d97706' }
+const STATUS_COLOR        = { READY: '#6366f1', RUNNING: '#16a34a', PAUSED: '#d97706' }
 const VEHICLE_STATUS_COLOR = { MOVING: '#2563eb', ARRIVED: '#16a34a', BLOCKED: '#dc2626', WAITING: '#64748b' }
+const ROAD_STATUS_COLOR   = { OPEN: '#16a34a', CONGESTED: '#d97706', BLOCKED: '#dc2626', CLOSED: '#991b1b' }
+const EVENT_TYPES         = ['CONGESTION', 'ACCIDENT', 'ROAD_CLOSURE', 'TRAFFIC_LIGHT_DELAY']
+const EVENT_TYPE_COLOR    = { CONGESTION: '#f59e0b', ACCIDENT: '#dc2626', ROAD_CLOSURE: '#991b1b', TRAFFIC_LIGHT_DELAY: '#6366f1' }
+const EVENT_STATUS_COLOR  = { SCHEDULED: '#3b82f6', ACTIVE: '#d97706', RESOLVED: '#16a34a' }
 
-async function apiFetch(path, method = 'GET', body) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`)
-  return data
+// ── Network Panel (Week 2) ───────────────────────────────────────────────────
+
+function NetworkPanel() {
+  const [summary, setSummary] = useState(null)
+  const [roads, setRoads]     = useState([])
+  const [showRoads, setShowRoads] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([networkApi.getRoadNetwork(), networkApi.getAllRoads()])
+      .then(([net, rds]) => {
+        setSummary(net)
+        setRoads(Array.isArray(rds) ? rds : [])
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (!summary && !loading) return null
+
+  return (
+    <section className="sim-panel">
+      <h2>Road Network</h2>
+
+      {loading && <p className="sim-hint">Loading network…</p>}
+
+      {summary && (
+        <>
+          <div className="sim-status-bar">
+            <span className="sim-badge" style={{ background: '#0ea5e9' }}>
+              {summary.intersectionCount} intersections
+            </span>
+            <span className="sim-badge" style={{ background: '#8b5cf6' }}>
+              {summary.roadCount} roads
+            </span>
+          </div>
+
+          <div className="sim-row">
+            <button className="sim-btn secondary" onClick={() => setShowRoads(v => !v)}>
+              {showRoads ? 'Hide Roads' : 'Show Roads'}
+            </button>
+          </div>
+
+          {showRoads && roads.length > 0 && (
+            <div className="vehicle-table-wrap">
+              <table className="steps-table">
+                <thead>
+                  <tr>
+                    <th>ID</th><th>From → To</th><th>Dist (km)</th>
+                    <th>Speed (km/h)</th><th>Vehicles / Cap</th><th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {roads.map(r => (
+                    <tr key={r.id}>
+                      <td><code>{r.id}</code></td>
+                      <td><code>{r.startIntersectionId}</code> → <code>{r.endIntersectionId}</code></td>
+                      <td>{r.distance?.toFixed(1)}</td>
+                      <td>{r.speedLimit}</td>
+                      <td>{r.currentVehicleCount} / {r.capacity}</td>
+                      <td>
+                        <span className="v-status" style={{ color: ROAD_STATUS_COLOR[r.status] ?? '#64748b' }}>
+                          {r.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  )
 }
 
-// ── Simulation Panel ────────────────────────────────────────────────────────
+// ── Simulation Panel (Week 4) ────────────────────────────────────────────────
 
 function SimulationPanel() {
-  const [simStatus, setSimStatus]     = useState('READY')
-  const [currentTick, setCurrentTick] = useState(0)
-  const [vehicles, setVehicles]       = useState([])
-  const [initialized, setInitialized] = useState(false)
-  const [loading, setLoading]         = useState(false)
-  const [error, setSimError]          = useState(null)
-  const [autoTick, setAutoTick]       = useState(false)
-  const [tickInterval, setTickInterval] = useState(1000)
+  const [simStatus, setSimStatus]         = useState('READY')
+  const [currentTick, setCurrentTick]     = useState(0)
+  const [vehicles, setVehicles]           = useState([])
+  const [trafficEvents, setTrafficEvents] = useState([])
+  const [initialized, setInitialized]     = useState(false)
+  const [loading, setLoading]             = useState(false)
+  const [error, setSimError]              = useState(null)
+  const [autoTick, setAutoTick]           = useState(false)
+  const [tickInterval, setTickInterval]   = useState(1000)
   const autoTickRef = useRef(null)
 
   const wrap = async (fn) => {
@@ -49,19 +120,20 @@ function SimulationPanel() {
   }
 
   const refreshSnapshot = async () => {
-    const snap = await apiFetch('/simulation/snapshot')
+    const snap = await simulationApi.getSimulationSnapshot()
     setCurrentTick(snap.tick ?? 0)
     setVehicles(snap.vehicles ?? [])
+    setTrafficEvents(snap.trafficEvents ?? [])
   }
 
   const refreshStatus = async () => {
-    const s = await apiFetch('/simulation/status')
+    const s = await simulationApi.getSimulationStatus()
     setSimStatus(s.status)
     setCurrentTick(s.currentTick ?? 0)
   }
 
   const handleInitialize = () => wrap(async () => {
-    await apiFetch('/simulation/initialize', 'POST', { vehicles: DEFAULT_VEHICLES, events: [] })
+    await simulationApi.initializeSimulation(DEFAULT_VEHICLES, [])
     await refreshSnapshot()
     await refreshStatus()
     setInitialized(true)
@@ -69,42 +141,44 @@ function SimulationPanel() {
   })
 
   const handleStart = () => wrap(async () => {
-    await apiFetch('/simulation/start', 'POST', {})
+    await simulationApi.startSimulation()
     setSimStatus('RUNNING')
   })
 
   const handlePause = () => wrap(async () => {
-    await apiFetch('/simulation/pause', 'POST', {})
+    await simulationApi.pauseSimulation()
     setSimStatus('PAUSED')
     setAutoTick(false)
   })
 
   const handleResume = () => wrap(async () => {
-    await apiFetch('/simulation/resume', 'POST', {})
+    await simulationApi.resumeSimulation()
     setSimStatus('RUNNING')
   })
 
   const handleReset = () => wrap(async () => {
-    await apiFetch('/simulation/reset', 'POST', {})
+    await simulationApi.resetSimulation()
     setAutoTick(false)
     await refreshSnapshot()
     await refreshStatus()
   })
 
   const handleTick = () => wrap(async () => {
-    const snap = await apiFetch('/simulation/tick', 'POST', {})
+    const snap = await simulationApi.advanceOneTick()
     setCurrentTick(snap.tick ?? currentTick + 1)
     setVehicles(snap.vehicles ?? [])
+    setTrafficEvents(snap.trafficEvents ?? [])
   })
 
   // Auto-tick effect
   useEffect(() => {
     if (autoTick && simStatus === 'RUNNING') {
       autoTickRef.current = setInterval(() => {
-        apiFetch('/simulation/tick', 'POST', {})
+        simulationApi.advanceOneTick()
           .then((snap) => {
             setCurrentTick(snap.tick ?? 0)
             setVehicles(snap.vehicles ?? [])
+            setTrafficEvents(snap.trafficEvents ?? [])
           })
           .catch((e) => {
             setSimError(e.message)
@@ -203,12 +277,7 @@ function SimulationPanel() {
           <table className="steps-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Type</th>
-                <th>Current</th>
-                <th>Destination</th>
-                <th>Status</th>
-                <th>Steps</th>
+                <th>ID</th><th>Type</th><th>Current</th><th>Destination</th><th>Status</th><th>Steps</th>
               </tr>
             </thead>
             <tbody>
@@ -219,10 +288,7 @@ function SimulationPanel() {
                   <td><code>{v.currentIntersectionId}</code></td>
                   <td><code>{v.destinationIntersectionId}</code></td>
                   <td>
-                    <span
-                      className="v-status"
-                      style={{ color: VEHICLE_STATUS_COLOR[v.status] ?? '#64748b' }}
-                    >
+                    <span className="v-status" style={{ color: VEHICLE_STATUS_COLOR[v.status] ?? '#64748b' }}>
                       {v.status}
                     </span>
                   </td>
@@ -233,19 +299,196 @@ function SimulationPanel() {
           </table>
         </div>
       )}
+
+      {/* Active events table (from snapshot) */}
+      {trafficEvents.length > 0 && (
+        <div className="vehicle-table-wrap">
+          <h3>Active Events</h3>
+          <table className="steps-table">
+            <thead>
+              <tr><th>ID</th><th>Type</th><th>Road</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {trafficEvents.map((ev) => (
+                <tr key={ev.id}>
+                  <td><code>{ev.id}</code></td>
+                  <td>
+                    <span className="v-status" style={{ color: EVENT_TYPE_COLOR[ev.type] ?? '#64748b' }}>
+                      {ev.type?.replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td><code>{ev.affectedRoadId}</code></td>
+                  <td>
+                    <span className="v-status" style={{ color: EVENT_STATUS_COLOR[ev.status] ?? '#64748b' }}>
+                      {ev.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }
 
-// ── Route Finder ─────────────────────────────────────────────────────────────
+// ── Event Controls Panel (Week 5) ────────────────────────────────────────────
+
+function EventsPanel() {
+  const [events, setEvents]               = useState([])
+  const [loading, setLoading]             = useState(false)
+  const [error, setError]                 = useState(null)
+  const [type, setType]                   = useState('CONGESTION')
+  const [roadId, setRoadId]               = useState('')
+  const [startTick, setStartTick]         = useState(0)
+  const [durationTicks, setDurationTicks] = useState(5)
+  const [value, setValue]                 = useState('')
+
+  const fetchEvents = async () => {
+    try {
+      const data = await trafficEventApi.getAllEvents()
+      setEvents(Array.isArray(data) ? data : [])
+    } catch (_) {}
+  }
+
+  useEffect(() => { fetchEvents() }, [])
+
+  const handleCreate = async () => {
+    if (!roadId.trim()) { setError('Road ID is required'); return }
+    setLoading(true)
+    setError(null)
+    try {
+      const eventData = value !== '' ? { value: parseFloat(value) } : {}
+      await trafficEventApi.createEvent(
+        type, roadId.trim(), Number(startTick), Number(durationTicks), eventData
+      )
+      await fetchEvents()
+      setRoadId('')
+      setValue('')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <section className="sim-panel">
+      <h2>Event Controls</h2>
+
+      <div className="form-row" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="form-group">
+          <label>Event Type</label>
+          <select value={type} onChange={e => setType(e.target.value)}>
+            {EVENT_TYPES.map(t => (
+              <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Road ID</label>
+          <input
+            type="text"
+            value={roadId}
+            onChange={e => setRoadId(e.target.value)}
+            placeholder="e.g. R01"
+          />
+        </div>
+        <div className="form-group" style={{ flex: '0 0 90px' }}>
+          <label>Start Tick</label>
+          <input
+            type="number"
+            min={0}
+            value={startTick}
+            onChange={e => setStartTick(e.target.value)}
+          />
+        </div>
+        <div className="form-group" style={{ flex: '0 0 90px' }}>
+          <label>Duration</label>
+          <input
+            type="number"
+            min={1}
+            value={durationTicks}
+            onChange={e => setDurationTicks(e.target.value)}
+          />
+        </div>
+        <div className="form-group" style={{ flex: '0 0 90px' }}>
+          <label>Value</label>
+          <input
+            type="number"
+            min={0}
+            step={0.1}
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            placeholder="0.5"
+          />
+        </div>
+      </div>
+
+      <div className="sim-row">
+        <button className="sim-btn amber" onClick={handleCreate} disabled={loading}>
+          + Dispatch Event
+        </button>
+        <button className="sim-btn secondary" onClick={fetchEvents}>
+          Refresh
+        </button>
+        <span className="sim-hint">
+          Value: congestion increase (0–1), capacity reduction (0–1), or delay seconds
+        </span>
+      </div>
+
+      {error && <div className="sim-error">{error}</div>}
+
+      {events.length > 0 ? (
+        <div className="vehicle-table-wrap">
+          <h3>All Events ({events.length})</h3>
+          <table className="steps-table">
+            <thead>
+              <tr>
+                <th>ID</th><th>Type</th><th>Road</th><th>Start</th><th>Duration</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map(ev => (
+                <tr key={ev.id}>
+                  <td><code>{ev.id}</code></td>
+                  <td>
+                    <span className="v-status" style={{ color: EVENT_TYPE_COLOR[ev.type] ?? '#64748b' }}>
+                      {ev.type?.replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td><code>{ev.affectedRoadId}</code></td>
+                  <td>{ev.startTick}</td>
+                  <td>{ev.durationTicks}</td>
+                  <td>
+                    <span className="v-status" style={{ color: EVENT_STATUS_COLOR[ev.status] ?? '#64748b' }}>
+                      {ev.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="sim-hint" style={{ marginTop: '0.5rem' }}>
+          No events yet. Dispatch a traffic event above — it will activate when the simulation reaches its start tick.
+        </p>
+      )}
+    </section>
+  )
+}
+
+// ── Route Finder (Week 3) ─────────────────────────────────────────────────────
 
 export default function App() {
-  const [start, setStart]           = useState('')
-  const [destination, setDestination] = useState('')
-  const [preference, setPreference] = useState('SHORTEST_TIME')
-  const [result, setResult]         = useState(null)
-  const [error, setError]           = useState(null)
-  const [loading, setLoading]       = useState(false)
+  const [start, setStart]               = useState('')
+  const [destination, setDestination]   = useState('')
+  const [preference, setPreference]     = useState('SHORTEST_TIME')
+  const [result, setResult]             = useState(null)
+  const [error, setError]               = useState(null)
+  const [loading, setLoading]           = useState(false)
 
   const findRoute = async () => {
     if (!start.trim() || !destination.trim()) {
@@ -256,23 +499,15 @@ export default function App() {
     setError(null)
     setResult(null)
     try {
-      const response = await fetch(`${API_BASE}/routes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          startIntersectionId: start.trim(),
-          destinationIntersectionId: destination.trim(),
-          preference,
-        }),
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        setError(data.error || `Error ${response.status}: ${response.statusText}`)
-        return
-      }
+      const data = await routingApi.findRoute(start.trim(), destination.trim(), preference)
       setResult(data)
     } catch (err) {
-      setError(`Cannot connect to backend. Is the server running on port 7070?\n${err.message}`)
+      const msg = err.message || ''
+      setError(
+        msg.toLowerCase().includes('fetch') || msg.toLowerCase().includes('failed to fetch')
+          ? `Cannot connect to backend. Is the server running on port 7070?\n${msg}`
+          : msg
+      )
     } finally {
       setLoading(false)
     }
@@ -284,15 +519,21 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <h1>Traffic Route Finder</h1>
-        <p className="subtitle">Small City Network — 6 intersections (I1–I6)</p>
+        <p className="subtitle">Small City Network — 6 intersections (I1–I6), 17 roads (R01–R17)</p>
       </header>
 
       <main className="main-content">
 
-        {/* ── Simulation ── */}
+        {/* ── Network Info (Week 2) ── */}
+        <NetworkPanel />
+
+        {/* ── Simulation (Week 4) ── */}
         <SimulationPanel />
 
-        {/* ── Route Finder ── */}
+        {/* ── Event Controls (Week 5) ── */}
+        <EventsPanel />
+
+        {/* ── Route Finder (Week 3) ── */}
         <section className="form-section">
           <h2>Route Finder</h2>
           <div className="form-row">
@@ -414,6 +655,7 @@ export default function App() {
             ))}
           </div>
         </section>
+
       </main>
     </div>
   )

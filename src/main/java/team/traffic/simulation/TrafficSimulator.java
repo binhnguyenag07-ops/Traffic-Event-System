@@ -102,6 +102,12 @@ public class TrafficSimulator {
         return Collections.unmodifiableList(events);
     }
 
+    public synchronized void addEvent(TrafficEvent event) {
+        if (event != null) {
+            events.add(event);
+        }
+    }
+
     private void resolveActiveEvents() {
         for (TrafficEvent event : events) {
             if (event.getStatus() == TrafficEventStatus.ACTIVE) {

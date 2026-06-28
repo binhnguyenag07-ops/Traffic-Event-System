@@ -48,6 +48,11 @@ public class SimulationServiceImpl implements SimulationService {
     }
 
     @Override
+    public void addEvent(TrafficEvent event) {
+        simulator.addEvent(event);
+    }
+
+    @Override
     public SimulationStatus getStatus() {
         return simulator.getStatus();
     }
