@@ -20,16 +20,13 @@ public class ApiRouteRegistry {
             HealthController healthController,
             NetworkController networkController,
             RoutingController routingController,
-            SimulationController simulationController) {
-        this.healthController = healthController;
-        this.networkController = networkController;
-        this.routingController = routingController;
-        this.simulationController = simulationController;
+            SimulationController simulationController,
             VehicleController vehicleController,
             TrafficEventController trafficEventController) {
         this.healthController = healthController;
         this.networkController = networkController;
         this.routingController = routingController;
+        this.simulationController = simulationController;
         this.vehicleController = vehicleController;
         this.trafficEventController = trafficEventController;
     }

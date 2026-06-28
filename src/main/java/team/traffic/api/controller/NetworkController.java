@@ -2,6 +2,7 @@ package team.traffic.api.controller;
 
 import io.javalin.Javalin;
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.service.RoadNetworkService;
 
@@ -39,6 +40,23 @@ public class NetworkController {
             }
             ctx.json(toMap(intersection));
         });
+
+        app.get("/api/network/roads", ctx -> {
+            RoadNetwork network = networkService.getNetwork();
+            ctx.json(network.getRoads().values().stream()
+                    .map(this::roadToMap)
+                    .collect(Collectors.toList()));
+        });
+
+        app.get("/api/network/roads/{id}", ctx -> {
+            String id = ctx.pathParam("id");
+            Road road = networkService.getNetwork().getRoad(id);
+            if (road == null) {
+                ctx.status(404).json(Map.of("error", "Road not found: " + id));
+                return;
+            }
+            ctx.json(roadToMap(road));
+        });
     }
 
     private Map<String, Object> toMap(Intersection i) {
@@ -48,5 +66,18 @@ public class NetworkController {
                 "x", i.getX(),
                 "y", i.getY(),
                 "locationType", i.getLocationType().name());
+    }
+
+    private Map<String, Object> roadToMap(Road r) {
+        return Map.of(
+                "id", r.getId(),
+                "startIntersectionId", r.getStartIntersectionId(),
+                "endIntersectionId", r.getEndIntersectionId(),
+                "distance", r.getDistance(),
+                "speedLimit", r.getSpeedLimit(),
+                "capacity", r.getCapacity(),
+                "currentVehicleCount", r.getCurrentVehicleCount(),
+                "status", r.getCondition().getRoadStatus().name(),
+                "congestionLevel", r.getCondition().getCongestionLevel());
     }
 }

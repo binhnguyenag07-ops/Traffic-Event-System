@@ -9,6 +9,7 @@ import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.event.TrafficEventType;
 import team.traffic.domain.event.TrafficLightDelayEvent;
+import team.traffic.service.SimulationService;
 import team.traffic.service.TrafficEventService;
 
 import java.util.List;
@@ -18,9 +19,11 @@ import java.util.stream.Collectors;
 
 public class TrafficEventController {
     private final TrafficEventService trafficEventService;
+    private final SimulationService simulationService;
 
-    public TrafficEventController(TrafficEventService trafficEventService) {
+    public TrafficEventController(TrafficEventService trafficEventService, SimulationService simulationService) {
         this.trafficEventService = trafficEventService;
+        this.simulationService = simulationService;
     }
 
     public void registerRoutes(Javalin app) {
@@ -83,6 +86,7 @@ public class TrafficEventController {
                     return;
             }
             trafficEventService.addEvent(event);
+            simulationService.addEvent(event);
             ctx.status(201).json(new TrafficEventDto(event));
         } catch (Exception e) {
             ctx.status(500).json(error("Error creating event: " + e.getMessage()));

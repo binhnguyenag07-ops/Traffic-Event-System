@@ -15,6 +15,7 @@ public interface SimulationService {
     void resume();
     void reset();
     void advanceTick();
+    void addEvent(TrafficEvent event);
     SimulationStatus getStatus();
     long getCurrentTick();
     List<Vehicle> getVehicles();
