@@ -112,6 +112,46 @@ class RoutingServiceImplTest {
         }
 
         @Test
+        @DisplayName("avoids blocked roads and uses the available alternative")
+        void avoidsBlockedRoads() {
+            network.getRoad("AB").getCondition().markBlocked();
+
+            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_DISTANCE);
+            RouteResult result = service.findRoute(network, request);
+
+            assertThat(result.getRoute().getSteps())
+                    .extracting(step -> step.getRoadId())
+                    .containsExactly("AC", "CD");
+        }
+
+        @Test
+        @DisplayName("avoids closed roads and uses the available alternative")
+        void avoidsClosedRoads() {
+            network.getRoad("AB").getCondition().setRoadStatus(RoadStatus.CLOSED);
+
+            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_TIME);
+            RouteResult result = service.findRoute(network, request);
+
+            assertThat(result.getRoute().getSteps())
+                    .extracting(step -> step.getRoadId())
+                    .containsExactly("AC", "CD");
+        }
+
+        @Test
+        @DisplayName("keeps congested roads routable but penalizes them in congestion-aware routing")
+        void penalizesCongestedRoads() {
+            network.getRoad("AC").setCondition(new RoadCondition(1.0, 1.0, RoadStatus.CONGESTED));
+            network.getRoad("CD").setCondition(new RoadCondition(1.0, 1.0, RoadStatus.CONGESTED));
+
+            RouteRequest request = new RouteRequest("A", "D", RoutePreference.CONGESTION_AWARE);
+            RouteResult result = service.findRoute(network, request);
+
+            assertThat(result.getRoute().getSteps())
+                    .extracting(step -> step.getRoadId())
+                    .containsExactly("AB", "BD");
+        }
+
+        @Test
         @DisplayName("throws when no route exists")
         void throwsWhenNoRoute() {
             RoadNetwork disconnected = new RoadNetwork();
