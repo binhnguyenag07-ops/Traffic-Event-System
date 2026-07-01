@@ -61,4 +61,43 @@ class RoadConditionTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Congestion increase must be finite and non-negative");
     }
+
+    @Test
+    void openRoadBecomesCongestedWhenCongestionIncreases() {
+        RoadCondition condition = new RoadCondition(0, 0, RoadStatus.OPEN);
+
+        double updatedCongestion = condition.increaseCongestion(0.4);
+
+        assertThat(updatedCongestion).isEqualTo(0.4);
+        assertThat(condition.getRoadStatus()).isEqualTo(RoadStatus.CONGESTED);
+        assertThat(condition.isRoutable()).isTrue();
+    }
+
+    @Test
+    void congestedRoadReturnsToOpenWhenCongestionIsCleared() {
+        RoadCondition condition = new RoadCondition(0.6, 0.2, RoadStatus.CONGESTED);
+
+        condition.setCongestionLevel(0);
+
+        assertThat(condition.getRoadStatus()).isEqualTo(RoadStatus.OPEN);
+        assertThat(condition.getTravelCostMultiplier()).isEqualTo(1.2);
+    }
+
+    @Test
+    void blockedRoadIsNotRoutableUntilOpenedAgain() {
+        RoadCondition condition = new RoadCondition(0.2, 0.3, RoadStatus.OPEN);
+
+        condition.markBlocked();
+
+        assertThat(condition.getRoadStatus()).isEqualTo(RoadStatus.BLOCKED);
+        assertThat(condition.getCongestionLevel()).isEqualTo(1.0);
+        assertThat(condition.isRoutable()).isFalse();
+        assertThat(condition.getTravelCostMultiplier()).isEqualTo(Double.POSITIVE_INFINITY);
+
+        condition.markOpen();
+
+        assertThat(condition.getRoadStatus()).isEqualTo(RoadStatus.OPEN);
+        assertThat(condition.getCongestionLevel()).isZero();
+        assertThat(condition.isRoutable()).isTrue();
+    }
 }
