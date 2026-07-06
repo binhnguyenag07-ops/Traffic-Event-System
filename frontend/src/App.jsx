@@ -337,6 +337,7 @@ function SimulationPanel() {
 
 function EventsPanel() {
   const [events, setEvents]               = useState([])
+  const [roads, setRoads]                 = useState([])
   const [loading, setLoading]             = useState(false)
   const [error, setError]                 = useState(null)
   const [type, setType]                   = useState('CONGESTION')
@@ -344,24 +345,43 @@ function EventsPanel() {
   const [startTick, setStartTick]         = useState(0)
   const [durationTicks, setDurationTicks] = useState(5)
   const [value, setValue]                 = useState('')
+  const [statusFilter, setStatusFilter]   = useState('ALL')
+  const [roadFilter, setRoadFilter]       = useState('ALL')
 
-  const fetchEvents = async () => {
+  useEffect(() => {
+    networkApi.getAllRoads()
+      .then(rds => setRoads(Array.isArray(rds) ? rds : []))
+      .catch(() => {})
+  }, [])
+
+  const fetchEvents = async (status = statusFilter, road = roadFilter) => {
     try {
-      const data = await trafficEventApi.getAllEvents()
-      setEvents(Array.isArray(data) ? data : [])
+      let data
+      if (road !== 'ALL') {
+        data = await trafficEventApi.getEventsOnRoad(road)
+      } else if (status === 'ACTIVE') {
+        data = await trafficEventApi.getActiveEvents()
+      } else {
+        data = await trafficEventApi.getAllEvents()
+      }
+      let list = Array.isArray(data) ? data : []
+      if (status !== 'ALL') {
+        list = list.filter(ev => ev.status === status)
+      }
+      setEvents(list)
     } catch (_) {}
   }
 
-  useEffect(() => { fetchEvents() }, [])
+  useEffect(() => { fetchEvents() }, [statusFilter, roadFilter])
 
   const handleCreate = async () => {
-    if (!roadId.trim()) { setError('Road ID is required'); return }
+    if (!roadId) { setError('Please select a road'); return }
     setLoading(true)
     setError(null)
     try {
       const eventData = value !== '' ? { value: parseFloat(value) } : {}
       await trafficEventApi.createEvent(
-        type, roadId.trim(), Number(startTick), Number(durationTicks), eventData
+        type, roadId, Number(startTick), Number(durationTicks), eventData
       )
       await fetchEvents()
       setRoadId('')
@@ -370,6 +390,36 @@ function EventsPanel() {
       setError(e.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleActivate = async (id) => {
+    setError(null)
+    try {
+      await trafficEventApi.updateEventStatus(id, 'ACTIVE')
+      await fetchEvents()
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const handleResolve = async (id) => {
+    setError(null)
+    try {
+      await trafficEventApi.updateEventStatus(id, 'RESOLVED')
+      await fetchEvents()
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const handleDelete = async (id) => {
+    setError(null)
+    try {
+      await trafficEventApi.removeEvent(id)
+      await fetchEvents()
+    } catch (e) {
+      setError(e.message)
     }
   }
 
@@ -387,13 +437,15 @@ function EventsPanel() {
           </select>
         </div>
         <div className="form-group">
-          <label>Road ID</label>
-          <input
-            type="text"
-            value={roadId}
-            onChange={e => setRoadId(e.target.value)}
-            placeholder="e.g. R01"
-          />
+          <label>Road</label>
+          <select value={roadId} onChange={e => setRoadId(e.target.value)}>
+            <option value="">Select a road…</option>
+            {roads.map(r => (
+              <option key={r.id} value={r.id}>
+                {r.id} ({r.startIntersectionId} → {r.endIntersectionId})
+              </option>
+            ))}
+          </select>
         </div>
         <div className="form-group" style={{ flex: '0 0 90px' }}>
           <label>Start Tick</label>
@@ -430,7 +482,7 @@ function EventsPanel() {
         <button className="sim-btn amber" onClick={handleCreate} disabled={loading}>
           + Dispatch Event
         </button>
-        <button className="sim-btn secondary" onClick={fetchEvents}>
+        <button className="sim-btn secondary" onClick={() => fetchEvents()}>
           Refresh
         </button>
         <span className="sim-hint">
@@ -438,15 +490,36 @@ function EventsPanel() {
         </span>
       </div>
 
+      <div className="sim-row">
+        <div className="form-group" style={{ flex: '0 0 160px' }}>
+          <label>Filter Status</label>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="ALL">All</option>
+            <option value="SCHEDULED">Scheduled</option>
+            <option value="ACTIVE">Active</option>
+            <option value="RESOLVED">Resolved</option>
+          </select>
+        </div>
+        <div className="form-group" style={{ flex: '0 0 220px' }}>
+          <label>Filter Road</label>
+          <select value={roadFilter} onChange={e => setRoadFilter(e.target.value)}>
+            <option value="ALL">All roads</option>
+            {roads.map(r => (
+              <option key={r.id} value={r.id}>{r.id}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {error && <div className="sim-error">{error}</div>}
 
       {events.length > 0 ? (
         <div className="vehicle-table-wrap">
-          <h3>All Events ({events.length})</h3>
+          <h3>Events ({events.length})</h3>
           <table className="steps-table">
             <thead>
               <tr>
-                <th>ID</th><th>Type</th><th>Road</th><th>Start</th><th>Duration</th><th>Status</th>
+                <th>ID</th><th>Type</th><th>Road</th><th>Start</th><th>Duration</th><th>Status</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -466,6 +539,21 @@ function EventsPanel() {
                       {ev.status}
                     </span>
                   </td>
+                  <td>
+                    {ev.status === 'SCHEDULED' && (
+                      <button className="sim-btn-xs green" onClick={() => handleActivate(ev.id)}>
+                        Activate
+                      </button>
+                    )}
+                    {ev.status !== 'RESOLVED' && (
+                      <button className="sim-btn-xs amber" onClick={() => handleResolve(ev.id)}>
+                        Resolve
+                      </button>
+                    )}
+                    <button className="sim-btn-xs red" onClick={() => handleDelete(ev.id)}>
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -473,7 +561,7 @@ function EventsPanel() {
         </div>
       ) : (
         <p className="sim-hint" style={{ marginTop: '0.5rem' }}>
-          No events yet. Dispatch a traffic event above — it will activate when the simulation reaches its start tick.
+          No events match the current filters. Dispatch a traffic event above — it will activate when the simulation reaches its start tick.
         </p>
       )}
     </section>
