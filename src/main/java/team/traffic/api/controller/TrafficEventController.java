@@ -7,6 +7,7 @@ import team.traffic.domain.event.AccidentEvent;
 import team.traffic.domain.event.CongestionEvent;
 import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
+import team.traffic.domain.event.TrafficEventStatus;
 import team.traffic.domain.event.TrafficEventType;
 import team.traffic.domain.event.TrafficLightDelayEvent;
 import team.traffic.service.SimulationService;
@@ -29,6 +30,11 @@ public class TrafficEventController {
     public void registerRoutes(Javalin app) {
         app.get("/api/events", this::getAllEvents);
         app.post("/api/events", this::createEvent);
+        app.get("/api/events/active", this::getActiveEvents);
+        app.get("/api/events/road/{roadId}", this::getEventsByRoad);
+        app.get("/api/events/{id}", this::getEventById);
+        app.put("/api/events/{id}/status", this::updateEventStatus);
+        app.delete("/api/events/{id}", this::deleteEvent);
     }
 
     private void getAllEvents(Context ctx) {
@@ -36,6 +42,75 @@ public class TrafficEventController {
                 .map(TrafficEventDto::new)
                 .collect(Collectors.toList());
         ctx.status(200).json(events);
+    }
+
+    private void getActiveEvents(Context ctx) {
+        List<TrafficEventDto> events = trafficEventService.getActiveEvents().stream()
+                .map(TrafficEventDto::new)
+                .collect(Collectors.toList());
+        ctx.status(200).json(events);
+    }
+
+    private void getEventsByRoad(Context ctx) {
+        String roadId = ctx.pathParam("roadId");
+        List<TrafficEventDto> events = trafficEventService.getEventsByRoad(roadId).stream()
+                .map(TrafficEventDto::new)
+                .collect(Collectors.toList());
+        ctx.status(200).json(events);
+    }
+
+    private void getEventById(Context ctx) {
+        String id = ctx.pathParam("id");
+        TrafficEvent event = trafficEventService.getEventById(id);
+        if (event == null) {
+            ctx.status(404).json(error("Event not found: " + id));
+            return;
+        }
+        ctx.status(200).json(new TrafficEventDto(event));
+    }
+
+    private void updateEventStatus(Context ctx) {
+        String id = ctx.pathParam("id");
+        StatusUpdateRequest request;
+        try {
+            request = ctx.bodyAsClass(StatusUpdateRequest.class);
+        } catch (Exception e) {
+            ctx.status(400).json(error("Invalid request body: " + e.getMessage()));
+            return;
+        }
+        if (request.status == null) {
+            ctx.status(400).json(error("status is required"));
+            return;
+        }
+
+        TrafficEventStatus status;
+        try {
+            status = TrafficEventStatus.valueOf(request.status.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).json(error("Invalid status. Valid values: SCHEDULED, ACTIVE, RESOLVED"));
+            return;
+        }
+
+        try {
+            TrafficEvent event = trafficEventService.updateEventStatus(id, status);
+            ctx.status(200).json(new TrafficEventDto(event));
+        } catch (IllegalArgumentException e) {
+            ctx.status(404).json(error(e.getMessage()));
+        } catch (IllegalStateException e) {
+            ctx.status(409).json(error(e.getMessage()));
+        } catch (Exception e) {
+            ctx.status(500).json(error("Error updating event status: " + e.getMessage()));
+        }
+    }
+
+    private void deleteEvent(Context ctx) {
+        String id = ctx.pathParam("id");
+        boolean removed = trafficEventService.removeEvent(id);
+        if (!removed) {
+            ctx.status(404).json(error("Event not found: " + id));
+            return;
+        }
+        ctx.status(204);
     }
 
     private void createEvent(Context ctx) {
@@ -104,5 +179,9 @@ public class TrafficEventController {
         public long durationTicks;
         public Double value;
         public String causingVehicleId;
+    }
+
+    public static class StatusUpdateRequest {
+        public String status;
     }
 }

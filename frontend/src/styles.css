@@ -340,6 +340,25 @@ code {
 .sim-btn.secondary { background: #e2e8f0; color: #1e293b; }
 .sim-btn.secondary:hover:not(:disabled) { background: #cbd5e1; }
 
+.sim-btn-xs {
+  padding: 0.25rem 0.6rem;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 0.35rem;
+  transition: opacity 0.15s;
+}
+
+.sim-btn-xs:disabled { opacity: 0.4; cursor: not-allowed; }
+.sim-btn-xs.amber   { background: #d97706; color: #fff; }
+.sim-btn-xs.amber:hover:not(:disabled)   { background: #b45309; }
+.sim-btn-xs.green   { background: #16a34a; color: #fff; }
+.sim-btn-xs.green:hover:not(:disabled)   { background: #15803d; }
+.sim-btn-xs.red     { background: #dc2626; color: #fff; }
+.sim-btn-xs.red:hover:not(:disabled)     { background: #b91c1c; }
+
 .auto-label {
   font-size: 0.85rem;
   color: #475569;

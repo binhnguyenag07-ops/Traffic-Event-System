@@ -51,7 +51,7 @@ public class App {
         TrafficSimulator simulator = new TrafficSimulator(network, routingService);
         SimulationServiceImpl simulationService = new SimulationServiceImpl(simulator);
         VehicleServiceImpl vehicleService = new VehicleServiceImpl();
-        TrafficEventServiceImpl trafficEventService = new TrafficEventServiceImpl(eventBus);
+        TrafficEventServiceImpl trafficEventService = new TrafficEventServiceImpl(eventBus, networkService);
 
         // Create controllers
         HealthController healthController = new HealthController();
@@ -84,5 +84,9 @@ public class App {
         System.out.println("  GET  http://localhost:" + PORT + "/api/simulation/snapshot");
         System.out.println("  GET  http://localhost:" + PORT + "/api/vehicles");
         System.out.println("  GET  http://localhost:" + PORT + "/api/events");
+        System.out.println("  GET  http://localhost:" + PORT + "/api/events/active");
+        System.out.println("  GET  http://localhost:" + PORT + "/api/events/road/{roadId}");
+        System.out.println("  PUT  http://localhost:" + PORT + "/api/events/{id}/status");
+        System.out.println("  DELETE http://localhost:" + PORT + "/api/events/{id}");
     }
 }
