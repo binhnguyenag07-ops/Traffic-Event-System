@@ -368,4 +368,66 @@ class DynamicReroutingListenerTest {
             assertThat(listener.getReroutingCount()).isEqualTo(0);
         }
     }
+
+    @Nested
+    @DisplayName("congestion avoidance")
+    class CongestionAvoidanceTests {
+
+        @Test
+        @DisplayName("routing avoids roads above congestion threshold")
+        void routingAvoidsHighCongestionRoads() {
+            network.addRoad(new Road("AB2", "A", "B", 5, 100, 100, 0,
+                    new RoadCondition(0.9, 0, RoadStatus.CONGESTED)));
+
+            RoutingStrategyRegistry highThresholdRegistry = new RoutingStrategyRegistry();
+            highThresholdRegistry.register(new DijkstraPathFindingStrategy(0.8));
+            RoutingService highThresholdService = new RoutingServiceImpl(highThresholdRegistry);
+
+            Car car = vehicleFactory.createCar("car1", "A", "D");
+            car.requestRoute(network, highThresholdService, RoutePreference.SHORTEST_TIME);
+
+            assertThat(car.getCurrentRoute()).isNotNull();
+            List<String> roadIds = car.getCurrentRoute().getSteps().stream()
+                    .map(step -> step.getRoadId())
+                    .toList();
+            assertThat(roadIds).doesNotContain("AB2");
+        }
+
+        @Test
+        @DisplayName("routing uses congested road when no alternative exists")
+        void routingUsesCongestedRoadWhenNoAlternative() {
+            RoadNetwork simpleNetwork = new RoadNetwork();
+            simpleNetwork.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            simpleNetwork.addIntersection(new Intersection("B", "B", 10, 0, LocationType.NORMAL));
+
+            simpleNetwork.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0,
+                    new RoadCondition(0.9, 0, RoadStatus.CONGESTED)));
+
+            RoutingStrategyRegistry registry = new RoutingStrategyRegistry();
+            registry.register(new DijkstraPathFindingStrategy(0.95));
+            RoutingService service = new RoutingServiceImpl(registry);
+
+            Car car = vehicleFactory.createCar("car1", "A", "B");
+            car.requestRoute(simpleNetwork, service, RoutePreference.SHORTEST_DISTANCE);
+
+            assertThat(car.getCurrentRoute()).isNotNull();
+            assertThat(car.getCurrentRoute().isEmpty()).isFalse();
+        }
+
+        @Test
+        @DisplayName("default threshold avoids roads above 0.8 congestion")
+        void defaultThresholdAvoidsHighCongestion() {
+            network.addRoad(new Road("AB2", "A", "B", 5, 100, 100, 0,
+                    new RoadCondition(0.9, 0, RoadStatus.CONGESTED)));
+
+            Car car = vehicleFactory.createCar("car1", "A", "D");
+            car.requestRoute(network, routingService, RoutePreference.SHORTEST_TIME);
+
+            assertThat(car.getCurrentRoute()).isNotNull();
+            List<String> roadIds = car.getCurrentRoute().getSteps().stream()
+                    .map(step -> step.getRoadId())
+                    .toList();
+            assertThat(roadIds).doesNotContain("AB2");
+        }
+    }
 }

@@ -11,9 +11,15 @@ public class AStarPathFindingStrategy implements PathFindingStrategy {
 
     private static final String NAME = "A*";
     private final Heuristic heuristic;
+    private final double congestionThreshold;
 
     public AStarPathFindingStrategy(Heuristic heuristic) {
+        this(heuristic, RouteBuilder.DEFAULT_CONGESTION_THRESHOLD);
+    }
+
+    public AStarPathFindingStrategy(Heuristic heuristic, double congestionThreshold) {
         this.heuristic = heuristic;
+        this.congestionThreshold = congestionThreshold;
     }
 
     @Override
@@ -71,7 +77,7 @@ public class AStarPathFindingStrategy implements PathFindingStrategy {
             if (outgoing == null) continue;
 
             for (Road road : outgoing) {
-                if (!RouteBuilder.isRoadUsable(road)) continue;
+                if (RouteBuilder.isRoadAvoidable(road, congestionThreshold)) continue;
 
                 String neighborId = road.getEndIntersectionId();
                 double edgeWeight = RouteBuilder.calculateEdgeWeight(road, preference);

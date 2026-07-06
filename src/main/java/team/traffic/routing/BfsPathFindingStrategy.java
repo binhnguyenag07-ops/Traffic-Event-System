@@ -9,6 +9,15 @@ import java.util.*;
 public class BfsPathFindingStrategy implements PathFindingStrategy {
 
     private static final String NAME = "BFS";
+    private final double congestionThreshold;
+
+    public BfsPathFindingStrategy() {
+        this(RouteBuilder.DEFAULT_CONGESTION_THRESHOLD);
+    }
+
+    public BfsPathFindingStrategy(double congestionThreshold) {
+        this.congestionThreshold = congestionThreshold;
+    }
 
     @Override
     public String getName() {
@@ -51,7 +60,7 @@ public class BfsPathFindingStrategy implements PathFindingStrategy {
             if (outgoing == null) continue;
 
             for (Road road : outgoing) {
-                if (!RouteBuilder.isRoadUsable(road)) continue;
+                if (RouteBuilder.isRoadAvoidable(road, congestionThreshold)) continue;
 
                 String neighborId = road.getEndIntersectionId();
 
