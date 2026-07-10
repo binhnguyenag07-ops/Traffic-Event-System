@@ -6,6 +6,7 @@ import team.traffic.api.controller.HealthController;
 import team.traffic.api.controller.NetworkController;
 import team.traffic.api.controller.RoutingController;
 import team.traffic.api.controller.SimulationController;
+import team.traffic.api.controller.StatisticsController;
 import team.traffic.api.controller.TrafficEventController;
 import team.traffic.api.controller.VehicleController;
 import team.traffic.domain.network.RoadNetwork;
@@ -18,6 +19,7 @@ import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.impl.RoadNetworkServiceImpl;
 import team.traffic.service.impl.RoutingServiceImpl;
 import team.traffic.service.impl.SimulationServiceImpl;
+import team.traffic.service.impl.StatisticsServiceImpl;
 import team.traffic.simulation.TrafficSimulator;
 import team.traffic.service.impl.TrafficEventServiceImpl;
 import team.traffic.service.impl.VehicleServiceImpl;
@@ -61,11 +63,13 @@ public class App {
 
         VehicleController vehicleController = new VehicleController(vehicleService, networkService);
         TrafficEventController trafficEventController = new TrafficEventController(trafficEventService, simulationService);
+        StatisticsServiceImpl statisticsService = new StatisticsServiceImpl(simulationService, networkService, registry);
+        StatisticsController statisticsController = new StatisticsController(statisticsService);
 
         // Wire API routes
         ApiRouteRegistry routeRegistry = new ApiRouteRegistry(
                 healthController, networkController, routingController, simulationController,
-                vehicleController, trafficEventController);
+                vehicleController, trafficEventController, statisticsController);
 
         // Start Javalin server
         TrafficApiServer server = new TrafficApiServer(routeRegistry, PORT);
@@ -88,5 +92,8 @@ public class App {
         System.out.println("  GET  http://localhost:" + PORT + "/api/events/road/{roadId}");
         System.out.println("  PUT  http://localhost:" + PORT + "/api/events/{id}/status");
         System.out.println("  DELETE http://localhost:" + PORT + "/api/events/{id}");
+        System.out.println("  GET  http://localhost:" + PORT + "/api/statistics");
+        System.out.println("  GET  http://localhost:" + PORT + "/api/statistics/traffic");
+        System.out.println("  GET  http://localhost:" + PORT + "/api/statistics/algorithm/{name}");
     }
 }
