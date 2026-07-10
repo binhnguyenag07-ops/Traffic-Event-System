@@ -1,0 +1,228 @@
+{
+  "intersections": [
+    {
+      "id": "I1",
+      "name": "Campus Gate",
+      "x": 0.0,
+      "y": 0.0,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "I2",
+      "name": "School Junction",
+      "x": 2.0,
+      "y": 0.0,
+      "locationType": "SCHOOL"
+    },
+    {
+      "id": "I3",
+      "name": "Central Market",
+      "x": 4.0,
+      "y": 0.0,
+      "locationType": "COMMERCIAL"
+    },
+    {
+      "id": "I4",
+      "name": "Riverside Homes",
+      "x": 0.0,
+      "y": 2.0,
+      "locationType": "RESIDENTIAL"
+    },
+    {
+      "id": "I5",
+      "name": "General Hospital",
+      "x": 2.0,
+      "y": 2.0,
+      "locationType": "HOSPITAL"
+    },
+    {
+      "id": "I6",
+      "name": "Night District",
+      "x": 4.0,
+      "y": 2.0,
+      "locationType": "BAR"
+    }
+  ],
+  "roads": [
+    {
+      "id": "R01",
+      "startIntersectionId": "I1",
+      "endIntersectionId": "I2",
+      "distance": 2.0,
+      "speedLimit": 40.0,
+      "capacity": 80,
+      "currentVehicleCount": 10,
+      "congestionLevel": 0.10,
+      "vehicleDensity": 0.125,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R02",
+      "startIntersectionId": "I2",
+      "endIntersectionId": "I1",
+      "distance": 2.0,
+      "speedLimit": 40.0,
+      "capacity": 80,
+      "currentVehicleCount": 8,
+      "congestionLevel": 0.05,
+      "vehicleDensity": 0.10,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R03",
+      "startIntersectionId": "I2",
+      "endIntersectionId": "I3",
+      "distance": 2.2,
+      "speedLimit": 35.0,
+      "capacity": 60,
+      "currentVehicleCount": 36,
+      "congestionLevel": 0.55,
+      "vehicleDensity": 0.60,
+      "roadStatus": "CONGESTED"
+    },
+    {
+      "id": "R04",
+      "startIntersectionId": "I3",
+      "endIntersectionId": "I2",
+      "distance": 2.2,
+      "speedLimit": 35.0,
+      "capacity": 60,
+      "currentVehicleCount": 30,
+      "congestionLevel": 0.45,
+      "vehicleDensity": 0.50,
+      "roadStatus": "CONGESTED"
+    },
+    {
+      "id": "R05",
+      "startIntersectionId": "I1",
+      "endIntersectionId": "I4",
+      "distance": 2.1,
+      "speedLimit": 45.0,
+      "capacity": 70,
+      "currentVehicleCount": 12,
+      "congestionLevel": 0.10,
+      "vehicleDensity": 0.17,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R06",
+      "startIntersectionId": "I4",
+      "endIntersectionId": "I1",
+      "distance": 2.1,
+      "speedLimit": 45.0,
+      "capacity": 70,
+      "currentVehicleCount": 9,
+      "congestionLevel": 0.05,
+      "vehicleDensity": 0.13,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R07",
+      "startIntersectionId": "I2",
+      "endIntersectionId": "I5",
+      "distance": 1.8,
+      "speedLimit": 35.0,
+      "capacity": 70,
+      "currentVehicleCount": 25,
+      "congestionLevel": 0.25,
+      "vehicleDensity": 0.36,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R08",
+      "startIntersectionId": "I5",
+      "endIntersectionId": "I2",
+      "distance": 1.8,
+      "speedLimit": 35.0,
+      "capacity": 70,
+      "currentVehicleCount": 22,
+      "congestionLevel": 0.20,
+      "vehicleDensity": 0.31,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R09",
+      "startIntersectionId": "I3",
+      "endIntersectionId": "I6",
+      "distance": 2.0,
+      "speedLimit": 45.0,
+      "capacity": 75,
+      "currentVehicleCount": 20,
+      "congestionLevel": 0.15,
+      "vehicleDensity": 0.27,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R10",
+      "startIntersectionId": "I6",
+      "endIntersectionId": "I3",
+      "distance": 2.0,
+      "speedLimit": 45.0,
+      "capacity": 75,
+      "currentVehicleCount": 18,
+      "congestionLevel": 0.10,
+      "vehicleDensity": 0.24,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R11",
+      "startIntersectionId": "I4",
+      "endIntersectionId": "I5",
+      "distance": 2.0,
+      "speedLimit": 40.0,
+      "capacity": 65,
+      "currentVehicleCount": 10,
+      "congestionLevel": 0.05,
+      "vehicleDensity": 0.15,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R12",
+      "startIntersectionId": "I5",
+      "endIntersectionId": "I4",
+      "distance": 2.0,
+      "speedLimit": 40.0,
+      "capacity": 65,
+      "currentVehicleCount": 12,
+      "congestionLevel": 0.08,
+      "vehicleDensity": 0.18,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R13",
+      "startIntersectionId": "I5",
+      "endIntersectionId": "I6",
+      "distance": 2.0,
+      "speedLimit": 40.0,
+      "capacity": 65,
+      "currentVehicleCount": 16,
+      "congestionLevel": 0.10,
+      "vehicleDensity": 0.25,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R14",
+      "startIntersectionId": "I6",
+      "endIntersectionId": "I5",
+      "distance": 2.0,
+      "speedLimit": 40.0,
+      "capacity": 65,
+      "currentVehicleCount": 14,
+      "congestionLevel": 0.10,
+      "vehicleDensity": 0.22,
+      "roadStatus": "OPEN"
+    },
+    {
+      "id": "R15",
+      "startIntersectionId": "I2",
+      "endIntersectionId": "I4",
+      "distance": 1.7,
+      "speedLimit": 30.0,
+      "capacity": 30,
+      "currentVehicleCount": 0,
+      "congestionLevel": 1.0,
+      "vehicleDensity": 0.0,
+      "roadStatus": "BLOCKED"
+    }
+  ]
+}
