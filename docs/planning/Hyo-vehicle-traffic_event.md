@@ -1,156 +1,166 @@
-# Planning for project's architecture & class diagram in module vehicle & traffic event
-## Project's Architecture
+# Student C Planning: Vehicle And Traffic Events
 
-```
+Student C owns the vehicle model, traffic-event model, observer event bus, and
+the backend workflow that connects events to vehicle movement and rerouting.
+
+## Scope
+
+| Roadmap week | Student C responsibility | Current status |
+|---|---|---|
+| 1 | Vehicle/event design | Done |
+| 2 | Vehicle model | Done |
+| 3 | Vehicle route request | Done |
+| 4 | Vehicle movement | Done |
+| 5 | Accident/congestion/closure | Done |
+| 6 | Multi-vehicle demo support | Done in backend/simulation |
+| 7 | Event tests | Done |
+| 8 | OOP docs | Done in planning, architecture, and class-diagram docs |
+
+## Implemented Packages
+
+```text
 src/main/java/team/traffic/
-├── domain/
-│   ├── vehicle/
-│   │   ├── Vehicle.java (abstract class)
-│   │   ├── Car.java
-│   │   ├── Bus.java
-│   │   ├── EmergencyVehicle.java
-│   │   ├── VehicleFactory.java
-│   │   ├── VehicleType.java (enum)
-│   │   └── VehicleStatus.java (enum)
-│   │
-│   └── event/
-│       ├── TrafficEvent.java (abstract class)
-│       ├── CongestionEvent.java
-│       ├── AccidentEvent.java
-│       ├── RoadClosureEvent.java
-│       ├── TrafficLightDelayEvent.java
-│       ├── TrafficEventType.java (enum)
-│       └── TrafficEventStatus.java (enum)
-│
-└── observer/
-    ├── TrafficEventBus.java
-    └── TrafficEventListener.java (interface)
+|-- domain/
+|   |-- vehicle/
+|   |   |-- Vehicle.java
+|   |   |-- Car.java
+|   |   |-- Bus.java
+|   |   |-- EmergencyVehicle.java
+|   |   |-- VehicleFactory.java
+|   |   |-- VehicleType.java
+|   |   `-- VehicleStatus.java
+|   `-- event/
+|       |-- TrafficEvent.java
+|       |-- CongestionEvent.java
+|       |-- AccidentEvent.java
+|       |-- RoadClosureEvent.java
+|       |-- TrafficLightDelayEvent.java
+|       |-- TrafficEventType.java
+|       `-- TrafficEventStatus.java
+|-- observer/
+|   |-- TrafficEventBus.java
+|   `-- TrafficEventListener.java
+|-- service/
+|   |-- VehicleService.java
+|   |-- TrafficEventService.java
+|   `-- impl/
+|       |-- VehicleServiceImpl.java
+|       `-- TrafficEventServiceImpl.java
+|-- routing/
+|   `-- DynamicReroutingListener.java
+`-- simulation/
+    |-- TrafficSimulator.java
+    |-- TickProcessor.java
+    |-- VehicleConfig.java
+    `-- EventConfig.java
 ```
-## Class Diagram
 
-```mermaid
-classDiagram
-    class Vehicle {
-        <<abstract>>
-        -String id
-        -String currentIntersectionId
-        -String destinationIntersectionId
-        -Route currentRoute
-        -double movementSpeed
-        -VehicleStatus status
-        -List~String~ travelHistory
-        +getType()* VehicleType
-        +requestRoute(RoutingService)
-        +moveOneStep()
-        +recomputeRoute(RoutingService)
-        +hasReachedDestination() boolean
-    }
+## Vehicle Responsibilities
 
-    class Car {
-        +getType() VehicleType
-    }
+`Vehicle` is the abstract base class for `Car`, `Bus`, and
+`EmergencyVehicle`.
 
-    class Bus {
-        -int passengerCapacity
-        +getType() VehicleType
-    }
+Implemented behavior:
 
-    class EmergencyVehicle {
-        -int priorityLevel
-        +getType() VehicleType
-    }
+- validates vehicle id, current intersection, destination, and movement speed;
+- stores current route, route preference, movement status, and travel history;
+- requests routes through `RoutingService`;
+- recomputes routes when a route becomes blocked or stale;
+- moves one route step at a time;
+- updates road vehicle counts through `RoadNetwork` when occupying or leaving a road;
+- becomes `ARRIVED` at the destination;
+- becomes `BLOCKED` when no usable route or road is available.
 
-    class VehicleFactory {
-        +createVehicle(VehicleType, String, String) Vehicle
-        +createCar(String, String) Car
-        +createBus(String, String) Bus
-        +createEmergencyVehicle(String, String) EmergencyVehicle
-    }
+## Event Responsibilities
 
-    class VehicleType {
-        <<enumeration>>
-        CAR
-        BUS
-        EMERGENCY
-    }
+`TrafficEvent` is the abstract base class for concrete road-impact events.
 
-    class VehicleStatus {
-        <<enumeration>>
-        WAITING
-        MOVING
-        ARRIVED
-        BLOCKED
-    }
+Implemented event types:
 
-    Vehicle <|-- Car
-    Vehicle <|-- Bus
-    Vehicle <|-- EmergencyVehicle
-    Vehicle --> Route
-    Vehicle --> VehicleStatus
-    Vehicle --> VehicleType
-    VehicleFactory --> Vehicle
+| Event | Effect when applied | Effect when resolved |
+|---|---|---|
+| `CongestionEvent` | increases congestion level | restores previous road condition |
+| `AccidentEvent` | marks road blocked and raises density impact | restores previous road condition |
+| `RoadClosureEvent` | marks road closed | restores previous road condition |
+| `TrafficLightDelayEvent` | increases congestion by delay-derived impact | restores previous road condition |
 
-    class TrafficEvent {
-        <<abstract>>
-        -String id
-        -String affectedRoadId
-        -long startTick
-        -long durationTicks
-        -TrafficEventStatus status
-        +getType()* TrafficEventType
-        +apply(RoadNetwork)
-        +resolve(RoadNetwork)
-        +isActive(long) boolean
-    }
+The base event class validates ids, road id, start tick, and duration. Concrete
+events remember the previous road condition before applying their effect.
 
-    class CongestionEvent {
-        -double congestionIncrease
-    }
+## Service And Runtime Flow
 
-    class AccidentEvent {
-        -double capacityReduction
-        -String causingVehicleId
-    }
+`VehicleServiceImpl`:
 
-    class RoadClosureEvent
+- creates vehicles with generated unique `V-...` ids;
+- validates start and destination intersections;
+- stores vehicles in memory;
+- updates all vehicles per tick;
+- requests or recomputes routes when needed;
+- moves vehicles and updates road density through `Vehicle.moveOneStep`.
 
-    class TrafficLightDelayEvent {
-        -long delayTicks
-    }
+`TrafficEventServiceImpl`:
 
-    class TrafficEventType {
-        <<enumeration>>
-        CONGESTION
-        ACCIDENT
-        ROAD_CLOSURE
-        TRAFFIC_LIGHT_DELAY
-    }
+- stores scheduled events;
+- exposes lookup by id, active events, and road id;
+- activates events by tick;
+- resolves expired events;
+- publishes activation/resolution through `TrafficEventBus`;
+- supports explicit API status updates and deletion.
 
-    class TrafficEventStatus {
-        <<enumeration>>
-        SCHEDULED
-        ACTIVE
-        RESOLVED
-    }
+`TickProcessor` and `TrafficSimulator` connect the Student C domain objects to
+runtime simulation:
 
-    TrafficEvent <|-- CongestionEvent
-    TrafficEvent <|-- AccidentEvent
-    TrafficEvent <|-- RoadClosureEvent
-    TrafficEvent <|-- TrafficLightDelayEvent
-    TrafficEvent --> TrafficEventType
-    TrafficEvent --> TrafficEventStatus
+- build multiple vehicles from `VehicleConfig`;
+- build events from `EventConfig`;
+- process event activation and resolution;
+- move vehicles each tick;
+- recompute routes for blocked vehicles.
 
-    class TrafficEventListener {
-        <<interface>>
-        +onTrafficEvent(TrafficEvent)
-    }
+`DynamicReroutingListener` listens to traffic events and reroutes vehicles whose
+current route uses the affected road.
 
-    class TrafficEventBus {
-        -List~TrafficEventListener~ listeners
-        +subscribe(TrafficEventListener)
-        +unsubscribe(TrafficEventListener)
-        +publish(TrafficEvent)
-    }
+## API Support
 
-    TrafficEventBus --> TrafficEventListener
-    TrafficEventBus --> TrafficEvent
+Student C functionality is exposed through:
+
+- `GET /api/vehicles`
+- `POST /api/vehicles`
+- `GET /api/events`
+- `POST /api/events`
+- `GET /api/events/active`
+- `GET /api/events/road/{roadId}`
+- `GET /api/events/{id}`
+- `PUT /api/events/{id}/status`
+- `DELETE /api/events/{id}`
+- simulation endpoints that initialize vehicles/events and advance ticks.
+
+## Design Patterns
+
+| Pattern | Classes | Reason |
+|---|---|---|
+| Factory | `VehicleFactory` | creates concrete vehicle subclasses behind a common type |
+| Observer | `TrafficEventBus`, `TrafficEventListener`, `DynamicReroutingListener` | decouples event publication from rerouting reaction |
+| Template Method style | `TrafficEvent.apply/resolve` overridden by subclasses | shared event lifecycle with subclass-specific road effect |
+| Polymorphism | `Vehicle`, `TrafficEvent` hierarchies | common workflow with concrete behavior per type |
+
+## Test Coverage
+
+Relevant tests:
+
+| Test class | Coverage |
+|---|---|
+| `VehicleTest` | route request, movement, blocked roads, route recomputation |
+| `VehicleServiceImplTest` | vehicle creation, validation, multi-vehicle updates |
+| `VehicleControllerTest` | vehicle API payload handling |
+| `TrafficEventTest` | event apply/resolve and road-condition restore |
+| `TrafficEventServiceImplTest` | event storage, activation, resolution, publishing |
+| `TrafficEventControllerTest` | event API create/read/update/delete validation |
+| `TrafficEventBusTest` | observer subscription and publish behavior |
+| `DynamicReroutingListenerTest` | rerouting after affected-road events |
+| `TrafficSimulatorTest` | multi-vehicle/event simulation setup and event creation |
+
+## Completion Notes
+
+The Student C backend work is complete against the team roadmap. Remaining
+project risk is integration-level polish across the whole app, not missing
+Student C domain functionality.

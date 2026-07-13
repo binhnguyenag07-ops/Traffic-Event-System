@@ -154,9 +154,40 @@ class TrafficSimulatorTest {
 
         assertThat(simulator.getEvents()).hasSize(1);
         TrafficEvent event = simulator.getEvents().get(0);
+        assertThat(event.getId()).isEqualTo("ev-1");
         assertThat(event).isInstanceOf(AccidentEvent.class);
         assertThat(((AccidentEvent) event).getCapacityReduction()).isEqualTo(0.9);
         assertThat(((AccidentEvent) event).getCausingVehicleId()).isEqualTo("truck-7");
+    }
+
+    @Test
+    void getSnapshotReturnsCurrentSimulationState() {
+        VehicleConfig vehicleConfig = new VehicleConfig("car-1", "CAR", "A", "B");
+        EventConfig eventConfig = new EventConfig("ev-1", "ROAD_CLOSURE", "AB", 0, 5);
+
+        simulator.initialize(List.of(vehicleConfig), List.of(eventConfig));
+
+        SimulationSnapshot snapshot = simulator.getSnapshot();
+        assertThat(snapshot.tick()).isZero();
+        assertThat(snapshot.status()).isEqualTo(SimulationStatus.READY);
+        assertThat(snapshot.vehicles()).hasSize(1);
+        assertThat(snapshot.vehicles().get(0).getId()).isEqualTo("car-1");
+        assertThat(snapshot.trafficEvents()).hasSize(1);
+        assertThat(snapshot.trafficEvents().get(0).getId()).isEqualTo("ev-1");
+        assertThatThrownBy(() -> snapshot.vehicles().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void advanceTickActivatesScheduledEventWhenStartTickHasAlreadyPassed() {
+        RoadClosureEvent event = new RoadClosureEvent("late-event", "AB", 0, 5);
+
+        simulator.advanceTick();
+        simulator.advanceTick();
+        simulator.addEvent(event);
+        simulator.advanceTick();
+
+        assertThat(event.getStatus()).isEqualTo(TrafficEventStatus.ACTIVE);
     }
 
     // --- validation ---

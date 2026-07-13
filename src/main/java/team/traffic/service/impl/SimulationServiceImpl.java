@@ -4,6 +4,7 @@ import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.EventConfig;
+import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.TrafficSimulator;
 import team.traffic.simulation.VehicleConfig;
@@ -60,6 +61,11 @@ public class SimulationServiceImpl implements SimulationService {
     @Override
     public long getCurrentTick() {
         return simulator.getCurrentTick();
+    }
+
+    @Override
+    public SimulationSnapshot getSnapshot() {
+        return simulator.getSnapshot();
     }
 
     @Override

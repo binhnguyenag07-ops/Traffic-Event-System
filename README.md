@@ -1,31 +1,32 @@
 # Traffic Event System
 
-An object-oriented urban traffic simulator project built with Java 17 and
-Maven. The system models a directed road graph, loads map data from JSON or
-CSV, generates synthetic grid maps, and provides BFS, Dijkstra, and A* routing
-structures.
+An object-oriented urban traffic simulator built with Java 17, Maven, Javalin,
+and a React frontend. The system models a directed road network, loads scenario
+maps, computes routes with BFS/Dijkstra/A*, runs multi-vehicle simulations, and
+processes traffic events such as congestion, accidents, road closures, and
+traffic-light delays.
 
-## Week 3 Status
+## Current Status
 
-The repository currently contains the Week 3 foundation:
+The repository currently includes:
 
-- road-network graph operations;
-- indexed incoming and outgoing roads;
-- JSON and CSV map loading;
-- deterministic JSON map saving;
-- synthetic grid-map generation;
-- road travel-cost calculation;
-- BFS, Dijkstra, and A* routing modules;
-- unit tests for network, persistence, and routing.
-
-The simulation engine, API, complete frontend, traffic-event integration, and
-statistics are later-roadmap work. Some source files for those modules are
-currently placeholders and are not part of the Week 3 runnable scope.
+- road-network graph operations and density tracking;
+- JSON/CSV map loading, map saving, and synthetic grid-map generation;
+- route search with BFS, Dijkstra, A*, and congestion-aware route costs;
+- vehicle models, route requests, route recomputation, and movement;
+- traffic-event models for congestion, accident, road closure, and light delay;
+- event service, event API, and dynamic rerouting support;
+- simulation clock, tick processing, pause/resume/reset, and snapshots;
+- traffic and algorithm statistics services;
+- React frontend for map, controls, vehicles, events, heatmap, and statistics;
+- unit and integration tests for domain, routing, persistence, services,
+  controllers, and simulation.
 
 ## Requirements
 
 - Java Development Kit 17 or newer
 - Apache Maven 3.9 or newer
+- Node.js and npm for the frontend
 - Git
 
 Check the installed versions:
@@ -33,61 +34,67 @@ Check the installed versions:
 ```powershell
 java -version
 mvn -version
+node -v
+npm -v
 git --version
 ```
 
-## Setup
+## Backend Setup
 
 ```powershell
 git clone https://github.com/binhnguyenag07-ops/Traffic-Event-System.git
 cd Traffic-Event-System
-mvn -DskipTests package
-```
-
-At Week 3, tests are the main executable verification because the application
-entry point and HTTP API are not implemented yet.
-
-## Run Student A Tests
-
-To run only the road-network and persistence tests:
-
-```powershell
-mvn "-Dtest=team.traffic.domain.network.*Test,team.traffic.persistence.*Test" test
-```
-
-This command currently runs 50 network and persistence tests.
-
-## Full Test Suite Status
-
-Run every repository test with:
-
-```powershell
 mvn test
 ```
 
-At the time of this Week 3 update, 175 of 177 tests pass. The remaining two
-legacy tests are in `team.traffic.routing.RoadNetworkTest`; they still expect a
-duplicate intersection or road ID to replace the existing object. The current
-network contract deliberately rejects duplicate IDs to preserve graph
-integrity. The routing owner should align those two test expectations with the
-shared network contract. No routing production code needs to change for this
-issue.
+Run the API server:
 
-## Road Network Model
+```powershell
+mvn exec:java
+```
 
-`RoadNetwork` stores directed roads and intersections. Each bidirectional
-street is represented by two `Road` objects, one for each direction.
+Default backend URL:
 
-Important graph operations include:
+```text
+http://localhost:7070
+```
 
-- adding and removing intersections and roads;
-- finding incoming and outgoing roads;
-- finding outgoing neighboring intersections;
-- updating road conditions;
-- checking graph membership and counts.
+## Frontend Setup
 
-Road and intersection IDs must be unique. Removing an intersection also
-removes every connected road.
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite dev server will print the local frontend URL.
+
+## Main API Endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/health` | health check |
+| `GET /api/network/intersections` | list intersections |
+| `GET /api/network/roads` | list roads |
+| `POST /api/routes` | compute route |
+| `GET /api/vehicles` | list vehicles |
+| `POST /api/vehicles` | create vehicle |
+| `GET /api/events` | list events |
+| `POST /api/events` | create traffic event |
+| `GET /api/events/active` | list active events |
+| `GET /api/events/road/{roadId}` | list events affecting one road |
+| `PUT /api/events/{id}/status` | activate or resolve event |
+| `DELETE /api/events/{id}` | remove event |
+| `POST /api/simulation/initialize` | load simulation vehicles/events |
+| `POST /api/simulation/start` | start simulation |
+| `POST /api/simulation/pause` | pause simulation |
+| `POST /api/simulation/resume` | resume simulation |
+| `POST /api/simulation/reset` | reset simulation |
+| `POST /api/simulation/tick` | advance one tick |
+| `GET /api/simulation/snapshot` | current simulation snapshot |
+| `GET /api/statistics` | combined statistics |
+| `GET /api/statistics/traffic` | traffic statistics |
+| `GET /api/statistics/algorithm/{name}` | algorithm statistics |
 
 ## Map Data
 
@@ -95,13 +102,12 @@ Available map files:
 
 | File | Purpose |
 |---|---|
-| `data/sample_map.json` | Small JSON loader example |
+| `data/sample_map.json` | small JSON loader example |
 | `data/sample_map.csv` | CSV equivalent of the sample map |
-| `data/small_city.json` | Six-intersection routing scenario with alternative, congested, and blocked roads |
-| `data/congestion_demo.json` | Reserved for the Week 5 event scenario |
-| `data/accident_demo.json` | Reserved for the Week 5 event scenario |
-
-The empty event files are roadmap placeholders and are not Week 3 map inputs.
+| `data/small_city.json` | six-intersection routing scenario |
+| `data/congestion_demo.json` | Week 6 congestion scenario |
+| `data/accident_demo.json` | Week 6 accident scenario |
+| `data/density_demo.json` | road-density scenario |
 
 ### Units
 
@@ -122,90 +128,65 @@ travelCost = distance / speedLimit
 
 A blocked, closed, or full road has an infinite routing cost.
 
-### JSON Structure
+## Example Simulation Payload
 
 ```json
 {
-  "intersections": [
+  "vehicles": [
     {
-      "id": "I1",
-      "name": "Campus Gate",
-      "x": 0.0,
-      "y": 0.0,
-      "locationType": "NORMAL"
+      "id": "car-1",
+      "type": "CAR",
+      "startIntersectionId": "I1",
+      "destinationIntersectionId": "I6"
     }
   ],
-  "roads": [
+  "events": [
     {
-      "id": "R1",
-      "startIntersectionId": "I1",
-      "endIntersectionId": "I2",
-      "distance": 1.5,
-      "speedLimit": 40.0,
-      "capacity": 60,
-      "currentVehicleCount": 12,
-      "congestionLevel": 0.1,
-      "vehicleDensity": 0.2,
-      "roadStatus": "OPEN"
+      "id": "event-1",
+      "type": "ROAD_CLOSURE",
+      "affectedRoadId": "R11",
+      "startTick": 2,
+      "durationTicks": 5
     }
   ]
 }
 ```
 
-Supported location types:
+Send it to:
 
 ```text
-SCHOOL, HOSPITAL, BAR, RESIDENTIAL, COMMERCIAL, NORMAL
+POST /api/simulation/initialize
 ```
 
-Supported road statuses:
+Then call:
 
 ```text
-OPEN, CONGESTED, BLOCKED, CLOSED
+POST /api/simulation/start
+POST /api/simulation/tick
+GET  /api/simulation/snapshot
 ```
 
-Invalid fields, duplicate IDs, missing endpoints, unsupported CSV records, and
-empty maps are reported with `InvalidMapException`.
+## Test Suite
 
-## Load and Save a Map
+Run every backend test:
 
-```java
-MapLoader loader = new JsonMapLoader();
-RoadNetwork network = loader.load("data/small_city.json");
-
-MapSaver saver = new MapSaver();
-saver.save(network, "output/saved-city.json");
+```powershell
+mvn test
 ```
 
-For CSV:
+Run the frontend production build:
 
-```java
-RoadNetwork network = new CsvMapLoader().load("data/sample_map.csv");
+```powershell
+cd frontend
+npm run build
 ```
-
-CSV `ROAD` records may appear before `INTERSECTION` records; the loader
-resolves intersections before adding roads.
-
-## Generate a Synthetic Map
-
-```java
-SyntheticMapGenerator generator = new SyntheticMapGenerator();
-RoadNetwork grid = generator.generateGridMap(5, 5);
-```
-
-A grid contains:
-
-```text
-intersections = rows * columns
-directed roads = 2 * [rows * (columns - 1) + columns * (rows - 1)]
-```
-
-Each neighboring pair receives two directed roads. Generated roads are 1 km
-long, have a 50 km/h speed limit, capacity 100, and start open with no traffic.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Class diagram](docs/CLASS_DIAGRAM.md)
+- [Planning overview](docs/PLANNING_OVERVIEW.md)
 - [Student A network and persistence notes](docs/planning/Binh-network-persistence.md)
-- [Routing planning notes](docs/planning/nguynie-routing-algorithms.md)
+- [Student B routing notes](docs/planning/nguynie-routing-algorithms.md)
+- [Student C vehicle and event notes](docs/planning/Hyo-vehicle-traffic_event.md)
+- [Student D simulation/API/frontend notes](docs/planning/An-simulation-API-services-frontend.md)

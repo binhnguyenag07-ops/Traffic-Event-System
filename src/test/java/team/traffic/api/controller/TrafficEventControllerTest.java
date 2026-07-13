@@ -28,6 +28,7 @@ import team.traffic.service.SimulationService;
 import team.traffic.service.TrafficEventService;
 import team.traffic.service.impl.TrafficEventServiceImpl;
 import team.traffic.simulation.EventConfig;
+import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.VehicleConfig;
 
@@ -369,6 +370,9 @@ class TrafficEventControllerTest {
         @Override public void addEvent(TrafficEvent event) {}
         @Override public SimulationStatus getStatus() { return SimulationStatus.READY; }
         @Override public long getCurrentTick() { return 0; }
+        @Override public SimulationSnapshot getSnapshot() {
+            return new SimulationSnapshot(0, SimulationStatus.READY, List.of(), List.of());
+        }
         @Override public List<Vehicle> getVehicles() { return List.of(); }
         @Override public List<TrafficEvent> getEvents() { return List.of(); }
     }

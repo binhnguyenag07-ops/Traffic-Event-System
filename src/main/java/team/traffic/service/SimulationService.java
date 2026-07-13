@@ -3,6 +3,7 @@ package team.traffic.service;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.simulation.EventConfig;
+import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.VehicleConfig;
 
@@ -18,6 +19,7 @@ public interface SimulationService {
     void addEvent(TrafficEvent event);
     SimulationStatus getStatus();
     long getCurrentTick();
+    SimulationSnapshot getSnapshot();
     List<Vehicle> getVehicles();
     List<TrafficEvent> getEvents();
 }

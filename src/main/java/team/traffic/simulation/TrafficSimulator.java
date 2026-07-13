@@ -105,6 +105,10 @@ public class TrafficSimulator {
         return Collections.unmodifiableList(events);
     }
 
+    public synchronized SimulationSnapshot getSnapshot() {
+        return new SimulationSnapshot(clock.getCurrentTick(), status, vehicles, events);
+    }
+
     public synchronized void addEvent(TrafficEvent event) {
         if (event != null) {
             events.add(event);
@@ -146,32 +150,47 @@ public class TrafficSimulator {
             throw new IllegalArgumentException("Affected road id must not be blank.");
         }
 
-        String id = "EV-" + UUID.randomUUID().toString().substring(0, 8);
-        TrafficEvent event;
+        return createEventWithId(null, type, affectedRoadId, startTick, durationTicks, value, causingVehicleId);
+    }
 
-        switch (type) {
-            case CONGESTION:
-                double congestion = value != null ? value : 0.5;
-                event = new CongestionEvent(id, affectedRoadId, startTick, durationTicks, congestion);
-                break;
-            case ACCIDENT:
-                double reduction = value != null ? value : 0.5;
-                String vehicleId = causingVehicleId != null && !causingVehicleId.isBlank()
-                        ? causingVehicleId : "system";
-                event = new AccidentEvent(id, affectedRoadId, startTick, durationTicks, reduction, vehicleId);
-                break;
-            case ROAD_CLOSURE:
-                event = new RoadClosureEvent(id, affectedRoadId, startTick, durationTicks);
-                break;
-            case TRAFFIC_LIGHT_DELAY:
-                long delay = value != null ? value.longValue() : 5L;
-                event = new TrafficLightDelayEvent(id, affectedRoadId, startTick, durationTicks, delay);
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported event type: " + type);
-        }
+    private TrafficEvent createEventWithId(
+            String id,
+            TrafficEventType type,
+            String affectedRoadId,
+            long startTick,
+            long durationTicks,
+            Double value,
+            String causingVehicleId) {
+        String eventId = id != null && !id.isBlank()
+                ? id
+                : "EV-" + UUID.randomUUID().toString().substring(0, 8);
 
-        return event;
+        return switch (type) {
+            case CONGESTION -> new CongestionEvent(
+                    eventId,
+                    affectedRoadId,
+                    startTick,
+                    durationTicks,
+                    value != null ? value : 0.5);
+            case ACCIDENT -> new AccidentEvent(
+                    eventId,
+                    affectedRoadId,
+                    startTick,
+                    durationTicks,
+                    value != null ? value : 0.5,
+                    causingVehicleId != null && !causingVehicleId.isBlank() ? causingVehicleId : "system");
+            case ROAD_CLOSURE -> new RoadClosureEvent(
+                    eventId,
+                    affectedRoadId,
+                    startTick,
+                    durationTicks);
+            case TRAFFIC_LIGHT_DELAY -> new TrafficLightDelayEvent(
+                    eventId,
+                    affectedRoadId,
+                    startTick,
+                    durationTicks,
+                    value != null ? value.longValue() : 5L);
+        };
     }
 
     /**
@@ -245,7 +264,13 @@ public class TrafficSimulator {
         } catch (IllegalArgumentException e) {
             type = TrafficEventType.CONGESTION;
         }
-        return createEvent(type, config.affectedRoadId(), config.startTick(), config.durationTicks(),
-                config.value(), config.causingVehicleId());
+        return createEventWithId(
+                config.id(),
+                type,
+                config.affectedRoadId(),
+                config.startTick(),
+                config.durationTicks(),
+                config.value(),
+                config.causingVehicleId());
     }
 }
