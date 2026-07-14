@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -187,6 +188,47 @@ class RoadNetworkTest {
         assertThatThrownBy(() -> roadNetwork.findRoadsAtOrAboveDensity(1.1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Minimum density must be finite and between 0 and 1");
+    }
+
+    @Test
+    void filtersRoadsAndCountsEveryRoadStatusForVisualizationConsumers() {
+        Road openRoad = road("R1", "I1", "I2", 5);
+        Road congestedRoad = road("R2", "I2", "I1", 5);
+        congestedRoad.setCondition(new RoadCondition(0.7, 0.6, RoadStatus.CONGESTED));
+        roadNetwork.addRoad(openRoad);
+        roadNetwork.addRoad(congestedRoad);
+
+        assertThat(roadNetwork.findRoadsByStatus(RoadStatus.CONGESTED))
+                .extracting(Road::getId)
+                .containsExactly("R2");
+        assertThat(roadNetwork.getRoadStatusCounts()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                RoadStatus.OPEN, 1,
+                RoadStatus.CONGESTED, 1,
+                RoadStatus.BLOCKED, 0,
+                RoadStatus.CLOSED, 0));
+        assertThatThrownBy(() -> roadNetwork.getRoadStatusCounts().put(RoadStatus.OPEN, 99))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void calculatesAverageCongestionAndHandlesEmptyNetwork() {
+        assertThat(roadNetwork.getAverageCongestionLevel()).isZero();
+
+        Road first = road("R1", "I1", "I2", 5);
+        first.setCondition(new RoadCondition(0.2, 0, RoadStatus.OPEN));
+        Road second = road("R2", "I2", "I1", 5);
+        second.setCondition(new RoadCondition(0.8, 0, RoadStatus.CONGESTED));
+        roadNetwork.addRoad(first);
+        roadNetwork.addRoad(second);
+
+        assertThat(roadNetwork.getAverageCongestionLevel()).isEqualTo(0.5);
+    }
+
+    @Test
+    void rejectsMissingStatusFilter() {
+        assertThatThrownBy(() -> roadNetwork.findRoadsByStatus(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Road status is required");
     }
 
     @Test

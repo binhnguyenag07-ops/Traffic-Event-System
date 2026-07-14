@@ -146,11 +146,39 @@ The number of directed roads is:
 `data/small_city.json` is the Week 3 routing dataset. It contains six
 intersections, all supported location types, alternative paths, four congested
 roads, and one blocked direct road. `congestion_demo.json` and
-`accident_demo.json` remain reserved for the Week 5 event implementation.
+`accident_demo.json` are complete Week 6 visualization datasets with valid
+coordinates, density values, road states, and alternative routes.
 
 `data/density_demo.json` is the Week 4 road-density dataset. It contains four
 roads with low, medium, high, and full density levels so the team can demo how
 capacity usage changes road availability and congestion-aware cost.
+
+## Week 6 Visualization Data Handoff
+
+Binh's visualization boundary remains the network, persistence, and data
+layers. The frontend and API layers consume these contracts but are owned by
+the integration/frontend member.
+
+The road-network model exposes read-only queries for visualization and
+statistics consumers:
+
+- `findRoadsAtOrAboveDensity(double)` for density heatmaps;
+- `findRoadsByStatus(RoadStatus)` for status filters and map layers;
+- `getRoadStatusCounts()` for status summaries and legends;
+- `getAverageVehicleDensity()` for network density summaries;
+- `getAverageCongestionLevel()` for congestion summaries.
+
+Each road already exposes `getCapacityUsage()`, `calculateTravelCost()`,
+`isAvailable()`, its current vehicle count, and its `RoadCondition`. Each
+intersection exposes stable `x` and `y` coordinates plus `LocationType`.
+
+The Week 6 scenario tests verify that:
+
+- intersection coordinates are finite and unique;
+- every road endpoint exists;
+- stored density matches `currentVehicleCount / capacity`;
+- congestion, density, vehicle count, and road status survive save/load
+  round trips.
 
 ## Class Diagram
 
