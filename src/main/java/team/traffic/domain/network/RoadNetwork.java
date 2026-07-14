@@ -2,6 +2,7 @@ package team.traffic.domain.network;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -151,6 +152,55 @@ public class RoadNetwork {
             }
         }
         return List.copyOf(denseRoads);
+    }
+
+    /**
+     * Returns roads with the requested status in network insertion order.
+     * Consumers can use this read-only query for legends, filters, and map
+     * layers without duplicating network traversal logic.
+     */
+    public List<Road> findRoadsByStatus(RoadStatus status) {
+        if (status == null) {
+            throw new IllegalArgumentException("Road status is required");
+        }
+
+        List<Road> matchingRoads = new ArrayList<>();
+        for (Road road : roads.values()) {
+            if (road.getCondition().getRoadStatus() == status) {
+                matchingRoads.add(road);
+            }
+        }
+        return List.copyOf(matchingRoads);
+    }
+
+    /**
+     * Counts every road status, including statuses with zero roads. The
+     * returned map is read-only and can be passed to statistics or
+     * visualization layers without exposing the mutable road index.
+     */
+    public Map<RoadStatus, Integer> getRoadStatusCounts() {
+        Map<RoadStatus, Integer> counts = new EnumMap<>(RoadStatus.class);
+        for (RoadStatus status : RoadStatus.values()) {
+            counts.put(status, 0);
+        }
+        for (Road road : roads.values()) {
+            RoadStatus status = road.getCondition().getRoadStatus();
+            counts.put(status, counts.get(status) + 1);
+        }
+        return Collections.unmodifiableMap(counts);
+    }
+
+    /** Returns the mean normalized congestion level across all roads. */
+    public double getAverageCongestionLevel() {
+        if (roads.isEmpty()) {
+            return 0;
+        }
+
+        double totalCongestion = 0;
+        for (Road road : roads.values()) {
+            totalCongestion += road.getCondition().getCongestionLevel();
+        }
+        return totalCongestion / roads.size();
     }
 
     public Intersection getIntersection(String intersectionId) {
