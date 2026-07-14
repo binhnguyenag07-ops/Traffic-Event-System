@@ -21,12 +21,45 @@ public abstract class Vehicle {
     private Route currentRoute;
     private int nextRouteStepIndex;
     private RoutePreference routePreference;
-    private double movementSpeed;
+    private final double length;
+    private final double width;
+    private final double maxSpeed;
+    private double currentSpeed;
+    private final double acceleration;
+    private final double deceleration;
+    private final double vehicleWeight;
+    private final int priorityLevel;
     private VehicleStatus status;
     private String occupiedRoadId;
     private final List<String> travelHistory;
 
     protected Vehicle(String id, String currentIntersectionId, String destinationIntersectionId, double movementSpeed) {
+        this(
+                id,
+                currentIntersectionId,
+                destinationIntersectionId,
+                4.5,
+                1.8,
+                movementSpeed,
+                movementSpeed,
+                1.0,
+                1.0,
+                1_000.0,
+                0);
+    }
+
+    protected Vehicle(
+            String id,
+            String currentIntersectionId,
+            String destinationIntersectionId,
+            double length,
+            double width,
+            double maxSpeed,
+            double currentSpeed,
+            double acceleration,
+            double deceleration,
+            double vehicleWeight,
+            int priorityLevel) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Vehicle id must not be blank.");
         }
@@ -36,14 +69,28 @@ public abstract class Vehicle {
         if (destinationIntersectionId == null || destinationIntersectionId.isBlank()) {
             throw new IllegalArgumentException("Destination intersection id must not be blank.");
         }
-        if (movementSpeed <= 0) {
-            throw new IllegalArgumentException("Movement speed must be positive.");
+        validatePositive("Length", length);
+        validatePositive("Width", width);
+        validatePositive("Maximum speed", maxSpeed);
+        validateCurrentSpeed(currentSpeed, maxSpeed);
+        validatePositive("Acceleration", acceleration);
+        validatePositive("Deceleration", deceleration);
+        validatePositive("Vehicle weight", vehicleWeight);
+        if (priorityLevel < 0) {
+            throw new IllegalArgumentException("Priority level must not be negative.");
         }
 
         this.id = id;
         this.currentIntersectionId = currentIntersectionId;
         this.destinationIntersectionId = destinationIntersectionId;
-        this.movementSpeed = movementSpeed;
+        this.length = length;
+        this.width = width;
+        this.maxSpeed = maxSpeed;
+        this.currentSpeed = currentSpeed;
+        this.acceleration = acceleration;
+        this.deceleration = deceleration;
+        this.vehicleWeight = vehicleWeight;
+        this.priorityLevel = priorityLevel;
         this.routePreference = RoutePreference.CONGESTION_AWARE;
         this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
         this.travelHistory = new ArrayList<>();
@@ -199,15 +246,100 @@ public abstract class Vehicle {
         return occupiedRoadId;
     }
 
+    /**
+     * Returns the legacy simulation-speed value. New code should use
+     * {@link #getCurrentSpeed()}.
+     */
     public double getMovementSpeed() {
-        return movementSpeed;
+        return currentSpeed;
     }
 
+    /**
+     * Updates the legacy simulation-speed value. New code should use
+     * {@link #setCurrentSpeed(double)}.
+     */
     public void setMovementSpeed(double movementSpeed) {
-        if (movementSpeed <= 0) {
+        if (!Double.isFinite(movementSpeed) || movementSpeed <= 0) {
             throw new IllegalArgumentException("Movement speed must be positive.");
         }
-        this.movementSpeed = movementSpeed;
+        setCurrentSpeed(movementSpeed);
+    }
+
+    /**
+     * Vehicle length in metres.
+     */
+    public double getLength() {
+        return length;
+    }
+
+    /**
+     * Vehicle width in metres.
+     */
+    public double getWidth() {
+        return width;
+    }
+
+    /**
+     * Maximum road speed in kilometres per hour.
+     */
+    public double getMaxSpeed() {
+        return maxSpeed;
+    }
+
+    /**
+     * Current road speed in kilometres per hour.
+     */
+    public double getCurrentSpeed() {
+        return currentSpeed;
+    }
+
+    public void setCurrentSpeed(double currentSpeed) {
+        validateCurrentSpeed(currentSpeed, maxSpeed);
+        this.currentSpeed = currentSpeed;
+    }
+
+    /**
+     * Acceleration in metres per second squared.
+     */
+    public double getAcceleration() {
+        return acceleration;
+    }
+
+    /**
+     * Braking deceleration in metres per second squared.
+     */
+    public double getDeceleration() {
+        return deceleration;
+    }
+
+    /**
+     * Vehicle mass in kilograms.
+     */
+    public double getVehicleWeight() {
+        return vehicleWeight;
+    }
+
+    /**
+     * Relative dispatch priority. Standard vehicles use {@code 0}.
+     */
+    public int getPriorityLevel() {
+        return priorityLevel;
+    }
+
+    /**
+     * Advances the current speed for a duration, capped at {@link #getMaxSpeed()}.
+     * This operation is intentionally independent of the graph-based tick movement.
+     */
+    public void accelerate(double durationSeconds) {
+        setCurrentSpeed(Math.min(maxSpeed, currentSpeed + acceleration * validateDuration(durationSeconds) * 3.6));
+    }
+
+    /**
+     * Reduces the current speed for a duration, floored at zero.
+     * This operation is intentionally independent of the graph-based tick movement.
+     */
+    public void decelerate(double durationSeconds) {
+        setCurrentSpeed(Math.max(0.0, currentSpeed - deceleration * validateDuration(durationSeconds) * 3.6));
     }
 
     public VehicleStatus getStatus() {
@@ -220,6 +352,25 @@ public abstract class Vehicle {
 
     public List<String> getTravelHistory() {
         return Collections.unmodifiableList(travelHistory);
+    }
+
+    private static void validatePositive(String name, double value) {
+        if (!Double.isFinite(value) || value <= 0) {
+            throw new IllegalArgumentException(name + " must be positive.");
+        }
+    }
+
+    private static void validateCurrentSpeed(double currentSpeed, double maxSpeed) {
+        if (!Double.isFinite(currentSpeed) || currentSpeed < 0 || currentSpeed > maxSpeed) {
+            throw new IllegalArgumentException("Current speed must be between zero and the maximum speed.");
+        }
+    }
+
+    private static double validateDuration(double durationSeconds) {
+        if (!Double.isFinite(durationSeconds) || durationSeconds < 0) {
+            throw new IllegalArgumentException("Duration must not be negative.");
+        }
+        return durationSeconds;
     }
 
     private RouteStep getNextRouteStep() {

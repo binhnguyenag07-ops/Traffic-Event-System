@@ -1,6 +1,7 @@
 package team.traffic.domain.vehicle;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -18,6 +19,63 @@ import team.traffic.domain.routing.RouteStep;
 import team.traffic.service.RoutingService;
 
 class VehicleTest {
+
+    @Test
+    void providesTypeSpecificPhysicalProfiles() {
+        Vehicle car = new Car("car-1", "A", "B");
+        Vehicle bus = new Bus("bus-1", "A", "B", 40);
+        Vehicle emergencyVehicle = new EmergencyVehicle("emergency-1", "A", "B", 2);
+
+        assertThat(car.getLength()).isEqualTo(4.5);
+        assertThat(car.getWidth()).isEqualTo(1.8);
+        assertThat(car.getMaxSpeed()).isEqualTo(120.0);
+        assertThat(car.getCurrentSpeed()).isEqualTo(50.0);
+        assertThat(car.getAcceleration()).isEqualTo(2.5);
+        assertThat(car.getDeceleration()).isEqualTo(6.5);
+        assertThat(car.getVehicleWeight()).isEqualTo(1_500.0);
+        assertThat(car.getPriorityLevel()).isZero();
+
+        assertThat(bus.getLength()).isEqualTo(12.0);
+        assertThat(bus.getVehicleWeight()).isEqualTo(12_000.0);
+        assertThat(bus.getPriorityLevel()).isZero();
+
+        assertThat(emergencyVehicle.getMaxSpeed()).isEqualTo(140.0);
+        assertThat(emergencyVehicle.getPriorityLevel()).isEqualTo(2);
+    }
+
+    @Test
+    void changesSpeedWithinPhysicalBoundsWithoutChangingRouteMovement() {
+        Vehicle vehicle = new Car("car-1", "A", "B");
+
+        vehicle.accelerate(2.0);
+        assertThat(vehicle.getCurrentSpeed()).isEqualTo(68.0);
+        assertThat(vehicle.getMovementSpeed()).isEqualTo(68.0);
+
+        vehicle.decelerate(10.0);
+        assertThat(vehicle.getCurrentSpeed()).isZero();
+
+        vehicle.setCurrentSpeed(120.0);
+        assertThatThrownBy(() -> vehicle.setCurrentSpeed(120.1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Current speed must be between zero and the maximum speed.");
+    }
+
+    @Test
+    void rejectsInvalidPhysicalProfiles() {
+        assertThatThrownBy(() -> new Car(
+                "car-1", "A", "B", 0.0, 1.8, 120.0, 50.0, 2.5, 6.5, 1_500.0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Length must be positive.");
+
+        assertThatThrownBy(() -> new Bus(
+                "bus-1", "A", "B", 40, 12.0, 2.5, 90.0, 91.0, 1.0, 5.0, 12_000.0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Current speed must be between zero and the maximum speed.");
+
+        assertThatThrownBy(() -> new EmergencyVehicle("emergency-1", "A", "B", 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Priority level must be positive.");
+    }
 
     @Test
     void requestsRouteAndMovesThroughEveryStep() {
