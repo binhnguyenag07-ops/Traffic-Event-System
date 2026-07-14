@@ -15,6 +15,7 @@ the backend workflow that connects events to vehicle movement and rerouting.
 | 6 | Multi-vehicle demo support | Done in backend/simulation |
 | 7 | Event tests | Done |
 | 8 | OOP docs | Done in planning, architecture, and class-diagram docs |
+| Post-plan extension | Vehicle physical profile and speed controls | Done |
 
 ## Implemented Packages
 
@@ -63,6 +64,8 @@ src/main/java/team/traffic/
 Implemented behavior:
 
 - validates vehicle id, current intersection, destination, and movement speed;
+- validates a physical vehicle profile: length, width, maximum speed, current
+  speed, acceleration, deceleration, weight, and dispatch priority;
 - stores current route, route preference, movement status, and travel history;
 - requests routes through `RoutingService`;
 - recomputes routes when a route becomes blocked or stale;
@@ -70,6 +73,29 @@ Implemented behavior:
 - updates road vehicle counts through `RoadNetwork` when occupying or leaving a road;
 - becomes `ARRIVED` at the destination;
 - becomes `BLOCKED` when no usable route or road is available.
+
+## Student C Extension: Vehicle Physical Profile
+
+The original roadmap and class diagram require the vehicle hierarchy but do not
+specify physical dimensions or kinematics. Student C extends the shared
+`Vehicle` API with a validated, type-specific physical profile. Existing
+constructors, `movementSpeed`, APIs, routing, density, and simulation behavior
+remain compatible.
+
+| Property | Unit | Default profile |
+|---|---:|---|
+| `length` | metres | car 4.5, bus 12.0, emergency 5.0 |
+| `width` | metres | car 1.8, bus 2.5, emergency 2.0 |
+| `maxSpeed` / `currentSpeed` | km/h | car 120 / 50, bus 90 / 35, emergency 140 / 70 |
+| `acceleration` / `deceleration` | m/s2 | car 2.5 / 6.5, bus 1.0 / 5.0, emergency 3.0 / 7.5 |
+| `vehicleWeight` | kg | car 1,500, bus 12,000, emergency 2,500 |
+| `priorityLevel` | level | standard vehicles 0; emergency supplied by caller |
+
+`accelerate(seconds)` and `decelerate(seconds)` enforce valid speed bounds.
+They intentionally do not alter the current graph-based movement rule, where a
+simulation tick moves a vehicle by one `RouteStep`. Integrating continuous
+kinematics into tick timing and route cost would require a team-wide simulation
+design decision and is outside this backward-compatible extension.
 
 ## Event Responsibilities
 

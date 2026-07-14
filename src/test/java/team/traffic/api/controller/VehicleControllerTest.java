@@ -57,6 +57,10 @@ class VehicleControllerTest {
         assertThat(response.statusCode()).isEqualTo(201);
         assertThat(vehicleService.createdDestinationIntersectionId).isEqualTo("B");
         assertThat(response.body()).contains("\"destinationIntersectionId\":\"B\"");
+        assertThat(response.body()).contains("\"length\":4.5");
+        assertThat(response.body()).contains("\"maxSpeed\":120.0");
+        assertThat(response.body()).contains("\"currentSpeed\":50.0");
+        assertThat(response.body()).contains("\"priorityLevel\":0");
     }
 
     @Test
