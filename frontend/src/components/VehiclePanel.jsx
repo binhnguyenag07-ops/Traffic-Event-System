@@ -2,6 +2,8 @@
  * Vehicle Panel Component
  * Displays simulation vehicles from the OOP Vehicle model.
  */
+import VehicleAsset from '../vehicle-assets/VehicleAsset'
+
 export default function VehiclePanel({ simulationHook }) {
   const { simulationState, getMovingVehicles, getVehicleStats } = simulationHook
 
@@ -51,7 +53,10 @@ export default function VehiclePanel({ simulationHook }) {
             {movingVehicles.map((vehicle) => (
               <div key={vehicle.id} className="vehicle-item">
                 <div className="vehicle-header">
-                  <span className="vehicle-id">{vehicle.id}</span>
+                  <span className="vehicle-kind">
+                    <VehicleAsset type={vehicle.type} size={28} decorative />
+                    <span className="vehicle-id">{vehicle.id}</span>
+                  </span>
                   <span className="vehicle-type">{vehicle.getTypeName()}</span>
                 </div>
                 <div className="vehicle-details">
@@ -97,7 +102,12 @@ export default function VehiclePanel({ simulationHook }) {
             {allVehicles.map((vehicle) => (
               <tr key={vehicle.id}>
                 <td>{vehicle.id}</td>
-                <td>{vehicle.getTypeName()}</td>
+                <td>
+                  <span className="vehicle-kind">
+                    <VehicleAsset type={vehicle.type} size={26} decorative />
+                    <span>{vehicle.getTypeName()}</span>
+                  </span>
+                </td>
                 <td>{vehicle.currentIntersectionId}</td>
                 <td>{vehicle.destinationIntersectionId}</td>
                 <td>

@@ -400,6 +400,34 @@ code {
   font-size: 0.85rem;
 }
 
+.vehicle-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.vehicle-asset {
+  inline-size: var(--vehicle-asset-size);
+  block-size: var(--vehicle-asset-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--vehicle-asset-size);
+  color: var(--vehicle-asset-color);
+  background: var(--vehicle-asset-background);
+  border: 1px solid var(--vehicle-asset-border);
+  border-radius: 6px;
+}
+
+.vehicle-asset img,
+.vehicle-asset svg {
+  display: block;
+  max-inline-size: 72%;
+  max-block-size: 72%;
+  object-fit: contain;
+}
+
 .form-section h2 {
   font-size: 1.25rem;
   margin-bottom: 1rem;
