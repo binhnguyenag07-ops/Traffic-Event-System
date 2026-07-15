@@ -106,7 +106,12 @@ public class TrafficSimulator {
     }
 
     public synchronized SimulationSnapshot getSnapshot() {
-        return new SimulationSnapshot(clock.getCurrentTick(), status, vehicles, events);
+        return new SimulationSnapshot(
+                clock.getCurrentTick(),
+                status,
+                vehicles,
+                events,
+                new ArrayList<>(network.getRoads().values()));
     }
 
     public synchronized void addEvent(TrafficEvent event) {

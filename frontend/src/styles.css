@@ -406,7 +406,139 @@ code {
   color: #1e293b;
 }
 
+/* ── Dashboard layout ───────────────────────────────────────────────────── */
+
+.app-wide {
+  max-width: 1400px;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+  margin-bottom: 1.5rem;
+}
+
+.dash-main {
+  min-width: 0;
+}
+
+.dash-side {
+  min-width: 0;
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.dash-grid .sim-panel {
+  margin-bottom: 0;
+}
+
+/* ── Map ────────────────────────────────────────────────────────────────── */
+
+.map-panel {
+  margin-bottom: 1.5rem;
+}
+
+.map-svg {
+  width: 100%;
+  height: auto;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: block;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 5px;
+  border-radius: 3px;
+}
+
+.legend-swatch.round {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* ── Selected details / pending vehicles ────────────────────────────────── */
+
+.selected-details-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.selected-details-head h2 {
+  margin-bottom: 0;
+}
+
+.selected-details p {
+  font-size: 0.9rem;
+  color: #475569;
+  margin-bottom: 0.35rem;
+}
+
+.pending-vehicles {
+  list-style: none;
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pending-vehicles li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+}
+
+.pending-vehicles li button {
+  margin-left: auto;
+}
+
+.row-selected td {
+  background: #eff6ff !important;
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 @media (max-width: 600px) {
   .form-row {

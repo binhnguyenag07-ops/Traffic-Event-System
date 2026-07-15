@@ -2,6 +2,7 @@ package team.traffic.api.dto;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import team.traffic.domain.statistics.TrafficStatistics;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 
@@ -10,10 +11,16 @@ public class SimulationSnapshotDto {
     private SimulationStatus status;
     private List<VehicleDto> vehicles;
     private List<TrafficEventDto> trafficEvents;
+    private List<RoadStateDto> roads;
+    private TrafficStatistics statistics;
 
     public SimulationSnapshotDto() {}
 
     public SimulationSnapshotDto(SimulationSnapshot snapshot) {
+        this(snapshot, null);
+    }
+
+    public SimulationSnapshotDto(SimulationSnapshot snapshot, TrafficStatistics statistics) {
         this.tick = snapshot.tick();
         this.status = snapshot.status();
         this.vehicles = snapshot.vehicles().stream()
@@ -22,6 +29,10 @@ public class SimulationSnapshotDto {
         this.trafficEvents = snapshot.trafficEvents().stream()
                 .map(TrafficEventDto::new)
                 .collect(Collectors.toList());
+        this.roads = snapshot.roads().stream()
+                .map(RoadStateDto::new)
+                .collect(Collectors.toList());
+        this.statistics = statistics;
     }
 
     public long getTick() {
@@ -54,5 +65,21 @@ public class SimulationSnapshotDto {
 
     public void setTrafficEvents(List<TrafficEventDto> trafficEvents) {
         this.trafficEvents = trafficEvents;
+    }
+
+    public List<RoadStateDto> getRoads() {
+        return roads;
+    }
+
+    public void setRoads(List<RoadStateDto> roads) {
+        this.roads = roads;
+    }
+
+    public TrafficStatistics getStatistics() {
+        return statistics;
+    }
+
+    public void setStatistics(TrafficStatistics statistics) {
+        this.statistics = statistics;
     }
 }

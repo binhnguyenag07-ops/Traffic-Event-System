@@ -55,15 +55,16 @@ public class App {
         VehicleServiceImpl vehicleService = new VehicleServiceImpl();
         TrafficEventServiceImpl trafficEventService = new TrafficEventServiceImpl(eventBus, networkService);
 
+        StatisticsServiceImpl statisticsService = new StatisticsServiceImpl(simulationService, networkService, registry);
+
         // Create controllers
         HealthController healthController = new HealthController();
         NetworkController networkController = new NetworkController(networkService);
         RoutingController routingController = new RoutingController(routingService, networkService);
-        SimulationController simulationController = new SimulationController(simulationService);
+        SimulationController simulationController = new SimulationController(simulationService, statisticsService);
 
         VehicleController vehicleController = new VehicleController(vehicleService, networkService);
         TrafficEventController trafficEventController = new TrafficEventController(trafficEventService, simulationService);
-        StatisticsServiceImpl statisticsService = new StatisticsServiceImpl(simulationService, networkService, registry);
         StatisticsController statisticsController = new StatisticsController(statisticsService);
 
         // Wire API routes

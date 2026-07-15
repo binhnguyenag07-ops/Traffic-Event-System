@@ -67,7 +67,17 @@ npm install
 npm run dev
 ```
 
-The Vite dev server will print the local frontend URL.
+The Vite dev server will print the local frontend URL. The dashboard shows an
+SVG map of the road network with live vehicles, traffic events, and route
+highlights, plus simulation controls, vehicle/event tables, a route finder,
+and a statistics/heatmap panel — all kept in sync per simulation tick.
+
+The frontend expects the backend at `http://localhost:7070/api`. To point it
+elsewhere, set `VITE_API_BASE_URL` (e.g. in `frontend/.env.local`):
+
+```text
+VITE_API_BASE_URL=http://my-host:7070/api
+```
 
 ## Main API Endpoints
 
@@ -172,6 +182,14 @@ Run every backend test:
 
 ```powershell
 mvn test
+```
+
+Run the frontend tests (API client, map visualization, and an end-to-end
+dashboard scenario against a mocked backend):
+
+```powershell
+cd frontend
+npm test
 ```
 
 Run the frontend production build:

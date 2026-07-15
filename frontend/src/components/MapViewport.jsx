@@ -1,221 +1,313 @@
-import { useState, useEffect, useRef } from 'react'
+import { useMemo } from 'react'
+import {
+  ROAD_STATUS_COLOR,
+  VEHICLE_STATUS_COLOR,
+  EVENT_TYPE_COLOR,
+  LOCATION_TYPE_COLOR,
+} from '../theme'
 
-export default function MapViewport({ roadNetworkHook }) {
-  const {
-    intersections,
-    roads,
-    loading,
-    error,
-    loadIntersections,
-    loadRoads,
-    generateGridMap,
-  } = roadNetworkHook
+const SCALE = 140
+const PAD = 70
+const ROAD_OFFSET = 6 // separates the two directions of a road pair
 
-  const canvasRef = useRef(null)
-  const [scale, setScale] = useState(1)
-  const [panX, setPanX] = useState(0)
-  const [panY, setPanY] = useState(0)
-  const [selectedIntersection, setSelectedIntersection] = useState(null)
-  const [showGrid, setShowGrid] = useState(false)
+/**
+ * SVG map of the road network.
+ *
+ * Props contract (agreed integration point for all four tracks):
+ *   intersections  [{ id, name, x, y, locationType }]          — Binh's network
+ *   roads          [{ id, startIntersectionId, endIntersectionId,
+ *                     status, congestionLevel, ... }]           — Binh's network / snapshot
+ *   vehicles       [{ id, type, currentIntersectionId, status }] — Hyo's vehicles (snapshot)
+ *   events         [{ id, type, affectedRoadId, status }]        — Hyo's events (snapshot)
+ *   route          { steps: [{ from, to, roadId }] } | null      — Nguyie's route result
+ *   selected       { type: 'intersection'|'road'|'vehicle', id } | null
+ *   onSelect       (selection | null) => void
+ */
+export default function MapViewport({
+  intersections = [],
+  roads = [],
+  vehicles = [],
+  events = [],
+  route = null,
+  selected = null,
+  onSelect = () => {},
+}) {
+  const positions = useMemo(() => {
+    const map = {}
+    if (intersections.length === 0) return { map, width: 0, height: 0 }
+    const xs = intersections.map((i) => i.x ?? 0)
+    const ys = intersections.map((i) => i.y ?? 0)
+    const minX = Math.min(...xs)
+    const minY = Math.min(...ys)
+    intersections.forEach((i) => {
+      map[i.id] = {
+        x: ((i.x ?? 0) - minX) * SCALE + PAD,
+        y: ((i.y ?? 0) - minY) * SCALE + PAD,
+      }
+    })
+    const width = (Math.max(...xs) - minX) * SCALE + PAD * 2
+    const height = (Math.max(...ys) - minY) * SCALE + PAD * 2
+    return { map, width, height }
+  }, [intersections])
 
-  // Generate grid map
-  const handleGenerateGridMap = async () => {
-    try {
-      await generateGridMap(5, 5)
-      await loadIntersections()
-      await loadRoads()
-    } catch (err) {
-      console.error('Failed to generate map:', err)
+  const routeRoadIds = useMemo(
+    () => new Set((route?.steps ?? []).map((s) => s.roadId)),
+    [route]
+  )
+
+  const activeEvents = events.filter((ev) => ev.status === 'ACTIVE')
+
+  const vehiclesByIntersection = useMemo(() => {
+    const grouped = {}
+    vehicles.forEach((v) => {
+      const at = v.currentIntersectionId
+      if (!grouped[at]) grouped[at] = []
+      grouped[at].push(v)
+    })
+    return grouped
+  }, [vehicles])
+
+  if (intersections.length === 0) {
+    return (
+      <section className="sim-panel map-panel">
+        <h2>Network Map</h2>
+        <p className="sim-hint">No network loaded yet.</p>
+      </section>
+    )
+  }
+
+  // Offsets a road line perpendicular to its direction so that the two
+  // directions of a road pair (A→B and B→A) render side by side.
+  const roadLine = (road) => {
+    const from = positions.map[road.startIntersectionId]
+    const to = positions.map[road.endIntersectionId]
+    if (!from || !to) return null
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    const ox = (-dy / len) * ROAD_OFFSET
+    const oy = (dx / len) * ROAD_OFFSET
+    return {
+      x1: from.x + ox,
+      y1: from.y + oy,
+      x2: to.x + ox,
+      y2: to.y + oy,
+      midX: (from.x + to.x) / 2 + ox * 2,
+      midY: (from.y + to.y) / 2 + oy * 2,
     }
   }
 
-  // Draw the map
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas || !intersections || !roads) return
+  const roadLines = {}
+  roads.forEach((r) => {
+    const line = roadLine(r)
+    if (line) roadLines[r.id] = line
+  })
 
-    const ctx = canvas.getContext('2d')
-    const width = canvas.width
-    const height = canvas.height
-
-    // Clear canvas
-    ctx.fillStyle = '#f0f0f0'
-    ctx.fillRect(0, 0, width, height)
-
-    // Draw grid
-    if (showGrid) {
-      ctx.strokeStyle = '#ddd'
-      ctx.lineWidth = 0.5
-      for (let i = 0; i < width; i += 50) {
-        ctx.beginPath()
-        ctx.moveTo(i, 0)
-        ctx.lineTo(i, height)
-        ctx.stroke()
-      }
-      for (let i = 0; i < height; i += 50) {
-        ctx.beginPath()
-        ctx.moveTo(0, i)
-        ctx.lineTo(width, i)
-        ctx.stroke()
-      }
-    }
-
-    // Draw roads
-    ctx.strokeStyle = '#333'
-    ctx.lineWidth = 2
-    roads.forEach((road) => {
-      const startIntersection = intersections.find((i) => i.id === road.startIntersectionId)
-      const endIntersection = intersections.find((i) => i.id === road.endIntersectionId)
-
-      if (startIntersection && endIntersection) {
-        const x1 = (startIntersection.x || 0) * scale + panX
-        const y1 = (startIntersection.y || 0) * scale + panY
-        const x2 = (endIntersection.x || 0) * scale + panX
-        const y2 = (endIntersection.y || 0) * scale + panY
-
-        // Draw road
-        ctx.beginPath()
-        ctx.moveTo(x1, y1)
-        ctx.lineTo(x2, y2)
-
-        ctx.strokeStyle = road.getStatusColor()
-        ctx.stroke()
-      }
+  const routePoints = (route?.steps ?? [])
+    .map((step, i) => {
+      const from = positions.map[step.from]
+      const to = positions.map[step.to]
+      if (!from || !to) return null
+      return i === 0 ? [from, to] : [to]
     })
-
-    // Draw intersections
-    intersections.forEach((intersection) => {
-      const x = (intersection.x || 0) * scale + panX
-      const y = (intersection.y || 0) * scale + panY
-
-      // Draw circle
-      ctx.fillStyle =
-        selectedIntersection?.id === intersection.id ? '#4169E1' : '#FFD700'
-      ctx.beginPath()
-      ctx.arc(x, y, 6, 0, 2 * Math.PI)
-      ctx.fill()
-
-      // Draw border
-      ctx.strokeStyle = '#333'
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-
-      // Draw label
-      ctx.fillStyle = '#000'
-      ctx.font = '10px Arial'
-      ctx.textAlign = 'center'
-      ctx.fillText(intersection.id, x, y + 15)
-    })
-  }, [intersections, roads, scale, panX, panY, selectedIntersection, showGrid])
-
-  // Handle canvas clicks
-  const handleCanvasClick = (e) => {
-    const canvas = canvasRef.current
-    const rect = canvas.getBoundingClientRect()
-    const clickX = (e.clientX - rect.left - panX) / scale
-    const clickY = (e.clientY - rect.top - panY) / scale
-
-    // Find clicked intersection
-    intersections.forEach((intersection) => {
-      const ix = intersection.x || 0
-      const iy = intersection.y || 0
-      const distance = Math.sqrt((clickX - ix) ** 2 + (clickY - iy) ** 2)
-
-      if (distance < 10) {
-        setSelectedIntersection(intersection)
-      }
-    })
-  }
-
-  // Handle zoom
-  const handleZoom = (e) => {
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    setScale((s) => Math.max(0.5, Math.min(5, s * delta)))
-  }
-
-  // Handle pan
-  const panState = useRef(null)
-
-  const handleMouseMove = (e) => {
-    if (!panState.current) return
-    const dx = e.clientX - panState.current.x
-    const dy = e.clientY - panState.current.y
-    setPanX((px) => px + dx)
-    setPanY((py) => py + dy)
-    panState.current = { x: e.clientX, y: e.clientY }
-  }
-
-  const handleMouseDown = (e) => {
-    if (e.button === 2) {
-      // Right click to pan
-      panState.current = { x: e.clientX, y: e.clientY }
-    } else {
-      handleCanvasClick(e)
-    }
-  }
-
-  const handleMouseUp = () => {
-    panState.current = null
-  }
+    .filter(Boolean)
+    .flat()
 
   return (
-    <div className="map-viewport">
-      <h2>Road Network Map</h2>
+    <section className="sim-panel map-panel">
+      <h2>Network Map</h2>
+      <svg
+        data-testid="map-svg"
+        className="map-svg"
+        viewBox={`0 0 ${positions.width} ${positions.height}`}
+        role="img"
+        aria-label="Road network map"
+        onClick={() => onSelect(null)}
+      >
+        {/* Roads */}
+        {roads.map((r) => {
+          const line = roadLines[r.id]
+          if (!line) return null
+          const isSelected = selected?.type === 'road' && selected.id === r.id
+          const inRoute = routeRoadIds.has(r.id)
+          return (
+            <line
+              key={r.id}
+              data-testid={`map-road-${r.id}`}
+              data-status={r.status}
+              data-in-route={inRoute ? 'true' : 'false'}
+              x1={line.x1}
+              y1={line.y1}
+              x2={line.x2}
+              y2={line.y2}
+              stroke={ROAD_STATUS_COLOR[r.status] ?? '#94a3b8'}
+              strokeWidth={isSelected ? 8 : 4 + (r.congestionLevel ?? 0) * 4}
+              strokeLinecap="round"
+              opacity={isSelected ? 1 : 0.85}
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelect({ type: 'road', id: r.id })
+              }}
+            >
+              <title>{`${r.id}: ${r.startIntersectionId} to ${r.endIntersectionId} (${r.status})`}</title>
+            </line>
+          )
+        })}
 
-      {/* Controls */}
-      <div className="map-controls">
-        <button onClick={() => setScale(1)} className="btn-secondary">
-          Reset Zoom
-        </button>
-        <button onClick={() => { setPanX(0); setPanY(0); }} className="btn-secondary">
-          Reset Pan
-        </button>
-        <button onClick={() => setShowGrid(!showGrid)} className="btn-secondary">
-          {showGrid ? 'Hide Grid' : 'Show Grid'}
-        </button>
-        <button onClick={handleGenerateGridMap} disabled={loading} className="btn-primary">
-          {loading ? 'Generating...' : 'Generate 5x5 Grid'}
-        </button>
-        <div className="zoom-info">
-          Zoom: {scale.toFixed(2)}x | Pan: ({panX.toFixed(0)}, {panY.toFixed(0)})
-        </div>
-      </div>
-
-      {/* Canvas */}
-      <canvas
-        ref={canvasRef}
-        width={800}
-        height={600}
-        onContextMenu={(e) => e.preventDefault()}
-        onWheel={handleZoom}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        style={{
-          border: '1px solid #ccc',
-          cursor: 'grab',
-          display: 'block',
-          margin: '10px 0',
-        }}
-      />
-
-      {/* Info */}
-      <div className="map-info">
-        <p>
-          Intersections: <strong>{intersections?.length || 0}</strong> | Roads: <strong>{roads?.length || 0}</strong>
-        </p>
-        {selectedIntersection && (
-          <div className="selected-info">
-            <h4>Selected Intersection: {selectedIntersection.id}</h4>
-            <p>Location Type: {selectedIntersection.locationType || 'NORMAL'}</p>
-            <p>Position: ({selectedIntersection.x || 0}, {selectedIntersection.y || 0})</p>
-          </div>
+        {/* Route highlight overlay */}
+        {routePoints.length > 1 && (
+          <polyline
+            data-testid="map-route-overlay"
+            points={routePoints.map((p) => `${p.x},${p.y}`).join(' ')}
+            fill="none"
+            stroke="#3b82f6"
+            strokeWidth={10}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.45}
+            pointerEvents="none"
+          />
         )}
-      </div>
 
-      {/* Error Display */}
-      {error && <div className="error-message">{error}</div>}
-    </div>
+        {/* Active event badges at road midpoints */}
+        {activeEvents.map((ev) => {
+          const line = roadLines[ev.affectedRoadId]
+          if (!line) return null
+          return (
+            <g key={ev.id} data-testid={`map-event-${ev.id}`} pointerEvents="none">
+              <circle
+                cx={line.midX}
+                cy={line.midY}
+                r={9}
+                fill={EVENT_TYPE_COLOR[ev.type] ?? '#64748b'}
+                stroke="#fff"
+                strokeWidth={2}
+              />
+              <text
+                x={line.midX}
+                y={line.midY + 4}
+                textAnchor="middle"
+                fontSize="10"
+                fontWeight="700"
+                fill="#fff"
+              >
+                !
+              </text>
+            </g>
+          )
+        })}
+
+        {/* Intersections */}
+        {intersections.map((i) => {
+          const pos = positions.map[i.id]
+          const isSelected = selected?.type === 'intersection' && selected.id === i.id
+          return (
+            <g
+              key={i.id}
+              data-testid={`map-intersection-${i.id}`}
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelect({ type: 'intersection', id: i.id })
+              }}
+            >
+              {isSelected && (
+                <circle cx={pos.x} cy={pos.y} r={16} fill="none" stroke="#3b82f6" strokeWidth={3} />
+              )}
+              <circle
+                cx={pos.x}
+                cy={pos.y}
+                r={10}
+                fill={LOCATION_TYPE_COLOR[i.locationType] ?? '#64748b'}
+                stroke="#fff"
+                strokeWidth={2}
+              />
+              <text
+                x={pos.x}
+                y={pos.y - 16}
+                textAnchor="middle"
+                fontSize="12"
+                fontWeight="700"
+                fill="#1e293b"
+              >
+                {i.id}
+              </text>
+              <text x={pos.x} y={pos.y + 26} textAnchor="middle" fontSize="10" fill="#64748b">
+                {i.name}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* Vehicles, spread around their current intersection */}
+        {Object.entries(vehiclesByIntersection).map(([intersectionId, group]) =>
+          group.map((v, idx) => {
+            const pos = positions.map[intersectionId]
+            if (!pos) return null
+            const angle = (idx / group.length) * Math.PI * 2
+            const vx = pos.x + Math.cos(angle) * 22
+            const vy = pos.y + Math.sin(angle) * 22
+            const isSelected = selected?.type === 'vehicle' && selected.id === v.id
+            return (
+              <g
+                key={v.id}
+                data-testid={`map-vehicle-${v.id}`}
+                data-at={intersectionId}
+                style={{ cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelect({ type: 'vehicle', id: v.id })
+                }}
+              >
+                {isSelected && (
+                  <circle cx={vx} cy={vy} r={12} fill="none" stroke="#3b82f6" strokeWidth={2.5} />
+                )}
+                <circle
+                  cx={vx}
+                  cy={vy}
+                  r={8}
+                  fill={VEHICLE_STATUS_COLOR[v.status] ?? '#64748b'}
+                  stroke="#fff"
+                  strokeWidth={1.5}
+                />
+                <text
+                  x={vx}
+                  y={vy + 3.5}
+                  textAnchor="middle"
+                  fontSize="9"
+                  fontWeight="700"
+                  fill="#fff"
+                >
+                  {(v.type ?? '?').charAt(0)}
+                </text>
+                <title>{`${v.id} (${v.type}) at ${intersectionId} - ${v.status}`}</title>
+              </g>
+            )
+          })
+        )}
+      </svg>
+
+      <div className="map-legend">
+        <span className="legend-item">
+          <span className="legend-swatch" style={{ background: ROAD_STATUS_COLOR.OPEN }} /> Open
+        </span>
+        <span className="legend-item">
+          <span className="legend-swatch" style={{ background: ROAD_STATUS_COLOR.CONGESTED }} /> Congested
+        </span>
+        <span className="legend-item">
+          <span className="legend-swatch" style={{ background: ROAD_STATUS_COLOR.BLOCKED }} /> Blocked
+        </span>
+        <span className="legend-item">
+          <span className="legend-swatch" style={{ background: ROAD_STATUS_COLOR.CLOSED }} /> Closed
+        </span>
+        <span className="legend-item">
+          <span className="legend-swatch round" style={{ background: '#3b82f6' }} /> Route
+        </span>
+        <span className="legend-item">
+          <span className="legend-swatch round" style={{ background: VEHICLE_STATUS_COLOR.MOVING }} /> Vehicle
+        </span>
+      </div>
+    </section>
   )
 }

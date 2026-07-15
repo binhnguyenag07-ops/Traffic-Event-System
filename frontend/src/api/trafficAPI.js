@@ -1,9 +1,18 @@
 /**
+ * Default API base URL.
+ * Override with VITE_API_BASE_URL (e.g. in frontend/.env.local) when the
+ * backend runs on a different host/port.
+ */
+const DEFAULT_BASE_URL =
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
+  'http://localhost:7070/api'
+
+/**
  * Base API Client Class
  * Handles HTTP communication with the backend server
  */
 class ApiClient {
-  constructor(baseUrl = 'http://localhost:7070/api') {
+  constructor(baseUrl = DEFAULT_BASE_URL) {
     this.baseUrl = baseUrl
     this.headers = {
       'Content-Type': 'application/json',
@@ -294,7 +303,7 @@ class StatisticsService extends ApiClient {
  * API Facade - Aggregates all services for easy access
  */
 class TrafficApiClient {
-  constructor(baseUrl = 'http://localhost:7070/api') {
+  constructor(baseUrl = DEFAULT_BASE_URL) {
     this.health = new HealthService(baseUrl)
     this.network = new NetworkService(baseUrl)
     this.routing = new RoutingService(baseUrl)

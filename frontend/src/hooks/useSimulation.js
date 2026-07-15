@@ -1,212 +1,166 @@
-import { useState, useEffect, useCallback } from 'react'
-import { simulationApi } from '../api/trafficApi'
-import { SimulationSnapshot } from '../models'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { simulationApi } from '../api/trafficAPI'
 
 /**
- * Hook for managing simulation state
- * Integrates with OOP domain models
+ * Owns the simulation lifecycle and the shared per-tick state.
+ *
+ * Every lifecycle action and every tick refreshes the snapshot, which carries
+ * vehicles (with route/progress), active traffic events, dynamic road state,
+ * and traffic statistics in a single consistent payload — so the map, tables,
+ * and statistics all describe the same tick.
+ *
+ * Auto-tick stops automatically on pause, reset, error, and unmount.
  */
 export function useSimulation() {
-  const [simulationState, setSimulationState] = useState(null)
-  const [isRunning, setIsRunning] = useState(false)
-  const [currentTick, setCurrentTick] = useState(0)
   const [status, setStatus] = useState('READY')
-  const [error, setError] = useState(null)
+  const [tick, setTick] = useState(0)
+  const [vehicles, setVehicles] = useState([])
+  const [trafficEvents, setTrafficEvents] = useState([])
+  const [liveRoads, setLiveRoads] = useState([])
+  const [statistics, setStatistics] = useState(null)
+  const [initialized, setInitialized] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [autoTick, setAutoTick] = useState(false)
+  const [tickInterval, setTickInterval] = useState(1000)
+  const intervalRef = useRef(null)
 
-  /**
-   * Get current simulation status
-   */
-  const getSimulationStatus = useCallback(async () => {
-    try {
-      const statusData = await simulationApi.getSimulationStatus()
-      setStatus(statusData.status || 'READY')
-      setIsRunning(statusData.status === 'RUNNING')
-      setCurrentTick(statusData.currentTick || 0)
-      return statusData
-    } catch (err) {
-      setError(`Failed to get simulation status: ${err.message}`)
-      return null
-    }
+  const applySnapshot = useCallback((snap) => {
+    if (!snap) return
+    setTick(snap.tick ?? 0)
+    if (snap.status) setStatus(snap.status)
+    setVehicles(Array.isArray(snap.vehicles) ? snap.vehicles : [])
+    setTrafficEvents(Array.isArray(snap.trafficEvents) ? snap.trafficEvents : [])
+    setLiveRoads(Array.isArray(snap.roads) ? snap.roads : [])
+    setStatistics(snap.statistics ?? null)
   }, [])
 
-  /**
-   * Get current simulation snapshot with OOP models
-   */
-  const getSnapshot = useCallback(async () => {
+  const refreshSnapshot = useCallback(async () => {
+    const snap = await simulationApi.getSimulationSnapshot()
+    applySnapshot(snap)
+    return snap
+  }, [applySnapshot])
+
+  const refreshStatus = useCallback(async () => {
+    const s = await simulationApi.getSimulationStatus()
+    setStatus(s.status ?? 'READY')
+    setTick(s.currentTick ?? 0)
+  }, [])
+
+  const wrap = useCallback(async (fn) => {
+    setLoading(true)
+    setError(null)
     try {
-      setLoading(true)
-      const snapshotData = await simulationApi.getSimulationSnapshot()
-      const snapshot = new SimulationSnapshot(snapshotData)
-      setSimulationState(snapshot)
-      if (snapshot.tick !== undefined) {
-        setCurrentTick(snapshot.tick)
-      }
-      return snapshot
-    } catch (err) {
-      setError(`Failed to get snapshot: ${err.message}`)
-      return null
+      await fn()
+    } catch (e) {
+      setError(e.message)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  /**
-   * Initialize simulation
-   */
-  const initialize = useCallback(async (vehicles, events) => {
-    try {
-      setLoading(true)
-      await simulationApi.initializeSimulation(vehicles, events)
-      await getSnapshot()
-      await getSimulationStatus()
-    } catch (err) {
-      setError(`Failed to initialize simulation: ${err.message}`)
-    } finally {
-      setLoading(false)
-    }
-  }, [getSnapshot, getSimulationStatus])
-
-  /**
-   * Start simulation
-   */
-  const start = useCallback(async () => {
-    try {
-      await simulationApi.startSimulation()
-      setIsRunning(true)
-      setStatus('RUNNING')
-      await getSnapshot()
-    } catch (err) {
-      setError(`Failed to start simulation: ${err.message}`)
-    }
-  }, [getSnapshot])
-
-  /**
-   * Pause simulation
-   */
-  const pause = useCallback(async () => {
-    try {
-      await simulationApi.pauseSimulation()
-      setIsRunning(false)
-      setStatus('PAUSED')
-      await getSnapshot()
-    } catch (err) {
-      setError(`Failed to pause simulation: ${err.message}`)
-    }
-  }, [getSnapshot])
-
-  /**
-   * Resume simulation
-   */
-  const resume = useCallback(async () => {
-    try {
-      await simulationApi.resumeSimulation()
-      setIsRunning(true)
-      setStatus('RUNNING')
-      await getSnapshot()
-    } catch (err) {
-      setError(`Failed to resume simulation: ${err.message}`)
-    }
-  }, [getSnapshot])
-
-  /**
-   * Reset simulation
-   */
-  const reset = useCallback(async () => {
-    try {
-      await simulationApi.resetSimulation()
-      setIsRunning(false)
-      setStatus('READY')
-      setCurrentTick(0)
-      await getSnapshot()
-    } catch (err) {
-      setError(`Failed to reset simulation: ${err.message}`)
-    }
-  }, [getSnapshot])
-
-  /**
-   * Advance by one tick
-   */
-  const advanceOneTick = useCallback(async () => {
-    try {
-      await simulationApi.advanceOneTick()
-      setCurrentTick((prev) => prev + 1)
-      await getSnapshot()
-    } catch (err) {
-      setError(`Failed to advance tick: ${err.message}`)
-    }
-  }, [getSnapshot])
-
-  /**
-   * Advance by multiple ticks
-   */
-  const advanceTicks = useCallback(
-    async (ticks) => {
-      for (let i = 0; i < ticks; i++) {
-        await advanceOneTick()
-      }
-    },
-    [advanceOneTick]
+  const initialize = useCallback(
+    (vehicleConfigs, eventConfigs = []) =>
+      wrap(async () => {
+        await simulationApi.initializeSimulation(vehicleConfigs, eventConfigs)
+        setAutoTick(false)
+        await refreshSnapshot()
+        await refreshStatus()
+        setInitialized(true)
+      }),
+    [wrap, refreshSnapshot, refreshStatus]
   )
 
-  /**
-   * Set simulation parameters
-   */
-  const setParameters = useCallback(async (parameters) => {
-    try {
-      await simulationApi.setSimulationParameters(parameters)
-    } catch (err) {
-      setError(`Failed to set parameters: ${err.message}`)
+  const start = useCallback(
+    () =>
+      wrap(async () => {
+        await simulationApi.startSimulation()
+        setStatus('RUNNING')
+      }),
+    [wrap]
+  )
+
+  const pause = useCallback(
+    () =>
+      wrap(async () => {
+        await simulationApi.pauseSimulation()
+        setAutoTick(false)
+        setStatus('PAUSED')
+      }),
+    [wrap]
+  )
+
+  const resume = useCallback(
+    () =>
+      wrap(async () => {
+        await simulationApi.resumeSimulation()
+        setStatus('RUNNING')
+      }),
+    [wrap]
+  )
+
+  const reset = useCallback(
+    () =>
+      wrap(async () => {
+        await simulationApi.resetSimulation()
+        setAutoTick(false)
+        await refreshSnapshot()
+        await refreshStatus()
+      }),
+    [wrap, refreshSnapshot, refreshStatus]
+  )
+
+  const stepTick = useCallback(
+    () =>
+      wrap(async () => {
+        const snap = await simulationApi.advanceOneTick()
+        applySnapshot(snap)
+      }),
+    [wrap, applySnapshot]
+  )
+
+  // Auto-tick: only while RUNNING; cleared on pause/reset/unmount and on error.
+  useEffect(() => {
+    if (autoTick && status === 'RUNNING') {
+      intervalRef.current = setInterval(() => {
+        simulationApi
+          .advanceOneTick()
+          .then(applySnapshot)
+          .catch((e) => {
+            setError(e.message)
+            setAutoTick(false)
+          })
+      }, tickInterval)
     }
-  }, [])
-
-  /**
-   * Get active traffic events
-   */
-  const getActiveEvents = useCallback(() => {
-    if (!simulationState) return []
-    return simulationState.getActiveEvents()
-  }, [simulationState])
-
-  /**
-   * Get moving vehicles
-   */
-  const getMovingVehicles = useCallback(() => {
-    if (!simulationState) return []
-    return simulationState.getMovingVehicles()
-  }, [simulationState])
-
-  /**
-   * Get vehicle count by type
-   */
-  const getVehicleStats = useCallback(() => {
-    if (!simulationState) return {}
-    return simulationState.getVehicleCountByType()
-  }, [simulationState])
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [autoTick, status, tickInterval, applySnapshot])
 
   return {
-    simulationState,
-    setSimulationState,
-    isRunning,
-    setIsRunning,
-    currentTick,
-    setCurrentTick,
     status,
-    error,
-    setError,
+    tick,
+    vehicles,
+    trafficEvents,
+    liveRoads,
+    statistics,
+    initialized,
     loading,
-    getSimulationStatus,
-    getSnapshot,
+    error,
+    autoTick,
+    setAutoTick,
+    tickInterval,
+    setTickInterval,
     initialize,
     start,
     pause,
     resume,
     reset,
-    advanceOneTick,
-    advanceTicks,
-    setParameters,
-    getActiveEvents,
-    getMovingVehicles,
-    getVehicleStats,
+    stepTick,
+    refreshSnapshot,
+    refreshStatus,
   }
 }

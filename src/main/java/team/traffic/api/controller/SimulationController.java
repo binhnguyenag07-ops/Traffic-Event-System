@@ -6,6 +6,7 @@ import io.javalin.Javalin;
 import io.javalin.http.Context;
 import team.traffic.api.dto.SimulationSnapshotDto;
 import team.traffic.service.SimulationService;
+import team.traffic.service.StatisticsService;
 import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.VehicleConfig;
 
@@ -16,10 +17,16 @@ import java.util.Map;
 
 public class SimulationController {
     private final SimulationService simulationService;
+    private final StatisticsService statisticsService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public SimulationController(SimulationService simulationService) {
+        this(simulationService, null);
+    }
+
+    public SimulationController(SimulationService simulationService, StatisticsService statisticsService) {
         this.simulationService = simulationService;
+        this.statisticsService = statisticsService;
     }
 
     public void registerRoutes(Javalin app) {
@@ -81,7 +88,7 @@ public class SimulationController {
 
     private void tick(Context ctx) {
         simulationService.advanceTick();
-        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot()));
+        ctx.json(snapshotDto());
     }
 
     private void getStatus(Context ctx) {
@@ -89,7 +96,13 @@ public class SimulationController {
     }
 
     private void getSnapshot(Context ctx) {
-        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot()));
+        ctx.json(snapshotDto());
+    }
+
+    private SimulationSnapshotDto snapshotDto() {
+        return new SimulationSnapshotDto(
+                simulationService.getSnapshot(),
+                statisticsService != null ? statisticsService.getTrafficStatistics() : null);
     }
 
     private void getCurrentTick(Context ctx) {

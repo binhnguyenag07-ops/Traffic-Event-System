@@ -1,406 +1,248 @@
-import { useState, useEffect } from 'react'
-import { VehicleFactory } from '../models'
+import { useState } from 'react'
+import { SIM_STATUS_COLOR } from '../theme'
+
+const VEHICLE_TYPES = ['CAR', 'BUS', 'EMERGENCY']
 
 /**
- * Control Panel Component
- * Manages simulation controls and display
- * Integrates with OOP simulation hook
+ * Simulation lifecycle controls plus a scenario builder.
+ *
+ * Vehicles are composed from the live intersection list (no hard-coded ids):
+ * pick type/start/destination one by one, or seed a quick random scenario.
  */
-export default function ControlPanel({
-  roadNetworkHook,
-  simulationHook,
-  onGenerateMap,
-  onInitializeSimulation,
-  appStatus,
-}) {
-  const { intersections, roads } = roadNetworkHook
+export default function ControlPanel({ sim, intersections = [] }) {
   const {
-    isRunning,
-    currentTick,
     status,
-    error,
+    tick,
+    initialized,
     loading,
+    error,
+    autoTick,
+    setAutoTick,
+    tickInterval,
+    setTickInterval,
+    initialize,
     start,
     pause,
     resume,
     reset,
-    advanceOneTick,
-    advanceTicks,
-  } = simulationHook
+    stepTick,
+  } = sim
 
-  const [simulationSpeed, setSimulationSpeed] = useState(1)
-  const [autoPlay, setAutoPlay] = useState(false)
-  const [ticksToAdvance, setTicksToAdvance] = useState(1)
-  const [mapGridRows, setMapGridRows] = useState(5)
-  const [mapGridCols, setMapGridCols] = useState(5)
-  const [vehicleCount, setVehicleCount] = useState(3)
-  const [eventCount, setEventCount] = useState(2)
+  const [pendingVehicles, setPendingVehicles] = useState([])
+  const [type, setType] = useState('CAR')
+  const [startId, setStartId] = useState('')
+  const [destId, setDestId] = useState('')
+  const [formError, setFormError] = useState(null)
 
-  /**
-   * Auto-advance simulation when auto-play is enabled
-   */
-  useEffect(() => {
-    if (!autoPlay || !isRunning) return
-
-    const interval = setInterval(() => {
-      advanceOneTick()
-    }, 1000 / simulationSpeed)
-
-    return () => clearInterval(interval)
-  }, [autoPlay, isRunning, simulationSpeed, advanceOneTick])
-
-  /**
-   * Handle map generation
-   */
-  const handleGenerateMap = async () => {
-    try {
-      await onGenerateMap(mapGridRows, mapGridCols)
-    } catch (err) {
-      console.error('Failed to generate map:', err)
-    }
-  }
-
-  /**
-   * Handle simulation initialization with default vehicles and events
-   */
-  const handleInitializeSimulation = async () => {
-    if (!appStatus.networkLoaded) {
-      alert('Please generate or load a map first')
+  const addVehicle = () => {
+    if (!startId || !destId) {
+      setFormError('Pick a start and a destination intersection.')
       return
     }
+    if (startId === destId) {
+      setFormError('Start and destination must differ.')
+      return
+    }
+    setFormError(null)
+    setPendingVehicles((list) => [
+      ...list,
+      {
+        id: `v${list.length + 1}`,
+        type,
+        currentIntersectionId: startId,
+        destinationIntersectionId: destId,
+      },
+    ])
+    setStartId('')
+    setDestId('')
+  }
 
-    try {
-      if (intersections.length < 2) {
-        alert('The map needs at least two intersections before simulation can start')
-        return
-      }
-
-      const vehicleTypes = ['CAR', 'BUS', 'EMERGENCY']
-      const eventTypes = ['CONGESTION', 'ACCIDENT', 'ROAD_CLOSURE']
-
-      // Create sample vehicles through the frontend domain factory.
-      const vehicles = []
-      for (let i = 0; i < vehicleCount; i++) {
-        const start = intersections[i % intersections.length]
-        const destination = intersections[(i + Math.max(1, Math.floor(intersections.length / 2))) % intersections.length]
-        vehicles.push(
-          VehicleFactory.createVehicle(
-            vehicleTypes[i % vehicleTypes.length],
-            start.id,
-            destination.id,
-            `vehicle-${i}`
-          )
-        )
-      }
-
-      // Create sample events against roads that actually exist in the loaded network.
-      const events = []
-      for (let i = 0; i < eventCount && roads.length > 0; i++) {
-        const road = roads[i % roads.length]
-        events.push({
-          id: `event-${i}`,
-          type: eventTypes[i % eventTypes.length],
-          affectedRoadId: road.id,
-          startTick: 0,
-          durationTicks: 50,
+  const addRandomVehicles = (count = 3) => {
+    if (intersections.length < 2) return
+    setFormError(null)
+    setPendingVehicles((list) => {
+      const next = [...list]
+      for (let n = 0; n < count; n++) {
+        const shuffled = [...intersections].sort(() => Math.random() - 0.5)
+        next.push({
+          id: `v${next.length + 1}`,
+          type: VEHICLE_TYPES[Math.floor(Math.random() * VEHICLE_TYPES.length)],
+          currentIntersectionId: shuffled[0].id,
+          destinationIntersectionId: shuffled[1].id,
         })
       }
-
-      await onInitializeSimulation(vehicles, events)
-    } catch (err) {
-      console.error('Failed to initialize simulation:', err)
-    }
+      return next
+    })
   }
 
-  /**
-   * Handle start simulation
-   */
-  const handleStart = async () => {
-    try {
-      await start()
-    } catch (err) {
-      console.error('Failed to start simulation:', err)
+  const removeVehicle = (id) =>
+    setPendingVehicles((list) => list.filter((v) => v.id !== id))
+
+  const handleInitialize = () => {
+    if (pendingVehicles.length === 0) {
+      setFormError('Add at least one vehicle to the scenario first.')
+      return
     }
+    setFormError(null)
+    initialize(pendingVehicles, [])
   }
 
-  /**
-   * Handle pause simulation
-   */
-  const handlePause = async () => {
-    try {
-      await pause()
-    } catch (err) {
-      console.error('Failed to pause simulation:', err)
-    }
-  }
-
-  /**
-   * Handle resume simulation
-   */
-  const handleResume = async () => {
-    try {
-      await resume()
-    } catch (err) {
-      console.error('Failed to resume simulation:', err)
-    }
-  }
-
-  /**
-   * Handle reset simulation
-   */
-  const handleReset = async () => {
-    try {
-      await reset()
-    } catch (err) {
-      console.error('Failed to reset simulation:', err)
-    }
-  }
-
-  /**
-   * Handle step simulation (single tick)
-   */
-  const handleStep = async () => {
-    try {
-      await advanceOneTick()
-    } catch (err) {
-      console.error('Failed to step simulation:', err)
-    }
-  }
-
-  /**
-   * Handle multi-step simulation (N ticks)
-   */
-  const handleMultiStep = async () => {
-    try {
-      await advanceTicks(ticksToAdvance)
-    } catch (err) {
-      console.error('Failed to advance multiple ticks:', err)
-    }
-  }
+  const isRunning = status === 'RUNNING'
+  const isPaused = status === 'PAUSED'
+  const isReady = status === 'READY'
 
   return (
-    <div className="control-panel">
-      <h2>Simulation Control</h2>
+    <section className="sim-panel">
+      <h2>Simulation Controls</h2>
 
-      {/* Network Setup Section */}
-      <div className="control-section">
-        <h3>1. Network Setup</h3>
-        <div className="network-controls">
-          <div className="control-group">
-            <label htmlFor="grid-rows">Grid Rows:</label>
-            <input
-              id="grid-rows"
-              type="number"
-              min="2"
-              max="20"
-              value={mapGridRows}
-              onChange={(e) => setMapGridRows(Math.max(2, parseInt(e.target.value) || 2))}
-              disabled={isRunning}
-            />
-          </div>
-          <div className="control-group">
-            <label htmlFor="grid-cols">Grid Cols:</label>
-            <input
-              id="grid-cols"
-              type="number"
-              min="2"
-              max="20"
-              value={mapGridCols}
-              onChange={(e) => setMapGridCols(Math.max(2, parseInt(e.target.value) || 2))}
-              disabled={isRunning}
-            />
-          </div>
-          <button
-            onClick={handleGenerateMap}
-            disabled={isRunning || loading}
-            className="btn-primary"
-          >
-            {loading ? 'Generating...' : '🗺️ Generate Map'}
+      <div className="sim-status-bar">
+        <span className="sim-badge" style={{ background: SIM_STATUS_COLOR[status] ?? '#64748b' }}>
+          {status}
+        </span>
+        <span className="sim-tick">
+          Tick&nbsp;<strong>{tick}</strong>
+        </span>
+      </div>
+
+      {/* Scenario builder */}
+      <h3>Scenario</h3>
+      <div className="form-row" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="form-group" style={{ flex: '0 0 110px' }}>
+          <label htmlFor="cp-type">Type</label>
+          <select id="cp-type" value={type} onChange={(e) => setType(e.target.value)}>
+            {VEHICLE_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label htmlFor="cp-start">Start</label>
+          <select id="cp-start" value={startId} onChange={(e) => setStartId(e.target.value)}>
+            <option value="">Select…</option>
+            {intersections.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.id} — {i.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label htmlFor="cp-dest">Destination</label>
+          <select id="cp-dest" value={destId} onChange={(e) => setDestId(e.target.value)}>
+            <option value="">Select…</option>
+            {intersections.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.id} — {i.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="sim-row">
+        <button className="sim-btn secondary" onClick={addVehicle}>
+          + Add Vehicle
+        </button>
+        <button className="sim-btn secondary" onClick={() => addRandomVehicles(3)}>
+          + 3 Random
+        </button>
+        {pendingVehicles.length > 0 && (
+          <button className="sim-btn secondary" onClick={() => setPendingVehicles([])}>
+            Clear
           </button>
-        </div>
+        )}
       </div>
 
-      {/* Simulation Setup Section */}
-      <div className="control-section">
-        <h3>2. Simulation Setup</h3>
-        <div className="simulation-setup">
-          <div className="control-group">
-            <label htmlFor="vehicle-count">Vehicles:</label>
-            <input
-              id="vehicle-count"
-              type="number"
-              min="1"
-              max="50"
-              value={vehicleCount}
-              onChange={(e) => setVehicleCount(Math.max(1, parseInt(e.target.value) || 1))}
-              disabled={appStatus.simulationInitialized}
-            />
-          </div>
-          <div className="control-group">
-            <label htmlFor="event-count">Events:</label>
-            <input
-              id="event-count"
-              type="number"
-              min="0"
-              max="20"
-              value={eventCount}
-              onChange={(e) => setEventCount(Math.max(0, parseInt(e.target.value) || 0))}
-              disabled={appStatus.simulationInitialized}
-            />
-          </div>
-          <button
-            onClick={handleInitializeSimulation}
-            disabled={!appStatus.networkLoaded || appStatus.simulationInitialized || loading}
-            className="btn-primary"
-          >
-            {loading ? 'Initializing...' : '⚙️ Initialize'}
-          </button>
-        </div>
-      </div>
-
-      {/* Status Display */}
-      <div className="control-section">
-        <h3>3. Simulation Status</h3>
-        <div className="status-display">
-          <div className="status-item">
-            <span className="status-label">Status:</span>
-            <span className={`status-value status-${status.toLowerCase()}`}>
-              {status}
-            </span>
-          </div>
-          <div className="status-item">
-            <span className="status-label">Current Tick:</span>
-            <span className="status-value">{currentTick}</span>
-          </div>
-          <div className="status-item">
-            <span className="status-label">Running:</span>
-            <span className={`status-value ${isRunning ? 'running' : 'stopped'}`}>
-              {isRunning ? '▶ Running' : '⏸ Stopped'}
-            </span>
-          </div>
-          {appStatus.networkStats && (
-            <div className="status-item">
-              <span className="status-label">Network Congestion:</span>
-              <span className="status-value">
-                {(appStatus.networkStats.averageCongestion * 100).toFixed(1)}%
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Simulation Controls */}
-      <div className="control-section">
-        <h3>4. Simulation Controls</h3>
-        <div className="control-buttons">
-          {status === 'READY' && (
-            <button onClick={handleStart} disabled={!appStatus.simulationInitialized || loading} className="btn-primary">
-              {loading ? 'Starting...' : '▶ Start'}
-            </button>
-          )}
-
-          {status === 'RUNNING' && (
-            <button onClick={handlePause} disabled={loading} className="btn-primary">
-              {loading ? 'Pausing...' : '⏸ Pause'}
-            </button>
-          )}
-
-          {status === 'PAUSED' && (
-            <button onClick={handleResume} disabled={loading} className="btn-primary">
-              {loading ? 'Resuming...' : '▶ Resume'}
-            </button>
-          )}
-
-          <button
-            onClick={handleReset}
-            disabled={loading || status === 'READY'}
-            className="btn-secondary"
-          >
-            {loading ? 'Resetting...' : '⟲ Reset'}
-          </button>
-        </div>
-      </div>
-
-      {/* Step Controls */}
-      <div className="control-section">
-        <h3>5. Step Controls</h3>
-        <div className="step-controls">
-          <button
-            onClick={handleStep}
-            disabled={loading || isRunning}
-            className="btn-secondary"
-            title="Advance simulation by 1 tick"
-          >
-            Step (1)
-          </button>
-          <div className="multi-step">
-            <input
-              type="number"
-              min="1"
-              max="1000"
-              value={ticksToAdvance}
-              onChange={(e) => setTicksToAdvance(Math.max(1, parseInt(e.target.value) || 1))}
-              disabled={loading || isRunning}
-              placeholder="Ticks"
-            />
-            <button
-              onClick={handleMultiStep}
-              disabled={loading || isRunning}
-              className="btn-secondary"
-              title="Advance simulation by N ticks"
-            >
-              Step (N)
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Speed Control */}
-      <div className="control-section">
-        <h3>6. Speed Control</h3>
-        <div className="speed-control">
-          <label htmlFor="speed-slider">Simulation Speed:</label>
-          <div className="speed-slider-container">
-            <span>0.5x</span>
-            <input
-              id="speed-slider"
-              type="range"
-              min="0.5"
-              max="4"
-              step="0.5"
-              value={simulationSpeed}
-              onChange={(e) => setSimulationSpeed(parseFloat(e.target.value))}
-            />
-            <span>4x</span>
-          </div>
-          <span className="speed-display">{simulationSpeed.toFixed(1)}x</span>
-        </div>
-      </div>
-
-      {/* Auto-Play Toggle */}
-      <div className="control-section">
-        <h3>7. Auto-Play</h3>
-        <div className="autoplay-toggle">
-          <label htmlFor="autoplay-checkbox">
-            <input
-              id="autoplay-checkbox"
-              type="checkbox"
-              checked={autoPlay}
-              onChange={(e) => setAutoPlay(e.target.checked)}
-              disabled={!isRunning}
-            />
-            Auto-advance every {(1000 / simulationSpeed).toFixed(0)}ms
-          </label>
-        </div>
-      </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="error-message">
-          <span className="error-icon">⚠️</span>
-          <span>{error}</span>
-        </div>
+      {pendingVehicles.length > 0 && (
+        <ul className="pending-vehicles">
+          {pendingVehicles.map((v) => (
+            <li key={v.id}>
+              <code>{v.id}</code> {v.type} {v.currentIntersectionId} → {v.destinationIntersectionId}
+              <button
+                className="sim-btn-xs red"
+                onClick={() => removeVehicle(v.id)}
+                aria-label={`Remove ${v.id}`}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-    </div>
+
+      {formError && <div className="sim-error">{formError}</div>}
+
+      <div className="sim-row">
+        <button className="sim-btn primary" onClick={handleInitialize} disabled={loading}>
+          Initialize
+        </button>
+        <span className="sim-hint">
+          {pendingVehicles.length > 0
+            ? `${pendingVehicles.length} vehicle(s) in scenario`
+            : 'Build a scenario, then initialize'}
+        </span>
+      </div>
+
+      {/* Lifecycle */}
+      <h3>Run</h3>
+      <div className="sim-row">
+        {isReady && (
+          <button className="sim-btn green" onClick={start} disabled={!initialized || loading}>
+            Start
+          </button>
+        )}
+        {isRunning && (
+          <button className="sim-btn amber" onClick={pause} disabled={loading}>
+            Pause
+          </button>
+        )}
+        {isPaused && (
+          <button className="sim-btn green" onClick={resume} disabled={loading}>
+            Resume
+          </button>
+        )}
+        <button
+          className="sim-btn red"
+          onClick={reset}
+          disabled={!initialized || isReady || loading}
+        >
+          Reset
+        </button>
+        <button
+          className="sim-btn secondary"
+          onClick={stepTick}
+          disabled={loading || isRunning}
+          title="Advance one tick manually"
+        >
+          Step 1 Tick
+        </button>
+      </div>
+
+      <div className="sim-row">
+        <label className="auto-label">
+          <input
+            type="checkbox"
+            checked={autoTick}
+            onChange={(e) => setAutoTick(e.target.checked)}
+            disabled={!isRunning}
+          />
+          &nbsp;Auto-tick every
+        </label>
+        <select
+          value={tickInterval}
+          onChange={(e) => setTickInterval(Number(e.target.value))}
+          disabled={!isRunning}
+          className="interval-select"
+          aria-label="Auto-tick interval"
+        >
+          <option value={2000}>2 s</option>
+          <option value={1000}>1 s</option>
+          <option value={500}>0.5 s</option>
+          <option value={250}>0.25 s</option>
+        </select>
+      </div>
+
+      {error && <div className="sim-error">{error}</div>}
+    </section>
   )
 }
