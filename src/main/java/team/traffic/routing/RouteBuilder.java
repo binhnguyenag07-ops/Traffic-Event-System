@@ -9,6 +9,8 @@ import java.util.*;
 
 public final class RouteBuilder {
 
+    public static final double DEFAULT_CONGESTION_THRESHOLD = 0.8;
+
     private RouteBuilder() {}
 
     public static double calculateEdgeWeight(Road road, RoutePreference preference) {
@@ -24,6 +26,11 @@ public final class RouteBuilder {
         if (!road.isAvailable()) return false;
         RoadStatus status = road.getRoadCondition().getRoadStatus();
         return status != RoadStatus.BLOCKED && status != RoadStatus.CLOSED;
+    }
+
+    public static boolean isRoadAvoidable(Road road, double congestionThreshold) {
+        if (!isRoadUsable(road)) return true;
+        return road.getRoadCondition().getCongestionLevel() > congestionThreshold;
     }
 
     public static Route reconstructRoute(

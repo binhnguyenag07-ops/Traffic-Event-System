@@ -4,8 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import team.traffic.domain.event.TrafficEvent;
-import team.traffic.domain.vehicle.Vehicle;
+import team.traffic.api.dto.SimulationSnapshotDto;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.VehicleConfig;
@@ -14,7 +13,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class SimulationController {
     private final SimulationService simulationService;
@@ -83,7 +81,7 @@ public class SimulationController {
 
     private void tick(Context ctx) {
         simulationService.advanceTick();
-        ctx.json(buildSnapshot());
+        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot()));
     }
 
     private void getStatus(Context ctx) {
@@ -91,7 +89,7 @@ public class SimulationController {
     }
 
     private void getSnapshot(Context ctx) {
-        ctx.json(buildSnapshot());
+        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot()));
     }
 
     private void getCurrentTick(Context ctx) {
@@ -103,44 +101,6 @@ public class SimulationController {
         response.put("status", simulationService.getStatus().name());
         response.put("currentTick", simulationService.getCurrentTick());
         return response;
-    }
-
-    private Map<String, Object> buildSnapshot() {
-        List<Map<String, Object>> vehicleList = simulationService.getVehicles().stream()
-                .map(this::vehicleToMap)
-                .collect(Collectors.toList());
-
-        List<Map<String, Object>> eventList = simulationService.getEvents().stream()
-                .map(this::eventToMap)
-                .collect(Collectors.toList());
-
-        Map<String, Object> snapshot = new HashMap<>();
-        snapshot.put("tick", simulationService.getCurrentTick());
-        snapshot.put("vehicles", vehicleList);
-        snapshot.put("trafficEvents", eventList);
-        return snapshot;
-    }
-
-    private Map<String, Object> vehicleToMap(Vehicle v) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", v.getId());
-        map.put("type", v.getType().name());
-        map.put("currentIntersectionId", v.getCurrentIntersectionId());
-        map.put("destinationIntersectionId", v.getDestinationIntersectionId());
-        map.put("status", v.getStatus().name());
-        map.put("travelHistory", v.getTravelHistory());
-        return map;
-    }
-
-    private Map<String, Object> eventToMap(TrafficEvent e) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", e.getId());
-        map.put("type", e.getType().name());
-        map.put("affectedRoadId", e.getAffectedRoadId());
-        map.put("startTick", e.getStartTick());
-        map.put("durationTicks", e.getDurationTicks());
-        map.put("status", e.getStatus().name());
-        return map;
     }
 
     private List<VehicleConfig> parseVehicleConfigs(JsonNode vehiclesNode) {
@@ -167,8 +127,12 @@ public class SimulationController {
             String roadId = firstNonNull(node, "affectedRoadId", "roadId");
             long startTick = node.has("startTick") ? node.get("startTick").asLong(0) : 0;
             long durationTicks = node.has("durationTicks") ? node.get("durationTicks").asLong(10) : 10;
+            Double value = node.has("value") && !node.get("value").isNull()
+                    ? node.get("value").asDouble()
+                    : null;
+            String causingVehicleId = firstNonNull(node, "causingVehicleId");
             if (roadId != null) {
-                configs.add(new EventConfig(id, type, roadId, startTick, durationTicks));
+                configs.add(new EventConfig(id, type, roadId, startTick, durationTicks, value, causingVehicleId));
             }
         }
         return configs;

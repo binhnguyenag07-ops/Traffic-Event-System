@@ -9,6 +9,15 @@ import java.util.*;
 public class DijkstraPathFindingStrategy implements PathFindingStrategy {
 
     private static final String NAME = "Dijkstra";
+    private final double congestionThreshold;
+
+    public DijkstraPathFindingStrategy() {
+        this(RouteBuilder.DEFAULT_CONGESTION_THRESHOLD);
+    }
+
+    public DijkstraPathFindingStrategy(double congestionThreshold) {
+        this.congestionThreshold = congestionThreshold;
+    }
 
     @Override
     public String getName() {
@@ -60,7 +69,7 @@ public class DijkstraPathFindingStrategy implements PathFindingStrategy {
             if (outgoing == null) continue;
 
             for (Road road : outgoing) {
-                if (!RouteBuilder.isRoadUsable(road)) continue;
+                if (RouteBuilder.isRoadAvoidable(road, congestionThreshold)) continue;
 
                 String neighborId = road.getEndIntersectionId();
                 double edgeWeight = RouteBuilder.calculateEdgeWeight(road, preference);

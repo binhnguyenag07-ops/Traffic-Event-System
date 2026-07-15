@@ -11,6 +11,14 @@ public class VehicleDto {
     private String destinationIntersectionId;
     private VehicleStatus status;
     private double movementSpeed;
+    private double length;
+    private double width;
+    private double maxSpeed;
+    private double currentSpeed;
+    private double acceleration;
+    private double deceleration;
+    private double vehicleWeight;
+    private int priorityLevel;
 
     public VehicleDto() {}
 
@@ -21,6 +29,14 @@ public class VehicleDto {
         this.destinationIntersectionId = vehicle.getDestinationIntersectionId();
         this.status = vehicle.getStatus();
         this.movementSpeed = vehicle.getMovementSpeed();
+        this.length = vehicle.getLength();
+        this.width = vehicle.getWidth();
+        this.maxSpeed = vehicle.getMaxSpeed();
+        this.currentSpeed = vehicle.getCurrentSpeed();
+        this.acceleration = vehicle.getAcceleration();
+        this.deceleration = vehicle.getDeceleration();
+        this.vehicleWeight = vehicle.getVehicleWeight();
+        this.priorityLevel = vehicle.getPriorityLevel();
     }
 
     public String getId() { return id; }
@@ -35,4 +51,20 @@ public class VehicleDto {
     public void setStatus(VehicleStatus status) { this.status = status; }
     public double getMovementSpeed() { return movementSpeed; }
     public void setMovementSpeed(double movementSpeed) { this.movementSpeed = movementSpeed; }
+    public double getLength() { return length; }
+    public void setLength(double length) { this.length = length; }
+    public double getWidth() { return width; }
+    public void setWidth(double width) { this.width = width; }
+    public double getMaxSpeed() { return maxSpeed; }
+    public void setMaxSpeed(double maxSpeed) { this.maxSpeed = maxSpeed; }
+    public double getCurrentSpeed() { return currentSpeed; }
+    public void setCurrentSpeed(double currentSpeed) { this.currentSpeed = currentSpeed; }
+    public double getAcceleration() { return acceleration; }
+    public void setAcceleration(double acceleration) { this.acceleration = acceleration; }
+    public double getDeceleration() { return deceleration; }
+    public void setDeceleration(double deceleration) { this.deceleration = deceleration; }
+    public double getVehicleWeight() { return vehicleWeight; }
+    public void setVehicleWeight(double vehicleWeight) { this.vehicleWeight = vehicleWeight; }
+    public int getPriorityLevel() { return priorityLevel; }
+    public void setPriorityLevel(int priorityLevel) { this.priorityLevel = priorityLevel; }
 }

@@ -18,7 +18,7 @@ public class TickProcessor {
 
     public void process(long currentTick, RoadNetwork network, List<Vehicle> vehicles, List<TrafficEvent> events) {
         for (TrafficEvent event : events) {
-            if (event.getStatus() == TrafficEventStatus.SCHEDULED && event.getStartTick() == currentTick) {
+            if (event.getStatus() == TrafficEventStatus.SCHEDULED && event.getStartTick() <= currentTick) {
                 try {
                     event.apply(network);
                 } catch (Exception ignored) {

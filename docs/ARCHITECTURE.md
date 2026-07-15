@@ -274,6 +274,14 @@ classDiagram
         -String destinationIntersectionId
         -Route currentRoute
         -double movementSpeed
+        -double length
+        -double width
+        -double maxSpeed
+        -double currentSpeed
+        -double acceleration
+        -double deceleration
+        -double vehicleWeight
+        -int priorityLevel
         -VehicleStatus status
         -List~String~ travelHistory
         +getType()* VehicleType
@@ -281,6 +289,8 @@ classDiagram
         +moveOneStep()
         +recomputeRoute(RoutingService)
         +hasReachedDestination() boolean
+        +accelerate(double)
+        +decelerate(double)
     }
 
     class Car {

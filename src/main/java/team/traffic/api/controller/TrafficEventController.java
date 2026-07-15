@@ -163,6 +163,8 @@ public class TrafficEventController {
             trafficEventService.addEvent(event);
             simulationService.addEvent(event);
             ctx.status(201).json(new TrafficEventDto(event));
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).json(error("Invalid event parameters: " + e.getMessage()));
         } catch (Exception e) {
             ctx.status(500).json(error("Error creating event: " + e.getMessage()));
         }
