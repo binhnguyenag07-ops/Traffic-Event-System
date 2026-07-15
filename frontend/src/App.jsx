@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { simulationApi, routingApi, trafficEventApi, networkApi, statisticsApi } from './api/trafficAPI'
+import VehicleAsset from './vehicle-assets/VehicleAsset'
 
 const PREFERENCES = [
   { value: 'SHORTEST_TIME', label: 'Shortest Time' },
@@ -284,7 +285,12 @@ function SimulationPanel() {
               {vehicles.map((v) => (
                 <tr key={v.id}>
                   <td><code>{v.id}</code></td>
-                  <td>{v.type}</td>
+                  <td>
+                    <span className="vehicle-kind">
+                      <VehicleAsset type={v.type} size={26} decorative />
+                      <span>{v.type}</span>
+                    </span>
+                  </td>
                   <td><code>{v.currentIntersectionId}</code></td>
                   <td><code>{v.destinationIntersectionId}</code></td>
                   <td>

@@ -45,6 +45,10 @@ Traffic-Event-System/
 |   |-- package.json
 |   |-- vite.config.js
 |   |-- index.html
+|   |-- public/
+|   |   `-- assets/
+|   |       `-- vehicles/
+|   |           `-- README.md
 |   `-- src/
 |       |-- main.jsx
 |       |-- App.jsx
@@ -57,6 +61,11 @@ Traffic-Event-System/
 |       |   |-- useRoadNetwork.js
 |       |   |-- useSimulation.js
 |       |   `-- useAlgorithms.js
+|       |
+|       |-- vehicle-assets/
+|       |   |-- VehicleAsset.jsx
+|       |   |-- vehicleAssetRegistry.js
+|       |   `-- vehicleAssetRegistry.test.js
 |       |
 |       `-- components/
 |           |-- MapViewport.jsx
@@ -194,6 +203,22 @@ Traffic-Event-System/
                     |-- TrafficEventTest.java
                     `-- SimulationTest.java
 ```
+
+## Vehicle Visual Assets
+
+Vehicle decoration is selected through `vehicleAssetRegistry.js`, which stores
+renderer-neutral descriptors for each vehicle type: label, icon key, optional
+asset URL, colors, marker size, and marker anchor. `VehicleAsset.jsx` is only the
+React renderer for those descriptors.
+
+Optional PNG, WebP, or SVG decorations live under
+`frontend/public/assets/vehicles/` and are served at `/assets/vehicles/...`.
+Built-in vehicle types currently use bundled Lucide icons, so the application
+does not issue image requests until an `assetUrl` is configured.
+
+This keeps vehicle assets independent from map data and map rendering. A future
+Leaflet adapter can resolve the same descriptor and use its `assetUrl`, size, and
+anchor without importing OpenStreetMap data or changing the vehicle domain model.
 
 ## Class Diagram
 
