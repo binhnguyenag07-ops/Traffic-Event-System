@@ -1,5 +1,7 @@
 package team.traffic.api.dto;
 
+import java.util.List;
+import java.util.stream.Collectors;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
@@ -19,6 +21,13 @@ public class VehicleDto {
     private double deceleration;
     private double vehicleWeight;
     private int priorityLevel;
+    private String currentRoadId;
+    private String segmentStartIntersectionId;
+    private String segmentEndIntersectionId;
+    private double roadProgress;
+    private List<RouteResultDto.RouteStepDto> currentRoute;
+    private int nextRouteStepIndex;
+    private List<String> travelHistory;
 
     public VehicleDto() {}
 
@@ -37,6 +46,21 @@ public class VehicleDto {
         this.deceleration = vehicle.getDeceleration();
         this.vehicleWeight = vehicle.getVehicleWeight();
         this.priorityLevel = vehicle.getPriorityLevel();
+        this.currentRoadId = vehicle.getCurrentRoadId();
+        this.segmentStartIntersectionId = vehicle.getSegmentStartIntersectionId();
+        this.segmentEndIntersectionId = vehicle.getSegmentEndIntersectionId();
+        this.roadProgress = vehicle.getRoadProgress();
+        this.nextRouteStepIndex = vehicle.getNextRouteStepIndex();
+        this.currentRoute = vehicle.getCurrentRoute() == null
+                ? List.of()
+                : vehicle.getCurrentRoute().getSteps().stream()
+                        .map(step -> new RouteResultDto.RouteStepDto(
+                                step.getFromIntersectionId(),
+                                step.getToIntersectionId(),
+                                step.getRoadId(),
+                                step.getCost()))
+                        .collect(Collectors.toList());
+        this.travelHistory = List.copyOf(vehicle.getTravelHistory());
     }
 
     public String getId() { return id; }
@@ -67,4 +91,18 @@ public class VehicleDto {
     public void setVehicleWeight(double vehicleWeight) { this.vehicleWeight = vehicleWeight; }
     public int getPriorityLevel() { return priorityLevel; }
     public void setPriorityLevel(int priorityLevel) { this.priorityLevel = priorityLevel; }
+    public String getCurrentRoadId() { return currentRoadId; }
+    public void setCurrentRoadId(String currentRoadId) { this.currentRoadId = currentRoadId; }
+    public String getSegmentStartIntersectionId() { return segmentStartIntersectionId; }
+    public void setSegmentStartIntersectionId(String segmentStartIntersectionId) { this.segmentStartIntersectionId = segmentStartIntersectionId; }
+    public String getSegmentEndIntersectionId() { return segmentEndIntersectionId; }
+    public void setSegmentEndIntersectionId(String segmentEndIntersectionId) { this.segmentEndIntersectionId = segmentEndIntersectionId; }
+    public double getRoadProgress() { return roadProgress; }
+    public void setRoadProgress(double roadProgress) { this.roadProgress = roadProgress; }
+    public List<RouteResultDto.RouteStepDto> getCurrentRoute() { return currentRoute; }
+    public void setCurrentRoute(List<RouteResultDto.RouteStepDto> currentRoute) { this.currentRoute = currentRoute; }
+    public int getNextRouteStepIndex() { return nextRouteStepIndex; }
+    public void setNextRouteStepIndex(int nextRouteStepIndex) { this.nextRouteStepIndex = nextRouteStepIndex; }
+    public List<String> getTravelHistory() { return travelHistory; }
+    public void setTravelHistory(List<String> travelHistory) { this.travelHistory = travelHistory; }
 }

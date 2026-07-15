@@ -61,6 +61,10 @@ class VehicleControllerTest {
         assertThat(response.body()).contains("\"maxSpeed\":120.0");
         assertThat(response.body()).contains("\"currentSpeed\":50.0");
         assertThat(response.body()).contains("\"priorityLevel\":0");
+        assertThat(response.body()).contains("\"roadProgress\":0.0");
+        assertThat(response.body()).contains("\"currentRoute\":[]");
+        assertThat(response.body()).contains("\"nextRouteStepIndex\":0");
+        assertThat(response.body()).contains("\"travelHistory\":[\"A\"]");
     }
 
     @Test

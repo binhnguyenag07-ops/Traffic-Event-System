@@ -282,6 +282,11 @@ classDiagram
         -double deceleration
         -double vehicleWeight
         -int priorityLevel
+        -String currentRoadId
+        -String segmentStartIntersectionId
+        -String segmentEndIntersectionId
+        -double roadProgress
+        -int nextRouteStepIndex
         -VehicleStatus status
         -List~String~ travelHistory
         +getType()* VehicleType
@@ -289,6 +294,7 @@ classDiagram
         +moveOneStep()
         +recomputeRoute(RoutingService)
         +hasReachedDestination() boolean
+        +advance(double, RoadNetwork)
         +accelerate(double)
         +decelerate(double)
     }

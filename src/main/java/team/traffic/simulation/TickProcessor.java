@@ -28,7 +28,7 @@ public class TickProcessor {
 
         for (Vehicle vehicle : vehicles) {
             if (!vehicle.hasReachedDestination()) {
-                vehicle.moveOneStep(network);
+                vehicle.advance(Vehicle.DEFAULT_TICK_DURATION_SECONDS, network);
                 if (vehicle.getStatus() == VehicleStatus.BLOCKED) {
                     try {
                         vehicle.recomputeRoute(network, routingService);
