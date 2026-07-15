@@ -15,6 +15,10 @@ import team.traffic.domain.routing.RouteStep;
 import team.traffic.service.RoutingService;
 
 public abstract class Vehicle {
+    /** One simulation tick represents one minute of physical travel time. */
+    public static final double DEFAULT_TICK_DURATION_SECONDS = 60.0;
+    private static final double ROAD_COMPLETION_EPSILON = 1.0e-9;
+
     private final String id;
     private String currentIntersectionId;
     private final String destinationIntersectionId;
@@ -30,7 +34,10 @@ public abstract class Vehicle {
     private final double vehicleWeight;
     private final int priorityLevel;
     private VehicleStatus status;
-    private String occupiedRoadId;
+    private String currentRoadId;
+    private String segmentStartIntersectionId;
+    private String segmentEndIntersectionId;
+    private double roadProgress;
     private final List<String> travelHistory;
 
     protected Vehicle(String id, String currentIntersectionId, String destinationIntersectionId, double movementSpeed) {
@@ -99,8 +106,15 @@ public abstract class Vehicle {
 
     public abstract VehicleType getType();
 
+    /**
+     * Clears the current route when the caller does not have a road network for
+     * a new route calculation. Physical movement still requires a road network.
+     */
     public void requestRoute(RoutingService routingService) {
         Objects.requireNonNull(routingService, "Routing service must not be null.");
+        if (isTravelling()) {
+            return;
+        }
         this.currentRoute = null;
         this.nextRouteStepIndex = 0;
         this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
@@ -119,64 +133,78 @@ public abstract class Vehicle {
         Objects.requireNonNull(preference, "Route preference must not be null.");
 
         routePreference = preference;
-        nextRouteStepIndex = 0;
-
-        if (hasReachedDestination()) {
+        String routeStartIntersectionId = getRouteStartIntersectionId();
+        if (destinationIntersectionId.equals(routeStartIntersectionId)) {
             currentRoute = null;
-            status = VehicleStatus.ARRIVED;
+            nextRouteStepIndex = 0;
+            if (!isTravelling()) {
+                status = VehicleStatus.ARRIVED;
+            }
             return;
         }
 
         RouteRequest request = new RouteRequest(
-                currentIntersectionId,
+                routeStartIntersectionId,
                 destinationIntersectionId,
                 preference);
 
         try {
             RouteResult result = routingService.findRoute(roadNetwork, request);
             currentRoute = result == null ? null : result.getRoute();
-            status = isUsableRoute(currentRoute) ? VehicleStatus.WAITING : VehicleStatus.BLOCKED;
+            nextRouteStepIndex = 0;
+            if (!isTravelling()) {
+                status = isUsableRoute(currentRoute, routeStartIntersectionId)
+                        ? VehicleStatus.WAITING
+                        : VehicleStatus.BLOCKED;
+            }
         } catch (NoSuchElementException exception) {
             currentRoute = null;
-            status = VehicleStatus.BLOCKED;
+            nextRouteStepIndex = 0;
+            if (!isTravelling()) {
+                status = VehicleStatus.BLOCKED;
+            }
         }
     }
 
-    public void moveOneStep() {
-        moveOneStep(null);
+    /**
+     * Advances vehicle movement by the supplied simulation duration.
+     * Distance is measured in kilometres, speed in kilometres per hour, and
+     * duration in seconds. A vehicle moves along at most one road per call.
+     */
+    public void advance(double durationSeconds, RoadNetwork roadNetwork) {
+        Objects.requireNonNull(roadNetwork, "Road network must not be null.");
+        double duration = validateDuration(durationSeconds);
+        if (duration == 0 || (hasReachedDestination() && !isTravelling())) {
+            if (hasReachedDestination()) {
+                status = VehicleStatus.ARRIVED;
+            }
+            return;
+        }
+
+        if (!isTravelling()) {
+            beginNextRoad(roadNetwork);
+        }
+
+        if (isTravelling()) {
+            advanceOnCurrentRoad(duration, roadNetwork);
+        }
     }
 
+    /**
+     * Compatibility wrapper for the former one-step API. It now advances one
+     * simulation tick of physical travel and never moves directly to a road endpoint.
+     */
+    @Deprecated
     public void moveOneStep(RoadNetwork roadNetwork) {
-        if (hasReachedDestination()) {
-            releaseOccupiedRoad(roadNetwork);
-            this.status = VehicleStatus.ARRIVED;
-            return;
-        }
+        advance(DEFAULT_TICK_DURATION_SECONDS, roadNetwork);
+    }
 
-        RouteStep nextStep = getNextRouteStep();
-        if (nextStep == null || !nextStep.getFromIntersectionId().equals(currentIntersectionId)) {
-            releaseOccupiedRoad(roadNetwork);
-            status = VehicleStatus.BLOCKED;
-            return;
-        }
-
-        if (roadNetwork != null && !isStepAvailable(roadNetwork, nextStep)) {
-            releaseOccupiedRoad(roadNetwork);
-            status = VehicleStatus.BLOCKED;
-            return;
-        }
-
-        enterNextRoad(roadNetwork, nextStep);
-        nextRouteStepIndex++;
-        moveTo(nextStep.getToIntersectionId());
-
-        if (hasReachedDestination()) {
-            releaseOccupiedRoad(roadNetwork);
-            status = VehicleStatus.ARRIVED;
-        } else if (nextRouteStepIndex >= currentRoute.getStepCount()) {
-            releaseOccupiedRoad(roadNetwork);
-            status = VehicleStatus.BLOCKED;
-        }
+    /**
+     * Physical movement requires road distance and speed-limit data.
+     */
+    @Deprecated
+    public void moveOneStep() {
+        throw new IllegalStateException("Physical vehicle movement requires a road network.");
     }
 
     public void recomputeRoute(RoutingService routingService) {
@@ -194,24 +222,39 @@ public abstract class Vehicle {
         requestRoute(roadNetwork, routingService, preference);
     }
 
+    /**
+     * Administrative relocation used outside normal simulation movement.
+     * A moving vehicle cannot be relocated because that would corrupt road density.
+     */
     public void moveTo(String nextIntersectionId) {
         if (nextIntersectionId == null || nextIntersectionId.isBlank()) {
             throw new IllegalArgumentException("Next intersection id must not be blank.");
         }
+        if (isTravelling()) {
+            throw new IllegalStateException("Cannot relocate a vehicle while it is travelling on a road.");
+        }
 
         this.currentIntersectionId = nextIntersectionId;
         this.travelHistory.add(nextIntersectionId);
-        this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.MOVING;
+        this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
     }
 
     public boolean hasReachedDestination() {
-        return destinationIntersectionId.equals(currentIntersectionId);
+        return destinationIntersectionId.equals(currentIntersectionId) && !isTravelling();
+    }
+
+    public boolean isTravelling() {
+        return currentRoadId != null;
     }
 
     public String getId() {
         return id;
     }
 
+    /**
+     * The last fully reached intersection. While travelling, use segment and
+     * progress fields to locate the vehicle between intersections.
+     */
     public String getCurrentIntersectionId() {
         return currentIntersectionId;
     }
@@ -229,8 +272,10 @@ public abstract class Vehicle {
         this.nextRouteStepIndex = 0;
         if (hasReachedDestination()) {
             this.status = VehicleStatus.ARRIVED;
-        } else {
-            this.status = isUsableRoute(currentRoute) ? VehicleStatus.WAITING : VehicleStatus.BLOCKED;
+        } else if (!isTravelling()) {
+            this.status = isUsableRoute(currentRoute, currentIntersectionId)
+                    ? VehicleStatus.WAITING
+                    : VehicleStatus.BLOCKED;
         }
     }
 
@@ -242,8 +287,31 @@ public abstract class Vehicle {
         return routePreference;
     }
 
+    public String getCurrentRoadId() {
+        return currentRoadId;
+    }
+
+    /**
+     * Returns the road currently occupied by this vehicle. Use
+     * {@link #getCurrentRoadId()} in new code.
+     */
     public String getOccupiedRoadId() {
-        return occupiedRoadId;
+        return currentRoadId;
+    }
+
+    public String getSegmentStartIntersectionId() {
+        return segmentStartIntersectionId;
+    }
+
+    public String getSegmentEndIntersectionId() {
+        return segmentEndIntersectionId;
+    }
+
+    /**
+     * Fraction of the current road already travelled, in the range {@code 0..1}.
+     */
+    public double getRoadProgress() {
+        return roadProgress;
     }
 
     /**
@@ -265,30 +333,22 @@ public abstract class Vehicle {
         setCurrentSpeed(movementSpeed);
     }
 
-    /**
-     * Vehicle length in metres.
-     */
+    /** Vehicle length in metres. */
     public double getLength() {
         return length;
     }
 
-    /**
-     * Vehicle width in metres.
-     */
+    /** Vehicle width in metres. */
     public double getWidth() {
         return width;
     }
 
-    /**
-     * Maximum road speed in kilometres per hour.
-     */
+    /** Maximum road speed in kilometres per hour. */
     public double getMaxSpeed() {
         return maxSpeed;
     }
 
-    /**
-     * Current road speed in kilometres per hour.
-     */
+    /** Current road speed in kilometres per hour. */
     public double getCurrentSpeed() {
         return currentSpeed;
     }
@@ -298,46 +358,32 @@ public abstract class Vehicle {
         this.currentSpeed = currentSpeed;
     }
 
-    /**
-     * Acceleration in metres per second squared.
-     */
+    /** Acceleration in metres per second squared. */
     public double getAcceleration() {
         return acceleration;
     }
 
-    /**
-     * Braking deceleration in metres per second squared.
-     */
+    /** Braking deceleration in metres per second squared. */
     public double getDeceleration() {
         return deceleration;
     }
 
-    /**
-     * Vehicle mass in kilograms.
-     */
+    /** Vehicle mass in kilograms. */
     public double getVehicleWeight() {
         return vehicleWeight;
     }
 
-    /**
-     * Relative dispatch priority. Standard vehicles use {@code 0}.
-     */
+    /** Relative dispatch priority. Standard vehicles use {@code 0}. */
     public int getPriorityLevel() {
         return priorityLevel;
     }
 
-    /**
-     * Advances the current speed for a duration, capped at {@link #getMaxSpeed()}.
-     * This operation is intentionally independent of the graph-based tick movement.
-     */
+    /** Advances the current speed for a duration, capped at {@link #getMaxSpeed()}. */
     public void accelerate(double durationSeconds) {
         setCurrentSpeed(Math.min(maxSpeed, currentSpeed + acceleration * validateDuration(durationSeconds) * 3.6));
     }
 
-    /**
-     * Reduces the current speed for a duration, floored at zero.
-     * This operation is intentionally independent of the graph-based tick movement.
-     */
+    /** Reduces the current speed for a duration, floored at zero. */
     public void decelerate(double durationSeconds) {
         setCurrentSpeed(Math.max(0.0, currentSpeed - deceleration * validateDuration(durationSeconds) * 3.6));
     }
@@ -347,11 +393,96 @@ public abstract class Vehicle {
     }
 
     public void setStatus(VehicleStatus status) {
-        this.status = status;
+        this.status = Objects.requireNonNull(status, "Vehicle status must not be null.");
     }
 
     public List<String> getTravelHistory() {
         return Collections.unmodifiableList(travelHistory);
+    }
+
+    private void beginNextRoad(RoadNetwork roadNetwork) {
+        if (currentSpeed == 0) {
+            status = VehicleStatus.WAITING;
+            return;
+        }
+
+        RouteStep nextStep = getNextRouteStep();
+        if (nextStep == null || !nextStep.getFromIntersectionId().equals(currentIntersectionId)) {
+            status = VehicleStatus.BLOCKED;
+            return;
+        }
+        if (!isStepAvailable(roadNetwork, nextStep)) {
+            status = VehicleStatus.BLOCKED;
+            return;
+        }
+
+        roadNetwork.recordVehicleEnteringRoad(nextStep.getRoadId());
+        currentRoadId = nextStep.getRoadId();
+        segmentStartIntersectionId = nextStep.getFromIntersectionId();
+        segmentEndIntersectionId = nextStep.getToIntersectionId();
+        roadProgress = 0.0;
+        status = VehicleStatus.MOVING;
+    }
+
+    private void advanceOnCurrentRoad(double durationSeconds, RoadNetwork roadNetwork) {
+        Road road = roadNetwork.getRoad(currentRoadId);
+        if (road == null) {
+            clearRoadPosition();
+            status = VehicleStatus.BLOCKED;
+            return;
+        }
+
+        double effectiveSpeed = Math.min(currentSpeed, road.getSpeedLimit());
+        if (effectiveSpeed == 0) {
+            return;
+        }
+
+        double travelledDistance = effectiveSpeed * durationSeconds / 3_600.0;
+        roadProgress += travelledDistance / road.getDistance();
+        if (roadProgress >= 1.0 - ROAD_COMPLETION_EPSILON) {
+            roadProgress = 1.0;
+            completeCurrentRoad(roadNetwork);
+        }
+    }
+
+    private void completeCurrentRoad(RoadNetwork roadNetwork) {
+        boolean completedCurrentRouteStep = currentRoadMatchesNextRouteStep();
+        String arrivedIntersectionId = segmentEndIntersectionId;
+        releaseCurrentRoad(roadNetwork);
+        currentIntersectionId = arrivedIntersectionId;
+        travelHistory.add(arrivedIntersectionId);
+        if (completedCurrentRouteStep) {
+            nextRouteStepIndex++;
+        }
+
+        if (hasReachedDestination()) {
+            status = VehicleStatus.ARRIVED;
+        } else if (getNextRouteStep() == null) {
+            status = VehicleStatus.BLOCKED;
+        } else {
+            status = VehicleStatus.WAITING;
+        }
+    }
+
+    private void releaseCurrentRoad(RoadNetwork roadNetwork) {
+        if (currentRoadId != null) {
+            Road occupiedRoad = roadNetwork.getRoad(currentRoadId);
+            if (occupiedRoad != null && occupiedRoad.getCurrentVehicleCount() > 0) {
+                roadNetwork.recordVehicleLeavingRoad(currentRoadId);
+            }
+        }
+        clearRoadPosition();
+    }
+
+    private void clearRoadPosition() {
+        currentRoadId = null;
+        segmentStartIntersectionId = null;
+        segmentEndIntersectionId = null;
+        roadProgress = 0.0;
+    }
+
+    private String getRouteStartIntersectionId() {
+        return isTravelling() ? segmentEndIntersectionId : currentIntersectionId;
     }
 
     private static void validatePositive(String name, double value) {
@@ -380,13 +511,21 @@ public abstract class Vehicle {
         return currentRoute.getSteps().get(nextRouteStepIndex);
     }
 
-    private boolean isUsableRoute(Route route) {
+    private boolean currentRoadMatchesNextRouteStep() {
+        RouteStep nextStep = getNextRouteStep();
+        return nextStep != null
+                && nextStep.getRoadId().equals(currentRoadId)
+                && nextStep.getFromIntersectionId().equals(segmentStartIntersectionId)
+                && nextStep.getToIntersectionId().equals(segmentEndIntersectionId);
+    }
+
+    private boolean isUsableRoute(Route route, String routeStartIntersectionId) {
         if (route == null || route.isEmpty()) {
             return false;
         }
 
         List<RouteStep> steps = route.getSteps();
-        return steps.get(0).getFromIntersectionId().equals(currentIntersectionId)
+        return steps.get(0).getFromIntersectionId().equals(routeStartIntersectionId)
                 && steps.get(steps.size() - 1).getToIntersectionId().equals(destinationIntersectionId);
     }
 
@@ -396,27 +535,5 @@ public abstract class Vehicle {
                 && road.getStartIntersectionId().equals(step.getFromIntersectionId())
                 && road.getEndIntersectionId().equals(step.getToIntersectionId())
                 && road.isAvailable();
-    }
-
-    private void enterNextRoad(RoadNetwork roadNetwork, RouteStep step) {
-        if (roadNetwork == null) {
-            return;
-        }
-
-        releaseOccupiedRoad(roadNetwork);
-        roadNetwork.recordVehicleEnteringRoad(step.getRoadId());
-        occupiedRoadId = step.getRoadId();
-    }
-
-    private void releaseOccupiedRoad(RoadNetwork roadNetwork) {
-        if (roadNetwork == null || occupiedRoadId == null) {
-            return;
-        }
-
-        Road occupiedRoad = roadNetwork.getRoad(occupiedRoadId);
-        if (occupiedRoad != null && occupiedRoad.getCurrentVehicleCount() > 0) {
-            roadNetwork.recordVehicleLeavingRoad(occupiedRoadId);
-        }
-        occupiedRoadId = null;
     }
 }

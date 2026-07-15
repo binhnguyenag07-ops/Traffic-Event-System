@@ -78,7 +78,7 @@ class VehicleTest {
     }
 
     @Test
-    void requestsRouteAndMovesThroughEveryStep() {
+    void advancesProgressivelyAlongRoadsBeforeReachingTheNextIntersection() {
         RoadNetwork network = createNetwork();
         Route route = routeFromAToC();
         RoutingService routingService = (ignoredNetwork, request) ->
@@ -90,19 +90,86 @@ class VehicleTest {
         assertThat(vehicle.getCurrentRoute()).isSameAs(route);
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.WAITING);
 
-        vehicle.moveOneStep(network);
-        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("B");
+        vehicle.advance(36.0, network);
+        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("A");
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.MOVING);
-        assertThat(vehicle.getOccupiedRoadId()).isEqualTo("AB");
+        assertThat(vehicle.getCurrentRoadId()).isEqualTo("AB");
+        assertThat(vehicle.getSegmentStartIntersectionId()).isEqualTo("A");
+        assertThat(vehicle.getSegmentEndIntersectionId()).isEqualTo("B");
+        assertThat(vehicle.getRoadProgress()).isEqualTo(0.5);
         assertThat(network.getRoad("AB").getCurrentVehicleCount()).isEqualTo(1);
 
-        vehicle.moveOneStep(network);
+        vehicle.advance(36.0, network);
+        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("B");
+        assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.WAITING);
+        assertThat(vehicle.getCurrentRoadId()).isNull();
+        assertThat(vehicle.getTravelHistory()).containsExactly("A", "B");
+        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
+
+        vehicle.advance(72.0, network);
         assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("C");
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.ARRIVED);
         assertThat(vehicle.getTravelHistory()).containsExactly("A", "B", "C");
-        assertThat(vehicle.getOccupiedRoadId()).isNull();
-        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
         assertThat(network.getRoad("BC").getCurrentVehicleCount()).isZero();
+    }
+
+    @Test
+    void calculatesRoadProgressFromCurrentSpeedCappedByRoadSpeedLimit() {
+        RoadNetwork network = createNetwork();
+        Route route = routeFromAToC();
+        Vehicle slowVehicle = new Car("slow-car", "A", "C");
+        Vehicle speedLimitedVehicle = new Car("fast-car", "A", "C");
+        slowVehicle.setCurrentRoute(route);
+        speedLimitedVehicle.setCurrentRoute(route);
+        slowVehicle.setCurrentSpeed(25.0);
+        speedLimitedVehicle.setCurrentSpeed(120.0);
+
+        slowVehicle.advance(36.0, network);
+        speedLimitedVehicle.advance(36.0, network);
+
+        assertThat(slowVehicle.getRoadProgress()).isEqualTo(0.25);
+        assertThat(speedLimitedVehicle.getRoadProgress()).isEqualTo(0.5);
+    }
+
+    @Test
+    void compatibilityMoveOneStepAdvancesOneSimulationTickOfRoadProgress() {
+        RoadNetwork network = createNetwork();
+        Vehicle vehicle = new Car("car-1", "A", "C");
+        vehicle.setCurrentRoute(routeFromAToC());
+
+        vehicle.moveOneStep(network);
+
+        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("A");
+        assertThat(vehicle.getCurrentRoadId()).isEqualTo("AB");
+        assertThat(vehicle.getRoadProgress()).isCloseTo(5.0 / 6.0, org.assertj.core.data.Offset.offset(0.000_001));
+    }
+
+    @Test
+    void recomputesFromTheEndOfTheCurrentRoadWithoutSkippingTheNewRoute() {
+        RoadNetwork network = createNetwork();
+        Vehicle vehicle = new Car("car-1", "A", "C");
+        vehicle.setCurrentRoute(routeFromAToC());
+        vehicle.advance(36.0, network);
+        RoutingService routingService = (ignoredNetwork, request) -> {
+            assertThat(request.getStartIntersectionId()).isEqualTo("B");
+            return new RouteResult(
+                    new Route(List.of(new RouteStep("B", "C", "BC", 1.0)), 1.0, 1.0, 1.0),
+                    "test",
+                    1,
+                    2);
+        };
+
+        vehicle.recomputeRoute(network, routingService);
+        vehicle.advance(36.0, network);
+
+        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("B");
+        assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.WAITING);
+        assertThat(vehicle.getNextRouteStepIndex()).isZero();
+
+        vehicle.advance(72.0, network);
+
+        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("C");
+        assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.ARRIVED);
     }
 
     @Test
@@ -127,7 +194,7 @@ class VehicleTest {
         vehicle.setCurrentRoute(route);
         network.getRoad("AB").getCondition().setRoadStatus(RoadStatus.CLOSED);
 
-        vehicle.moveOneStep(network);
+        vehicle.advance(1.0, network);
 
         assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("A");
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.BLOCKED);

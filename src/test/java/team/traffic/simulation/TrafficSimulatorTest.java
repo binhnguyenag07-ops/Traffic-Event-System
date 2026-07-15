@@ -19,6 +19,10 @@ import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.routing.Route;
+import team.traffic.domain.routing.RouteResult;
+import team.traffic.domain.routing.RouteStep;
+import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.service.RoutingService;
 
 class TrafficSimulatorTest {
@@ -188,6 +192,26 @@ class TrafficSimulatorTest {
         simulator.advanceTick();
 
         assertThat(event.getStatus()).isEqualTo(TrafficEventStatus.ACTIVE);
+    }
+
+    @Test
+    void advanceTickKeepsVehicleOnRoadUntilPhysicalTravelIsComplete() {
+        RoadNetwork network = createNetwork();
+        RoutingService routingService = (ignoredNetwork, request) -> new RouteResult(
+                new Route(List.of(new RouteStep("A", "B", "AB", 1.0)), 1.0, 1.0, 1.0),
+                "test",
+                1,
+                2);
+        TrafficSimulator continuousSimulator = new TrafficSimulator(network, routingService);
+        continuousSimulator.initialize(List.of(new VehicleConfig("car-1", "CAR", "A", "B")), List.of());
+
+        continuousSimulator.advanceTick();
+
+        Vehicle vehicle = continuousSimulator.getVehicles().get(0);
+        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("A");
+        assertThat(vehicle.getCurrentRoadId()).isEqualTo("AB");
+        assertThat(vehicle.getRoadProgress()).isCloseTo(5.0 / 6.0, org.assertj.core.data.Offset.offset(0.000_001));
+        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isEqualTo(1);
     }
 
     // --- validation ---

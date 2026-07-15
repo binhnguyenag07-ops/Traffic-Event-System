@@ -70,7 +70,7 @@ public class VehicleServiceImpl implements VehicleService {
 
     private void moveIfReady(Vehicle vehicle, RoadNetwork network) {
         if (vehicle.getStatus() == VehicleStatus.WAITING || vehicle.getStatus() == VehicleStatus.MOVING) {
-            vehicle.moveOneStep(network);
+            vehicle.advance(Vehicle.DEFAULT_TICK_DURATION_SECONDS, network);
         }
     }
 
