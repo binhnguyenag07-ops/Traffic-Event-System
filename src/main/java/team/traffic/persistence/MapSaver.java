@@ -40,6 +40,13 @@ public class MapSaver {
         objectMapper.writeValue(path.toFile(), MapData.from(roadNetwork));
     }
 
+    public String toJson(RoadNetwork roadNetwork) throws IOException {
+        if (roadNetwork == null) {
+            throw new IllegalArgumentException("Road network is required");
+        }
+        return objectMapper.writeValueAsString(MapData.from(roadNetwork));
+    }
+
     static class MapData {
         public List<IntersectionData> intersections = new ArrayList<>();
         public List<RoadData> roads = new ArrayList<>();
@@ -70,6 +77,8 @@ public class MapSaver {
         public double x;
         public double y;
         public String locationType;
+        public Double latitude;
+        public Double longitude;
 
         static IntersectionData from(Intersection intersection) {
             IntersectionData data = new IntersectionData();
@@ -78,6 +87,8 @@ public class MapSaver {
             data.x = intersection.getX();
             data.y = intersection.getY();
             data.locationType = intersection.getLocationType().name();
+            data.latitude = intersection.getLatitude();
+            data.longitude = intersection.getLongitude();
             return data;
         }
     }
@@ -93,6 +104,7 @@ public class MapSaver {
         public double congestionLevel;
         public double vehicleDensity;
         public RoadStatus roadStatus;
+        public List<List<Double>> geometry;
 
         static RoadData from(Road road) {
             RoadCondition condition = road.getCondition();
@@ -107,6 +119,9 @@ public class MapSaver {
             data.congestionLevel = condition.getCongestionLevel();
             data.vehicleDensity = condition.getVehicleDensity();
             data.roadStatus = condition.getRoadStatus();
+            data.geometry = road.getGeometry().stream()
+                    .map(point -> List.of(point.latitude(), point.longitude()))
+                    .toList();
             return data;
         }
     }

@@ -12,6 +12,7 @@ import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.RoadNetworkService;
 import team.traffic.service.SimulationService;
 import team.traffic.service.StatisticsService;
+import team.traffic.service.RoutingService;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -24,14 +25,24 @@ public class StatisticsServiceImpl implements StatisticsService {
     private final SimulationService simulationService;
     private final RoadNetworkService networkService;
     private final RoutingStrategyRegistry strategyRegistry;
+    private final RoutingService routingService;
 
     public StatisticsServiceImpl(
             SimulationService simulationService,
             RoadNetworkService networkService,
             RoutingStrategyRegistry strategyRegistry) {
+        this(simulationService, networkService, strategyRegistry, null);
+    }
+
+    public StatisticsServiceImpl(
+            SimulationService simulationService,
+            RoadNetworkService networkService,
+            RoutingStrategyRegistry strategyRegistry,
+            RoutingService routingService) {
         this.simulationService = simulationService;
         this.networkService = networkService;
         this.strategyRegistry = strategyRegistry;
+        this.routingService = routingService;
     }
 
     @Override
@@ -68,6 +79,9 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     @Override
     public List<AlgorithmStatistics> getAllAlgorithmStatistics() {
+        if (routingService != null) {
+            return routingService.getAlgorithmStatistics();
+        }
         return strategyRegistry.getAll().stream()
                 .map(strategy -> {
                     List<String> prefs = new ArrayList<>();

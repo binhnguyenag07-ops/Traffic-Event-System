@@ -3,13 +3,8 @@ package team.traffic.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import java.util.EnumSet;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import org.junit.jupiter.api.Test;
 
-import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 
@@ -25,17 +20,19 @@ class SmallCityDatasetTest {
                 .isEqualTo(RoadStatus.BLOCKED);
         assertThat(network.findOutgoingRoads("I1"))
                 .extracting(road -> road.getEndIntersectionId())
-                .containsExactly("I2", "I4", "I5");
+                .containsExactly("I2", "I4", "I6");
     }
 
     @Test
-    void coversEverySupportedLocationType() throws IOException {
+    void usesRealHcmcCoordinatesAndStreetGeometry() throws IOException {
         RoadNetwork network = new JsonMapLoader().load("data/small_city.json");
-        Set<LocationType> types = network.getIntersections().values().stream()
-                .map(intersection -> intersection.getLocationType())
-                .collect(Collectors.toSet());
 
-        assertThat(types).containsExactlyInAnyOrderElementsOf(EnumSet.allOf(LocationType.class));
+        assertThat(network.getIntersection("I1").getName()).isEqualTo("Bến Thành Market");
+        assertThat(network.getIntersection("I1").getLatitude()).isCloseTo(10.772803,
+                org.assertj.core.data.Offset.offset(1.0e-8));
+        assertThat(network.getRoad("R01").getGeometry()).hasSizeGreaterThan(2);
+        assertThat(network.getRoads().values())
+                .allSatisfy(road -> assertThat(road.getGeometry()).hasSizeGreaterThan(1));
     }
 
     @Test

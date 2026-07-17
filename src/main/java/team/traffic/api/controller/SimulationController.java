@@ -13,6 +13,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+import team.traffic.simulation.SimulationSnapshot;
+import team.traffic.simulation.SimulationStatus;
 
 public class SimulationController {
     private final SimulationService simulationService;
@@ -32,7 +35,16 @@ public class SimulationController {
         app.get("/api/simulation/status", this::getStatus);
         app.get("/api/simulation/snapshot", this::getSnapshot);
         app.get("/api/simulation/tick/current", this::getCurrentTick);
-        app.put("/api/simulation/parameters", ctx -> ctx.json(statusResponse()));
+        app.put("/api/simulation/parameters", this::setParameters);
+        app.sse("/api/simulation/stream", client -> {
+            Consumer<SimulationSnapshot> listener = snapshot -> client.sendEvent(
+                    "snapshot",
+                    new SimulationSnapshotDto(snapshot, simulationService.getNetwork()));
+            simulationService.addSnapshotListener(listener);
+            client.onClose(() -> simulationService.removeSnapshotListener(listener));
+            listener.accept(simulationService.getSnapshot());
+            client.keepAlive();
+        });
     }
 
     private void initialize(Context ctx) {
@@ -80,8 +92,28 @@ public class SimulationController {
     }
 
     private void tick(Context ctx) {
+        if (simulationService.getStatus() == SimulationStatus.RUNNING) {
+            ctx.status(409).json(error("Manual ticks are unavailable while the simulation is running."));
+            return;
+        }
         simulationService.advanceTick();
-        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot()));
+        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot(), simulationService.getNetwork()));
+    }
+
+    private void setParameters(Context ctx) {
+        try {
+            JsonNode body = objectMapper.readTree(ctx.body());
+            double simulationSeconds = body.has("simulationSecondsPerTick")
+                    ? body.get("simulationSecondsPerTick").asDouble()
+                    : simulationService.getSimulationSecondsPerTick();
+            long playbackInterval = body.has("playbackIntervalMs")
+                    ? body.get("playbackIntervalMs").asLong()
+                    : simulationService.getPlaybackIntervalMillis();
+            simulationService.setParameters(simulationSeconds, playbackInterval);
+            ctx.json(statusResponse());
+        } catch (Exception exception) {
+            ctx.status(400).json(error(exception.getMessage()));
+        }
     }
 
     private void getStatus(Context ctx) {
@@ -89,7 +121,7 @@ public class SimulationController {
     }
 
     private void getSnapshot(Context ctx) {
-        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot()));
+        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot(), simulationService.getNetwork()));
     }
 
     private void getCurrentTick(Context ctx) {
@@ -100,6 +132,8 @@ public class SimulationController {
         Map<String, Object> response = new HashMap<>();
         response.put("status", simulationService.getStatus().name());
         response.put("currentTick", simulationService.getCurrentTick());
+        response.put("simulationSecondsPerTick", simulationService.getSimulationSecondsPerTick());
+        response.put("playbackIntervalMs", simulationService.getPlaybackIntervalMillis());
         return response;
     }
 

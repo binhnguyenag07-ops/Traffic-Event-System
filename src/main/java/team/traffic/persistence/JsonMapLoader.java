@@ -9,6 +9,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
@@ -102,6 +103,8 @@ public class JsonMapLoader implements MapLoader {
         public Double x;
         public Double y;
         public LocationType locationType;
+        public Double latitude;
+        public Double longitude;
 
         // Converts JSON data into the domain model.
         public Intersection toIntersection() {
@@ -110,7 +113,9 @@ public class JsonMapLoader implements MapLoader {
                     name,
                     requireField(x, "x"),
                     requireField(y, "y"),
-                    locationType);
+                    locationType,
+                    latitude,
+                    longitude);
         }
     }
 
@@ -125,6 +130,7 @@ public class JsonMapLoader implements MapLoader {
         public Double congestionLevel;
         public Double vehicleDensity;
         public RoadStatus roadStatus;
+        public List<List<Double>> geometry;
 
         // Converts JSON data into the domain model.
         public Road toRoad() {
@@ -145,7 +151,21 @@ public class JsonMapLoader implements MapLoader {
                     requireField(speedLimit, "speedLimit"),
                     requiredCapacity,
                     requiredVehicleCount,
-                    condition);
+                    condition,
+                    toGeometry(geometry));
+        }
+
+        private List<GeoPoint> toGeometry(List<List<Double>> coordinates) {
+            if (coordinates == null) {
+                return List.of();
+            }
+            return coordinates.stream().map(coordinate -> {
+                if (coordinate == null || coordinate.size() != 2
+                        || coordinate.get(0) == null || coordinate.get(1) == null) {
+                    throw new IllegalArgumentException("Road geometry points require latitude and longitude");
+                }
+                return new GeoPoint(coordinate.get(0), coordinate.get(1));
+            }).toList();
         }
     }
 

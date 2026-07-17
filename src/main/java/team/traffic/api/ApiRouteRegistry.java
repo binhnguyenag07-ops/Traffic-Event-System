@@ -8,6 +8,7 @@ import team.traffic.api.controller.SimulationController;
 import team.traffic.api.controller.StatisticsController;
 import team.traffic.api.controller.TrafficEventController;
 import team.traffic.api.controller.VehicleController;
+import team.traffic.api.controller.ScenarioController;
 
 public class ApiRouteRegistry {
     private final HealthController healthController;
@@ -17,6 +18,7 @@ public class ApiRouteRegistry {
     private final VehicleController vehicleController;
     private final TrafficEventController trafficEventController;
     private final StatisticsController statisticsController;
+    private final ScenarioController scenarioController;
 
     public ApiRouteRegistry(
             HealthController healthController,
@@ -26,6 +28,19 @@ public class ApiRouteRegistry {
             VehicleController vehicleController,
             TrafficEventController trafficEventController,
             StatisticsController statisticsController) {
+        this(healthController, networkController, routingController, simulationController,
+                vehicleController, trafficEventController, statisticsController, null);
+    }
+
+    public ApiRouteRegistry(
+            HealthController healthController,
+            NetworkController networkController,
+            RoutingController routingController,
+            SimulationController simulationController,
+            VehicleController vehicleController,
+            TrafficEventController trafficEventController,
+            StatisticsController statisticsController,
+            ScenarioController scenarioController) {
         this.healthController = healthController;
         this.networkController = networkController;
         this.routingController = routingController;
@@ -33,6 +48,7 @@ public class ApiRouteRegistry {
         this.vehicleController = vehicleController;
         this.trafficEventController = trafficEventController;
         this.statisticsController = statisticsController;
+        this.scenarioController = scenarioController;
     }
 
     public void register(Javalin app) {
@@ -43,5 +59,8 @@ public class ApiRouteRegistry {
         vehicleController.registerRoutes(app);
         trafficEventController.registerRoutes(app);
         statisticsController.registerRoutes(app);
+        if (scenarioController != null) {
+            scenarioController.registerRoutes(app);
+        }
     }
 }

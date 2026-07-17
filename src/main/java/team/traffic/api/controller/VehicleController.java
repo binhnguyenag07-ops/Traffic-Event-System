@@ -24,6 +24,26 @@ public class VehicleController {
     public void registerRoutes(Javalin app) {
         app.get("/api/vehicles", this::getAllVehicles);
         app.post("/api/vehicles", this::createVehicle);
+        app.get("/api/vehicles/{id}", this::getVehicle);
+        app.delete("/api/vehicles/{id}", this::deleteVehicle);
+    }
+
+    private void getVehicle(Context ctx) {
+        String id = ctx.pathParam("id");
+        Vehicle vehicle = vehicleService.getVehicleById(id);
+        if (vehicle == null) {
+            ctx.status(404).json(error("Vehicle not found: " + id));
+            return;
+        }
+        ctx.json(new VehicleDto(vehicle));
+    }
+
+    private void deleteVehicle(Context ctx) {
+        if (!vehicleService.removeVehicle(ctx.pathParam("id"))) {
+            ctx.status(404).json(error("Vehicle not found: " + ctx.pathParam("id")));
+            return;
+        }
+        ctx.status(204);
     }
 
     private void getAllVehicles(Context ctx) {

@@ -7,7 +7,7 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.service.RoadNetworkService;
 
 public class RoadNetworkServiceImpl implements RoadNetworkService {
-    private final RoadNetwork network;
+    private RoadNetwork network;
 
     public RoadNetworkServiceImpl(RoadNetwork network) {
         if (network == null) {
@@ -44,5 +44,13 @@ public class RoadNetworkServiceImpl implements RoadNetworkService {
     @Override
     public List<Road> findRoadsAtOrAboveDensity(double minimumDensity) {
         return network.findRoadsAtOrAboveDensity(minimumDensity);
+    }
+
+    @Override
+    public void replaceNetwork(RoadNetwork network) {
+        if (network == null) {
+            throw new IllegalArgumentException("Road network is required");
+        }
+        this.network = network;
     }
 }

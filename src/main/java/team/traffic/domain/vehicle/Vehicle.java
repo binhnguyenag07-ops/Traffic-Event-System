@@ -31,6 +31,9 @@ public abstract class Vehicle {
     private final int priorityLevel;
     private VehicleStatus status;
     private String occupiedRoadId;
+    private String roadStartIntersectionId;
+    private String roadEndIntersectionId;
+    private double roadProgress;
     private final List<String> travelHistory;
 
     protected Vehicle(String id, String currentIntersectionId, String destinationIntersectionId, double movementSpeed) {
@@ -179,6 +182,67 @@ public abstract class Vehicle {
         }
     }
 
+    /**
+     * Advances this vehicle along its current road using simulation time.
+     * Unlike {@link #moveOneStep(RoadNetwork)}, the vehicle remains on a road
+     * until the travelled distance reaches that road's length.
+     */
+    public void advance(RoadNetwork roadNetwork, double simulationSeconds) {
+        Objects.requireNonNull(roadNetwork, "Road network must not be null.");
+        if (!Double.isFinite(simulationSeconds) || simulationSeconds <= 0) {
+            throw new IllegalArgumentException("Simulation seconds must be positive.");
+        }
+        if (hasReachedDestination()) {
+            releaseOccupiedRoad(roadNetwork);
+            status = VehicleStatus.ARRIVED;
+            return;
+        }
+
+        RouteStep step = getNextRouteStep();
+        if (step == null || !step.getFromIntersectionId().equals(currentIntersectionId)) {
+            releaseOccupiedRoad(roadNetwork);
+            status = VehicleStatus.BLOCKED;
+            return;
+        }
+
+        Road road = roadNetwork.getRoad(step.getRoadId());
+        if (road == null) {
+            releaseOccupiedRoad(roadNetwork);
+            status = VehicleStatus.BLOCKED;
+            return;
+        }
+
+        if (occupiedRoadId == null) {
+            if (!isStepAvailable(roadNetwork, step)) {
+                status = VehicleStatus.BLOCKED;
+                return;
+            }
+            enterNextRoad(roadNetwork, step);
+            roadStartIntersectionId = step.getFromIntersectionId();
+            roadEndIntersectionId = step.getToIntersectionId();
+            roadProgress = 0.0;
+        }
+
+        double trafficFactor = 1.0
+                + road.getCondition().getCongestionLevel()
+                + road.getCondition().getVehicleDensity();
+        double effectiveSpeedKph = Math.min(currentSpeed, road.getSpeedLimit()) / trafficFactor;
+        double distanceThisTick = effectiveSpeedKph * simulationSeconds / 3600.0;
+        roadProgress = Math.min(1.0, roadProgress + distanceThisTick / road.getDistance());
+        status = VehicleStatus.MOVING;
+
+        if (roadProgress >= 1.0) {
+            nextRouteStepIndex++;
+            moveTo(step.getToIntersectionId());
+            releaseOccupiedRoad(roadNetwork);
+            if (hasReachedDestination()) {
+                status = VehicleStatus.ARRIVED;
+            } else if (nextRouteStepIndex >= currentRoute.getStepCount()) {
+                status = VehicleStatus.BLOCKED;
+            }
+        }
+    }
+
     public void recomputeRoute(RoutingService routingService) {
         requestRoute(routingService);
     }
@@ -244,6 +308,22 @@ public abstract class Vehicle {
 
     public String getOccupiedRoadId() {
         return occupiedRoadId;
+    }
+
+    public void releaseRoad(RoadNetwork roadNetwork) {
+        releaseOccupiedRoad(roadNetwork);
+    }
+
+    public String getRoadStartIntersectionId() {
+        return roadStartIntersectionId;
+    }
+
+    public String getRoadEndIntersectionId() {
+        return roadEndIntersectionId;
+    }
+
+    public double getRoadProgress() {
+        return roadProgress;
     }
 
     /**
@@ -418,5 +498,8 @@ public abstract class Vehicle {
             roadNetwork.recordVehicleLeavingRoad(occupiedRoadId);
         }
         occupiedRoadId = null;
+        roadStartIntersectionId = null;
+        roadEndIntersectionId = null;
+        roadProgress = 0.0;
     }
 }

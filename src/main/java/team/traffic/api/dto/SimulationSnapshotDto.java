@@ -4,16 +4,22 @@ import java.util.List;
 import java.util.stream.Collectors;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
+import team.traffic.domain.network.RoadNetwork;
 
 public class SimulationSnapshotDto {
     private long tick;
     private SimulationStatus status;
     private List<VehicleDto> vehicles;
     private List<TrafficEventDto> trafficEvents;
+    private List<RoadStateDto> roadStates;
 
     public SimulationSnapshotDto() {}
 
     public SimulationSnapshotDto(SimulationSnapshot snapshot) {
+        this(snapshot, null);
+    }
+
+    public SimulationSnapshotDto(SimulationSnapshot snapshot, RoadNetwork network) {
         this.tick = snapshot.tick();
         this.status = snapshot.status();
         this.vehicles = snapshot.vehicles().stream()
@@ -21,6 +27,9 @@ public class SimulationSnapshotDto {
                 .collect(Collectors.toList());
         this.trafficEvents = snapshot.trafficEvents().stream()
                 .map(TrafficEventDto::new)
+                .collect(Collectors.toList());
+        this.roadStates = network == null ? List.of() : network.getRoads().values().stream()
+                .map(RoadStateDto::new)
                 .collect(Collectors.toList());
     }
 
@@ -55,4 +64,7 @@ public class SimulationSnapshotDto {
     public void setTrafficEvents(List<TrafficEventDto> trafficEvents) {
         this.trafficEvents = trafficEvents;
     }
+
+    public List<RoadStateDto> getRoadStates() { return roadStates; }
+    public void setRoadStates(List<RoadStateDto> roadStates) { this.roadStates = roadStates; }
 }

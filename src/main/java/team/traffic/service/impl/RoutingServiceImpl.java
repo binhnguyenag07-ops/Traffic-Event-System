@@ -10,10 +10,14 @@ import team.traffic.domain.routing.RouteResult;
 import team.traffic.routing.PathFindingStrategy;
 import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.RoutingService;
+import team.traffic.domain.statistics.AlgorithmStatistics;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class RoutingServiceImpl implements RoutingService {
 
     private final RoutingStrategyRegistry registry;
+    private final Map<String, Metrics> metrics = new LinkedHashMap<>();
 
     public RoutingServiceImpl(RoutingStrategyRegistry registry) {
         this.registry = Objects.requireNonNull(registry, "RoutingStrategyRegistry must not be null.");
@@ -38,6 +42,79 @@ public class RoutingServiceImpl implements RoutingService {
                 .orElseThrow(() -> new NoSuchElementException(
                         "No routing strategy found for preference: " + preference));
 
-        return strategy.findRoute(network, request);
+        return execute(strategy, network, request);
+    }
+
+    @Override
+    public RouteResult findRoute(RoadNetwork network, RouteRequest request, String algorithm) {
+        Objects.requireNonNull(network, "RoadNetwork must not be null.");
+        Objects.requireNonNull(request, "RouteRequest must not be null.");
+        if (algorithm == null || algorithm.isBlank()) {
+            return findRoute(network, request);
+        }
+        PathFindingStrategy strategy = registry.findByName(algorithm)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown routing algorithm: " + algorithm));
+        if (!strategy.supports(request.getPreference())) {
+            throw new IllegalArgumentException(strategy.getName() + " does not support " + request.getPreference());
+        }
+        return execute(strategy, network, request);
+    }
+
+    @Override
+    public java.util.List<PathFindingStrategy> getStrategies() {
+        return registry.getAll();
+    }
+
+    @Override
+    public synchronized java.util.List<AlgorithmStatistics> getAlgorithmStatistics() {
+        return registry.getAll().stream().map(strategy -> {
+            Metrics current = metrics.getOrDefault(strategy.getName(), new Metrics());
+            AlgorithmStatistics result = new AlgorithmStatistics(strategy.getName(),
+                    java.util.Arrays.stream(RoutePreference.values())
+                            .filter(strategy::supports).map(Enum::name).toList());
+            result.setTotalRoutesComputed(current.attempts);
+            result.setSuccessfulRoutes(current.successes);
+            result.setFailedRoutes(current.failures);
+            result.setAverageComputationTime(current.successes == 0 ? 0 : current.totalNanos / 1_000_000.0 / current.successes);
+            result.setAverageVisitedNodes(current.successes == 0 ? 0 : (double) current.totalVisited / current.successes);
+            result.setAverageRouteCost(current.successes == 0 ? 0 : current.totalCost / current.successes);
+            return result;
+        }).toList();
+    }
+
+    private RouteResult execute(PathFindingStrategy strategy, RoadNetwork network, RouteRequest request) {
+        long started = System.nanoTime();
+        try {
+            RouteResult result = strategy.findRoute(network, request);
+            recordSuccess(strategy.getName(), System.nanoTime() - started, result);
+            return result;
+        } catch (RuntimeException exception) {
+            recordFailure(strategy.getName());
+            throw exception;
+        }
+    }
+
+    private synchronized void recordSuccess(String name, long nanos, RouteResult result) {
+        Metrics current = metrics.computeIfAbsent(name, ignored -> new Metrics());
+        current.attempts++;
+        current.successes++;
+        current.totalNanos += nanos;
+        current.totalVisited += result.getVisitedNodes();
+        current.totalCost += result.getRoute().getTotalCost();
+    }
+
+    private synchronized void recordFailure(String name) {
+        Metrics current = metrics.computeIfAbsent(name, ignored -> new Metrics());
+        current.attempts++;
+        current.failures++;
+    }
+
+    private static class Metrics {
+        long attempts;
+        long successes;
+        long failures;
+        long totalNanos;
+        long totalVisited;
+        double totalCost;
     }
 }

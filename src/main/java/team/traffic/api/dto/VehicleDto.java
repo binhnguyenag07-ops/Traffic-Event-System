@@ -3,6 +3,8 @@ package team.traffic.api.dto;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.routing.RoutePreference;
+import java.util.List;
 
 public class VehicleDto {
     private String id;
@@ -19,6 +21,14 @@ public class VehicleDto {
     private double deceleration;
     private double vehicleWeight;
     private int priorityLevel;
+    private RouteDto currentRoute;
+    private int nextRouteStepIndex;
+    private RoutePreference routePreference;
+    private String occupiedRoadId;
+    private String roadStartIntersectionId;
+    private String roadEndIntersectionId;
+    private double roadProgress;
+    private List<String> travelHistory;
 
     public VehicleDto() {}
 
@@ -37,6 +47,14 @@ public class VehicleDto {
         this.deceleration = vehicle.getDeceleration();
         this.vehicleWeight = vehicle.getVehicleWeight();
         this.priorityLevel = vehicle.getPriorityLevel();
+        this.currentRoute = vehicle.getCurrentRoute() == null ? null : new RouteDto(vehicle.getCurrentRoute());
+        this.nextRouteStepIndex = vehicle.getNextRouteStepIndex();
+        this.routePreference = vehicle.getRoutePreference();
+        this.occupiedRoadId = vehicle.getOccupiedRoadId();
+        this.roadStartIntersectionId = vehicle.getRoadStartIntersectionId();
+        this.roadEndIntersectionId = vehicle.getRoadEndIntersectionId();
+        this.roadProgress = vehicle.getRoadProgress();
+        this.travelHistory = vehicle.getTravelHistory();
     }
 
     public String getId() { return id; }
@@ -67,4 +85,20 @@ public class VehicleDto {
     public void setVehicleWeight(double vehicleWeight) { this.vehicleWeight = vehicleWeight; }
     public int getPriorityLevel() { return priorityLevel; }
     public void setPriorityLevel(int priorityLevel) { this.priorityLevel = priorityLevel; }
+    public RouteDto getCurrentRoute() { return currentRoute; }
+    public void setCurrentRoute(RouteDto currentRoute) { this.currentRoute = currentRoute; }
+    public int getNextRouteStepIndex() { return nextRouteStepIndex; }
+    public void setNextRouteStepIndex(int nextRouteStepIndex) { this.nextRouteStepIndex = nextRouteStepIndex; }
+    public RoutePreference getRoutePreference() { return routePreference; }
+    public void setRoutePreference(RoutePreference routePreference) { this.routePreference = routePreference; }
+    public String getOccupiedRoadId() { return occupiedRoadId; }
+    public void setOccupiedRoadId(String occupiedRoadId) { this.occupiedRoadId = occupiedRoadId; }
+    public String getRoadStartIntersectionId() { return roadStartIntersectionId; }
+    public void setRoadStartIntersectionId(String roadStartIntersectionId) { this.roadStartIntersectionId = roadStartIntersectionId; }
+    public String getRoadEndIntersectionId() { return roadEndIntersectionId; }
+    public void setRoadEndIntersectionId(String roadEndIntersectionId) { this.roadEndIntersectionId = roadEndIntersectionId; }
+    public double getRoadProgress() { return roadProgress; }
+    public void setRoadProgress(double roadProgress) { this.roadProgress = roadProgress; }
+    public List<String> getTravelHistory() { return travelHistory; }
+    public void setTravelHistory(List<String> travelHistory) { this.travelHistory = travelHistory; }
 }

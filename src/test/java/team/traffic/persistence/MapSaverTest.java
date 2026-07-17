@@ -6,11 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
@@ -40,6 +42,8 @@ class MapSaverTest {
         assertThat(restored.getIntersectionCount()).isEqualTo(original.getIntersectionCount());
         assertThat(restored.getRoadCount()).isEqualTo(original.getRoadCount());
         assertThat(restored.getRoad("R1").getDistance()).isEqualTo(10);
+        assertThat(restored.getRoad("R1").getGeometry())
+                .containsExactly(new GeoPoint(10.77, 106.69), new GeoPoint(10.78, 106.70));
         assertThat(restored.getRoad("R2").getCondition().getRoadStatus())
                 .isEqualTo(RoadStatus.CONGESTED);
     }
@@ -65,7 +69,8 @@ class MapSaverTest {
                 new RoadCondition(0.4, 0.25, RoadStatus.CONGESTED)));
         network.addRoad(new Road(
                 "R1", "I1", "I2", 10, 50, 100, 0,
-                new RoadCondition(0, 0, RoadStatus.OPEN)));
+                new RoadCondition(0, 0, RoadStatus.OPEN),
+                List.of(new GeoPoint(10.77, 106.69), new GeoPoint(10.78, 106.70))));
         return network;
     }
 }

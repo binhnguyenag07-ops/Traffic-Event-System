@@ -1,5 +1,7 @@
 package team.traffic.domain.network;
 
+import java.util.List;
+
 public class Road {
     private final String id;
     private final String startIntersectionId;
@@ -7,12 +9,20 @@ public class Road {
     private final double distance;
     private final double speedLimit;
     private final int capacity;
+    private final List<GeoPoint> geometry;
     private int currentVehicleCount;
     private RoadCondition condition;
 
     public Road(String id, String startIntersectionId, String endIntersectionId,
             double distance, double speedLimit, int capacity,
             int currentVehicleCount, RoadCondition condition) {
+        this(id, startIntersectionId, endIntersectionId, distance, speedLimit, capacity,
+                currentVehicleCount, condition, List.of());
+    }
+
+    public Road(String id, String startIntersectionId, String endIntersectionId,
+            double distance, double speedLimit, int capacity,
+            int currentVehicleCount, RoadCondition condition, List<GeoPoint> geometry) {
         // Basic validation keeps impossible roads out of the network.
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Road id is required");
@@ -41,6 +51,7 @@ public class Road {
         this.distance = distance;
         this.speedLimit = speedLimit;
         this.capacity = capacity;
+        this.geometry = geometry == null ? List.of() : List.copyOf(geometry);
         this.currentVehicleCount = currentVehicleCount;
         this.condition = condition == null ? new RoadCondition(0, 0, RoadStatus.OPEN) : condition;
     }
@@ -140,6 +151,10 @@ public class Road {
 
     public int getCurrentVehicleCount() {
         return currentVehicleCount;
+    }
+
+    public List<GeoPoint> getGeometry() {
+        return geometry;
     }
 
     public void setCurrentVehicleCount(int currentVehicleCount) {
