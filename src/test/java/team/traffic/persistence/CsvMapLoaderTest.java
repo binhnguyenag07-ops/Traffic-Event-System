@@ -20,7 +20,6 @@ class CsvMapLoaderTest {
             "name",
             "x",
             "y",
-            "locationType",
             "startIntersectionId",
             "endIntersectionId",
             "distance",
@@ -48,9 +47,9 @@ class CsvMapLoaderTest {
     @Test
     void loadsRoadRecordsThatAppearBeforeIntersections() throws IOException {
         Path file = writeCsv(
-                "ROAD,R1,,,,,I1,I2,10,50,100,0,0,0,OPEN",
-                "INTERSECTION,I1,First,0,0,NORMAL,,,,,,,,,",
-                "INTERSECTION,I2,Second,1,0,NORMAL,,,,,,,,,");
+                "ROAD,R1,,,,I1,I2,10,50,100,0,0,0,OPEN",
+                "INTERSECTION,I1,First,0,0,,,,,,,,,",
+                "INTERSECTION,I2,Second,1,0,,,,,,,,,");
 
         RoadNetwork network = loader.load(file.toString());
 
@@ -62,7 +61,7 @@ class CsvMapLoaderTest {
 
     @Test
     void rejectsUnsupportedRecordTypeWithRecordNumber() throws IOException {
-        Path file = writeCsv("BUILDING,B1,Office,0,0,COMMERCIAL,,,,,,,,,");
+        Path file = writeCsv("BUILDING,B1,Office,0,0,,,,,,,,,");
 
         assertThatThrownBy(() -> loader.load(file.toString()))
                 .isInstanceOf(InvalidMapException.class)
@@ -85,8 +84,8 @@ class CsvMapLoaderTest {
     @Test
     void reportsDuplicateIntersectionWithRecordContext() throws IOException {
         Path file = writeCsv(
-                "INTERSECTION,I1,First,0,0,NORMAL,,,,,,,,,",
-                "INTERSECTION,I1,Duplicate,1,1,NORMAL,,,,,,,,,");
+                "INTERSECTION,I1,First,0,0,,,,,,,,,",
+                "INTERSECTION,I1,Duplicate,1,1,,,,,,,,,");
 
         assertThatThrownBy(() -> loader.load(file.toString()))
                 .isInstanceOf(InvalidMapException.class)
@@ -97,8 +96,8 @@ class CsvMapLoaderTest {
     @Test
     void reportsMissingRoadEndpointWithRecordContext() throws IOException {
         Path file = writeCsv(
-                "INTERSECTION,I1,First,0,0,NORMAL,,,,,,,,,",
-                "ROAD,R1,,,,,I1,UNKNOWN,10,50,100,0,0,0,OPEN");
+                "INTERSECTION,I1,First,0,0,,,,,,,,,",
+                "ROAD,R1,,,,I1,UNKNOWN,10,50,100,0,0,0,OPEN");
 
         assertThatThrownBy(() -> loader.load(file.toString()))
                 .isInstanceOf(InvalidMapException.class)
@@ -109,9 +108,9 @@ class CsvMapLoaderTest {
     @Test
     void rejectsRoadDensityThatDoesNotMatchVehicleCountAndCapacity() throws IOException {
         Path file = writeCsv(
-                "INTERSECTION,I1,First,0,0,NORMAL,,,,,,,,,",
-                "INTERSECTION,I2,Second,1,0,NORMAL,,,,,,,,,",
-                "ROAD,R1,,,,,I1,I2,10,50,10,5,0,0.1,OPEN");
+                "INTERSECTION,I1,First,0,0,,,,,,,,,",
+                "INTERSECTION,I2,Second,1,0,,,,,,,,,",
+                "ROAD,R1,,,,I1,I2,10,50,10,5,0,0.1,OPEN");
 
         assertThatThrownBy(() -> loader.load(file.toString()))
                 .isInstanceOf(InvalidMapException.class)

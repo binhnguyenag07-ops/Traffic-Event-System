@@ -1,252 +1,114 @@
 {
   "intersections": [
-    {
-      "id": "I1",
-      "name": "Campus Gate",
-      "x": 0.0,
-      "y": 0.0,
-      "locationType": "NORMAL"
-    },
-    {
-      "id": "I2",
-      "name": "School Junction",
-      "x": 2.0,
-      "y": 0.0,
-      "locationType": "SCHOOL"
-    },
-    {
-      "id": "I3",
-      "name": "Central Market",
-      "x": 4.0,
-      "y": 0.0,
-      "locationType": "COMMERCIAL"
-    },
-    {
-      "id": "I4",
-      "name": "Riverside Homes",
-      "x": 0.0,
-      "y": 2.0,
-      "locationType": "RESIDENTIAL"
-    },
-    {
-      "id": "I5",
-      "name": "General Hospital",
-      "x": 2.0,
-      "y": 2.0,
-      "locationType": "HOSPITAL"
-    },
-    {
-      "id": "I6",
-      "name": "Night District",
-      "x": 4.0,
-      "y": 2.0,
-      "locationType": "BAR"
-    }
+    {"id":"I1","name":"Trần Hưng Đạo - Nguyễn Thái Học","longitude":106.69075,"latitude":10.76490},
+    {"id":"I2","name":"Trần Hưng Đạo - Yersin","longitude":106.69500,"latitude":10.76610},
+    {"id":"I3","name":"Trần Hưng Đạo - Ký Con","longitude":106.69920,"latitude":10.76735},
+    {"id":"I4","name":"Võ Văn Kiệt - Nguyễn Thái Học","longitude":106.68980,"latitude":10.76110},
+    {"id":"I5","name":"Võ Văn Kiệt - Yersin","longitude":106.69410,"latitude":10.76225},
+    {"id":"I6","name":"Võ Văn Kiệt - Ký Con","longitude":106.69835,"latitude":10.76345}
   ],
   "roads": [
     {
-      "id": "R01",
-      "startIntersectionId": "I1",
-      "endIntersectionId": "I2",
-      "distance": 2.0,
-      "speedLimit": 40.0,
-      "capacity": 80,
-      "currentVehicleCount": 10,
-      "congestionLevel": 0.10,
-      "vehicleDensity": 0.125,
-      "roadStatus": "OPEN"
+      "id":"R01","name":"Trần Hưng Đạo","physicalRoadId":"THD-01","startIntersectionId":"I1","endIntersectionId":"I2",
+      "distance":0.49,"speedLimit":40.0,"capacity":80,"currentVehicleCount":10,"laneCount":1,
+      "geometry":[{"longitude":106.69075,"latitude":10.76490},{"longitude":106.69500,"latitude":10.76610}],
+      "congestionLevel":0.10,"vehicleDensity":0.125,"roadStatus":"OPEN"
     },
     {
-      "id": "R02",
-      "startIntersectionId": "I2",
-      "endIntersectionId": "I1",
-      "distance": 2.0,
-      "speedLimit": 40.0,
-      "capacity": 80,
-      "currentVehicleCount": 8,
-      "congestionLevel": 0.05,
-      "vehicleDensity": 0.10,
-      "roadStatus": "OPEN"
+      "id":"R02","name":"Trần Hưng Đạo","physicalRoadId":"THD-01","startIntersectionId":"I2","endIntersectionId":"I1",
+      "distance":0.49,"speedLimit":40.0,"capacity":80,"currentVehicleCount":8,"laneCount":1,
+      "geometry":[{"longitude":106.69500,"latitude":10.76610},{"longitude":106.69075,"latitude":10.76490}],
+      "congestionLevel":0.05,"vehicleDensity":0.10,"roadStatus":"OPEN"
     },
     {
-      "id": "R03",
-      "startIntersectionId": "I2",
-      "endIntersectionId": "I3",
-      "distance": 2.2,
-      "speedLimit": 35.0,
-      "capacity": 60,
-      "currentVehicleCount": 36,
-      "congestionLevel": 0.55,
-      "vehicleDensity": 0.60,
-      "roadStatus": "CONGESTED"
+      "id":"R03","name":"Trần Hưng Đạo","physicalRoadId":"THD-02","startIntersectionId":"I2","endIntersectionId":"I3",
+      "distance":0.48,"speedLimit":35.0,"capacity":60,"currentVehicleCount":36,"laneCount":1,
+      "geometry":[{"longitude":106.69500,"latitude":10.76610},{"longitude":106.69920,"latitude":10.76735}],
+      "congestionLevel":0.55,"vehicleDensity":0.60,"roadStatus":"CONGESTED"
     },
     {
-      "id": "R04",
-      "startIntersectionId": "I3",
-      "endIntersectionId": "I2",
-      "distance": 2.2,
-      "speedLimit": 35.0,
-      "capacity": 60,
-      "currentVehicleCount": 30,
-      "congestionLevel": 0.45,
-      "vehicleDensity": 0.50,
-      "roadStatus": "CONGESTED"
+      "id":"R04","name":"Trần Hưng Đạo","physicalRoadId":"THD-02","startIntersectionId":"I3","endIntersectionId":"I2",
+      "distance":0.48,"speedLimit":35.0,"capacity":60,"currentVehicleCount":30,"laneCount":1,
+      "geometry":[{"longitude":106.69920,"latitude":10.76735},{"longitude":106.69500,"latitude":10.76610}],
+      "congestionLevel":0.45,"vehicleDensity":0.50,"roadStatus":"CONGESTED"
     },
     {
-      "id": "R05",
-      "startIntersectionId": "I4",
-      "endIntersectionId": "I5",
-      "distance": 2.0,
-      "speedLimit": 45.0,
-      "capacity": 90,
-      "currentVehicleCount": 15,
-      "congestionLevel": 0.10,
-      "vehicleDensity": 0.167,
-      "roadStatus": "OPEN"
+      "id":"R05","name":"Võ Văn Kiệt","physicalRoadId":"VVK-01","startIntersectionId":"I4","endIntersectionId":"I5",
+      "distance":0.49,"speedLimit":45.0,"capacity":90,"currentVehicleCount":15,"laneCount":1,
+      "geometry":[{"longitude":106.68980,"latitude":10.76110},{"longitude":106.69410,"latitude":10.76225}],
+      "congestionLevel":0.10,"vehicleDensity":0.167,"roadStatus":"OPEN"
     },
     {
-      "id": "R06",
-      "startIntersectionId": "I5",
-      "endIntersectionId": "I4",
-      "distance": 2.0,
-      "speedLimit": 45.0,
-      "capacity": 90,
-      "currentVehicleCount": 12,
-      "congestionLevel": 0.08,
-      "vehicleDensity": 0.133,
-      "roadStatus": "OPEN"
+      "id":"R06","name":"Võ Văn Kiệt","physicalRoadId":"VVK-01","startIntersectionId":"I5","endIntersectionId":"I4",
+      "distance":0.49,"speedLimit":45.0,"capacity":90,"currentVehicleCount":12,"laneCount":1,
+      "geometry":[{"longitude":106.69410,"latitude":10.76225},{"longitude":106.68980,"latitude":10.76110}],
+      "congestionLevel":0.08,"vehicleDensity":0.133,"roadStatus":"OPEN"
     },
     {
-      "id": "R07",
-      "startIntersectionId": "I5",
-      "endIntersectionId": "I6",
-      "distance": 2.3,
-      "speedLimit": 30.0,
-      "capacity": 50,
-      "currentVehicleCount": 35,
-      "congestionLevel": 0.65,
-      "vehicleDensity": 0.70,
-      "roadStatus": "CONGESTED"
+      "id":"R07","name":"Võ Văn Kiệt","physicalRoadId":"VVK-02","startIntersectionId":"I5","endIntersectionId":"I6",
+      "distance":0.48,"speedLimit":30.0,"capacity":50,"currentVehicleCount":35,"laneCount":1,
+      "geometry":[{"longitude":106.69410,"latitude":10.76225},{"longitude":106.69835,"latitude":10.76345}],
+      "congestionLevel":0.65,"vehicleDensity":0.70,"roadStatus":"CONGESTED"
     },
     {
-      "id": "R08",
-      "startIntersectionId": "I6",
-      "endIntersectionId": "I5",
-      "distance": 2.3,
-      "speedLimit": 30.0,
-      "capacity": 50,
-      "currentVehicleCount": 30,
-      "congestionLevel": 0.55,
-      "vehicleDensity": 0.60,
-      "roadStatus": "CONGESTED"
+      "id":"R08","name":"Võ Văn Kiệt","physicalRoadId":"VVK-02","startIntersectionId":"I6","endIntersectionId":"I5",
+      "distance":0.48,"speedLimit":30.0,"capacity":50,"currentVehicleCount":30,"laneCount":1,
+      "geometry":[{"longitude":106.69835,"latitude":10.76345},{"longitude":106.69410,"latitude":10.76225}],
+      "congestionLevel":0.55,"vehicleDensity":0.60,"roadStatus":"CONGESTED"
     },
     {
-      "id": "R09",
-      "startIntersectionId": "I1",
-      "endIntersectionId": "I4",
-      "distance": 2.0,
-      "speedLimit": 50.0,
-      "capacity": 100,
-      "currentVehicleCount": 10,
-      "congestionLevel": 0.05,
-      "vehicleDensity": 0.10,
-      "roadStatus": "OPEN"
+      "id":"R09","name":"Nguyễn Thái Học","physicalRoadId":"NTH-01","startIntersectionId":"I1","endIntersectionId":"I4",
+      "distance":0.43,"speedLimit":50.0,"capacity":100,"currentVehicleCount":10,"laneCount":1,
+      "geometry":[{"longitude":106.69075,"latitude":10.76490},{"longitude":106.68980,"latitude":10.76110}],
+      "congestionLevel":0.05,"vehicleDensity":0.10,"roadStatus":"OPEN"
     },
     {
-      "id": "R10",
-      "startIntersectionId": "I4",
-      "endIntersectionId": "I1",
-      "distance": 2.0,
-      "speedLimit": 50.0,
-      "capacity": 100,
-      "currentVehicleCount": 8,
-      "congestionLevel": 0.04,
-      "vehicleDensity": 0.08,
-      "roadStatus": "OPEN"
+      "id":"R10","name":"Nguyễn Thái Học","physicalRoadId":"NTH-01","startIntersectionId":"I4","endIntersectionId":"I1",
+      "distance":0.43,"speedLimit":50.0,"capacity":100,"currentVehicleCount":8,"laneCount":1,
+      "geometry":[{"longitude":106.68980,"latitude":10.76110},{"longitude":106.69075,"latitude":10.76490}],
+      "congestionLevel":0.04,"vehicleDensity":0.08,"roadStatus":"OPEN"
     },
     {
-      "id": "R11",
-      "startIntersectionId": "I2",
-      "endIntersectionId": "I5",
-      "distance": 2.0,
-      "speedLimit": 40.0,
-      "capacity": 70,
-      "currentVehicleCount": 14,
-      "congestionLevel": 0.15,
-      "vehicleDensity": 0.20,
-      "roadStatus": "OPEN"
+      "id":"R11","name":"Yersin","physicalRoadId":"YER-01","startIntersectionId":"I2","endIntersectionId":"I5",
+      "distance":0.44,"speedLimit":40.0,"capacity":70,"currentVehicleCount":14,"laneCount":1,
+      "geometry":[{"longitude":106.69500,"latitude":10.76610},{"longitude":106.69410,"latitude":10.76225}],
+      "congestionLevel":0.15,"vehicleDensity":0.20,"roadStatus":"OPEN"
     },
     {
-      "id": "R12",
-      "startIntersectionId": "I5",
-      "endIntersectionId": "I2",
-      "distance": 2.0,
-      "speedLimit": 40.0,
-      "capacity": 70,
-      "currentVehicleCount": 12,
-      "congestionLevel": 0.12,
-      "vehicleDensity": 0.171,
-      "roadStatus": "OPEN"
+      "id":"R12","name":"Yersin","physicalRoadId":"YER-01","startIntersectionId":"I5","endIntersectionId":"I2",
+      "distance":0.44,"speedLimit":40.0,"capacity":70,"currentVehicleCount":12,"laneCount":1,
+      "geometry":[{"longitude":106.69410,"latitude":10.76225},{"longitude":106.69500,"latitude":10.76610}],
+      "congestionLevel":0.12,"vehicleDensity":0.171,"roadStatus":"OPEN"
     },
     {
-      "id": "R13",
-      "startIntersectionId": "I3",
-      "endIntersectionId": "I6",
-      "distance": 2.0,
-      "speedLimit": 45.0,
-      "capacity": 80,
-      "currentVehicleCount": 8,
-      "congestionLevel": 0.05,
-      "vehicleDensity": 0.10,
-      "roadStatus": "OPEN"
+      "id":"R13","name":"Ký Con","physicalRoadId":"KYC-01","startIntersectionId":"I3","endIntersectionId":"I6",
+      "distance":0.44,"speedLimit":45.0,"capacity":80,"currentVehicleCount":8,"laneCount":1,
+      "geometry":[{"longitude":106.69920,"latitude":10.76735},{"longitude":106.69835,"latitude":10.76345}],
+      "congestionLevel":0.05,"vehicleDensity":0.10,"roadStatus":"OPEN"
     },
     {
-      "id": "R14",
-      "startIntersectionId": "I6",
-      "endIntersectionId": "I3",
-      "distance": 2.0,
-      "speedLimit": 45.0,
-      "capacity": 80,
-      "currentVehicleCount": 10,
-      "congestionLevel": 0.08,
-      "vehicleDensity": 0.125,
-      "roadStatus": "OPEN"
+      "id":"R14","name":"Ký Con","physicalRoadId":"KYC-01","startIntersectionId":"I6","endIntersectionId":"I3",
+      "distance":0.44,"speedLimit":45.0,"capacity":80,"currentVehicleCount":10,"laneCount":1,
+      "geometry":[{"longitude":106.69835,"latitude":10.76345},{"longitude":106.69920,"latitude":10.76735}],
+      "congestionLevel":0.08,"vehicleDensity":0.125,"roadStatus":"OPEN"
     },
     {
-      "id": "R15",
-      "startIntersectionId": "I1",
-      "endIntersectionId": "I5",
-      "distance": 2.8,
-      "speedLimit": 60.0,
-      "capacity": 50,
-      "currentVehicleCount": 5,
-      "congestionLevel": 0.05,
-      "vehicleDensity": 0.10,
-      "roadStatus": "OPEN"
+      "id":"R15","name":"Cô Giang","physicalRoadId":"CG-01","startIntersectionId":"I1","endIntersectionId":"I5",
+      "distance":0.53,"speedLimit":60.0,"capacity":50,"currentVehicleCount":5,"laneCount":1,
+      "geometry":[{"longitude":106.69075,"latitude":10.76490},{"longitude":106.69250,"latitude":10.76355},{"longitude":106.69410,"latitude":10.76225}],
+      "congestionLevel":0.05,"vehicleDensity":0.10,"roadStatus":"OPEN"
     },
     {
-      "id": "R16",
-      "startIntersectionId": "I5",
-      "endIntersectionId": "I1",
-      "distance": 2.8,
-      "speedLimit": 60.0,
-      "capacity": 50,
-      "currentVehicleCount": 6,
-      "congestionLevel": 0.06,
-      "vehicleDensity": 0.12,
-      "roadStatus": "OPEN"
+      "id":"R16","name":"Cô Giang","physicalRoadId":"CG-01","startIntersectionId":"I5","endIntersectionId":"I1",
+      "distance":0.53,"speedLimit":60.0,"capacity":50,"currentVehicleCount":6,"laneCount":1,
+      "geometry":[{"longitude":106.69410,"latitude":10.76225},{"longitude":106.69250,"latitude":10.76355},{"longitude":106.69075,"latitude":10.76490}],
+      "congestionLevel":0.06,"vehicleDensity":0.12,"roadStatus":"OPEN"
     },
     {
-      "id": "R17",
-      "startIntersectionId": "I2",
-      "endIntersectionId": "I6",
-      "distance": 3.0,
-      "speedLimit": 60.0,
-      "capacity": 40,
-      "currentVehicleCount": 0,
-      "congestionLevel": 1.0,
-      "vehicleDensity": 0.0,
-      "roadStatus": "BLOCKED"
+      "id":"R17","name":"Calmette","physicalRoadId":"CAL-01","startIntersectionId":"I2","endIntersectionId":"I6",
+      "distance":0.55,"speedLimit":60.0,"capacity":40,"currentVehicleCount":0,"laneCount":1,
+      "geometry":[{"longitude":106.69500,"latitude":10.76610},{"longitude":106.69670,"latitude":10.76475},{"longitude":106.69835,"latitude":10.76345}],
+      "congestionLevel":1.0,"vehicleDensity":0.0,"roadStatus":"BLOCKED"
     }
   ]
 }

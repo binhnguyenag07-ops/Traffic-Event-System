@@ -10,6 +10,7 @@ import java.util.List;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
+import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
@@ -67,29 +68,31 @@ public class MapSaver {
     static class IntersectionData {
         public String id;
         public String name;
-        public double x;
-        public double y;
-        public String locationType;
+        public double longitude;
+        public double latitude;
 
         static IntersectionData from(Intersection intersection) {
             IntersectionData data = new IntersectionData();
             data.id = intersection.getId();
             data.name = intersection.getName();
-            data.x = intersection.getX();
-            data.y = intersection.getY();
-            data.locationType = intersection.getLocationType().name();
+            data.longitude = intersection.getLongitude();
+            data.latitude = intersection.getLatitude();
             return data;
         }
     }
 
     static class RoadData {
         public String id;
+        public String name;
+        public String physicalRoadId;
         public String startIntersectionId;
         public String endIntersectionId;
         public double distance;
         public double speedLimit;
         public int capacity;
         public int currentVehicleCount;
+        public int laneCount;
+        public List<GeoPoint> geometry;
         public double congestionLevel;
         public double vehicleDensity;
         public RoadStatus roadStatus;
@@ -98,12 +101,16 @@ public class MapSaver {
             RoadCondition condition = road.getCondition();
             RoadData data = new RoadData();
             data.id = road.getId();
+            data.name = road.getName();
+            data.physicalRoadId = road.getPhysicalRoadId();
             data.startIntersectionId = road.getStartIntersectionId();
             data.endIntersectionId = road.getEndIntersectionId();
             data.distance = road.getDistance();
             data.speedLimit = road.getSpeedLimit();
             data.capacity = road.getCapacity();
             data.currentVehicleCount = road.getCurrentVehicleCount();
+            data.laneCount = road.getLaneCount();
+            data.geometry = road.getGeometry();
             data.congestionLevel = condition.getCongestionLevel();
             data.vehicleDensity = condition.getVehicleDensity();
             data.roadStatus = condition.getRoadStatus();

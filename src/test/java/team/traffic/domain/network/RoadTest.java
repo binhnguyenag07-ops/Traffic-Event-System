@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.data.Offset.offset;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 class RoadTest {
@@ -37,6 +39,23 @@ class RoadTest {
 
         assertThat(road.getFreeFlowTravelTimeHours()).isEqualTo(0.2);
         assertThat(road.getFreeFlowTravelTime()).isEqualTo(0.2);
+        assertThat(road.getFreeFlowTravelTimeSeconds()).isEqualTo(720);
+    }
+
+    @Test
+    void exposesImmutableGeometryAndPhysicalRoadMetadata() {
+        Road road = new Road(
+                "R1", "Trần Hưng Đạo", "THD-01", "I1", "I2",
+                0.5, 50, 100, 0, 1,
+                List.of(new GeoPoint(106.69, 10.76), new GeoPoint(106.70, 10.77)),
+                new RoadCondition(0, 0, RoadStatus.OPEN));
+
+        assertThat(road.getName()).isEqualTo("Trần Hưng Đạo");
+        assertThat(road.getPhysicalRoadId()).isEqualTo("THD-01");
+        assertThat(road.getLaneCount()).isOne();
+        assertThat(road.hasGeometry()).isTrue();
+        assertThatThrownBy(() -> road.getGeometry().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test

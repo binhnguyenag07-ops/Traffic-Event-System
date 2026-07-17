@@ -2,45 +2,39 @@
   "intersections": [
     {
       "id": "I1",
-      "name": "Campus Gate",
+      "name": "Trần Hưng Đạo - Nguyễn Thái Học",
       "x": 0.0,
-      "y": 0.0,
-      "locationType": "NORMAL"
+      "y": 0.0
     },
     {
       "id": "I2",
-      "name": "School Junction",
+      "name": "Trần Hưng Đạo - Yersin",
       "x": 2.0,
-      "y": 0.0,
-      "locationType": "SCHOOL"
+      "y": 0.0
     },
     {
       "id": "I3",
-      "name": "Central Market",
+      "name": "Trần Hưng Đạo - Ký Con",
       "x": 4.0,
-      "y": 0.0,
-      "locationType": "COMMERCIAL"
+      "y": 0.0
     },
     {
       "id": "I4",
-      "name": "Riverside Homes",
+      "name": "Võ Văn Kiệt - Nguyễn Thái Học",
       "x": 0.0,
-      "y": 2.0,
-      "locationType": "RESIDENTIAL"
+      "y": 2.0
     },
     {
       "id": "I5",
-      "name": "General Hospital",
+      "name": "Võ Văn Kiệt - Yersin",
       "x": 2.0,
-      "y": 2.0,
-      "locationType": "HOSPITAL"
+      "y": 2.0
     },
     {
       "id": "I6",
-      "name": "Night District",
+      "name": "Võ Văn Kiệt - Ký Con",
       "x": 4.0,
-      "y": 2.0,
-      "locationType": "BAR"
+      "y": 2.0
     }
   ],
   "roads": [
