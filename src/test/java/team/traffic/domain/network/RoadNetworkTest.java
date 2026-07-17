@@ -191,6 +191,36 @@ class RoadNetworkTest {
     }
 
     @Test
+    void groupsDirectedLanesByPhysicalRoadId() {
+        Road firstDirection = new Road(
+                "R1", "Road A", "ROAD-A-01", "I1", "I2", 1, 50, 100, 0, 1,
+                List.of(), new RoadCondition(0, 0, RoadStatus.OPEN));
+        Road oppositeDirection = new Road(
+                "R2", "Road A", "ROAD-A-01", "I2", "I1", 1, 50, 100, 0, 1,
+                List.of(), new RoadCondition(0, 0, RoadStatus.OPEN));
+        roadNetwork.addRoad(firstDirection);
+        roadNetwork.addRoad(oppositeDirection);
+
+        assertThat(roadNetwork.findRoadsByPhysicalRoadId("ROAD-A-01"))
+                .containsExactly(firstDirection, oppositeDirection);
+    }
+
+    @Test
+    void rejectsGeometryThatDoesNotConnectItsDeclaredIntersections() {
+        RoadNetwork geographicNetwork = new RoadNetwork();
+        geographicNetwork.addIntersection(new Intersection("I1", "A - B", 106.69, 10.76));
+        geographicNetwork.addIntersection(new Intersection("I2", "B - C", 106.70, 10.77));
+        Road disconnected = new Road(
+                "R1", "Road B", "ROAD-B-01", "I1", "I2", 1, 50, 100, 0, 1,
+                List.of(new GeoPoint(0, 0), new GeoPoint(106.70, 10.77)),
+                new RoadCondition(0, 0, RoadStatus.OPEN));
+
+        assertThatThrownBy(() -> geographicNetwork.addRoad(disconnected))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Road geometry must start at intersection: I1");
+    }
+
+    @Test
     void filtersRoadsAndCountsEveryRoadStatusForVisualizationConsumers() {
         Road openRoad = road("R1", "I1", "I2", 5);
         Road congestedRoad = road("R2", "I2", "I1", 5);
@@ -239,7 +269,7 @@ class RoadNetworkTest {
     }
 
     private Intersection intersection(String id, String name) {
-        return new Intersection(id, name, 0, 0, LocationType.NORMAL);
+        return new Intersection(id, name, 0, 0);
     }
 
     private Road road(String id, double distance) {

@@ -25,7 +25,7 @@ class JsonMapLoaderTest {
 
         assertThat(network.getIntersectionCount()).isEqualTo(3);
         assertThat(network.getRoadCount()).isEqualTo(3);
-        assertThat(network.getIntersection("I2").getName()).isEqualTo("Library Junction");
+        assertThat(network.getIntersection("I2").getName()).isEqualTo("Trần Hưng Đạo - Yersin");
     }
 
     @Test
@@ -42,7 +42,7 @@ class JsonMapLoaderTest {
         assertThatThrownBy(() -> loader.load(file.toString()))
                 .isInstanceOf(InvalidMapException.class)
                 .hasMessageContaining("Invalid JSON intersection at index 0")
-                .hasMessageContaining("Required field is missing: x");
+                .hasMessageContaining("Required field is missing: longitude (or legacy x)");
     }
 
     @Test
@@ -137,19 +137,32 @@ class JsonMapLoaderTest {
     }
 
     @Test
-    void rejectsUnknownEnumValueAsInvalidJsonMap() throws IOException {
+    void ignoresLegacyLocationTypeAndLoadsModernGeographicFields() throws IOException {
         Path file = writeJson("""
                 {
                   "intersections": [
-                    {"id":"I1","name":"First","x":0,"y":0,"locationType":"SPACEPORT"}
+                    {"id":"I1","name":"Road A - Road B","longitude":106.69,"latitude":10.76,"locationType":"SPACEPORT"},
+                    {"id":"I2","name":"Road B - Road C","longitude":106.70,"latitude":10.77}
                   ],
-                  "roads": []
+                  "roads": [{
+                    "id":"R1","name":"Road B","physicalRoadId":"ROAD-B-01",
+                    "startIntersectionId":"I1","endIntersectionId":"I2",
+                    "distance":1,"speedLimit":50,"capacity":100,"currentVehicleCount":0,
+                    "laneCount":1,
+                    "geometry":[
+                      {"longitude":106.69,"latitude":10.76},
+                      {"longitude":106.70,"latitude":10.77}
+                    ],
+                    "congestionLevel":0,"vehicleDensity":0,"roadStatus":"OPEN"
+                  }]
                 }
                 """);
 
-        assertThatThrownBy(() -> loader.load(file.toString()))
-                .isInstanceOf(InvalidMapException.class)
-                .hasMessageContaining("Invalid JSON map");
+        RoadNetwork network = loader.load(file.toString());
+
+        assertThat(network.getIntersection("I1").getLongitude()).isEqualTo(106.69);
+        assertThat(network.getRoad("R1").getPhysicalRoadId()).isEqualTo("ROAD-B-01");
+        assertThat(network.getRoad("R1").getGeometry()).hasSize(2);
     }
 
     @Test
