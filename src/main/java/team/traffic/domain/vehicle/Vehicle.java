@@ -5,8 +5,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.HashSet;
 import java.util.Set;
+import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.routing.Route;
@@ -14,9 +16,23 @@ import team.traffic.domain.routing.RoutePreference;
 import team.traffic.domain.routing.RouteRequest;
 import team.traffic.domain.routing.RouteResult;
 import team.traffic.domain.routing.RouteStep;
+import team.traffic.domain.vehicle.dynamics.CarFollowingModel;
+import team.traffic.domain.vehicle.dynamics.DriverProfile;
+import team.traffic.domain.vehicle.dynamics.FollowContext;
+import team.traffic.domain.vehicle.dynamics.JunctionApproach;
+import team.traffic.domain.vehicle.dynamics.KraussCarFollowingModel;
+import team.traffic.domain.vehicle.dynamics.LaneOccupancy;
+import team.traffic.domain.vehicle.dynamics.LeaderGap;
+import team.traffic.domain.vehicle.dynamics.TrafficState;
+import team.traffic.domain.vehicle.dynamics.TurnDirection;
 import team.traffic.service.RoutingService;
 
 public abstract class Vehicle {
+    /** Conversion factor between kilometres per hour and metres per second. */
+    private static final double KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND = 3.6;
+    /** Below this speed a vehicle is reported as queueing rather than moving. */
+    private static final double QUEUEING_THRESHOLD_MPS = 0.2;
+
     private final String id;
     private String currentIntersectionId;
     private final String destinationIntersectionId;
@@ -45,6 +61,12 @@ public abstract class Vehicle {
     private long waitingTicks;
     private int routeRecalculationCount;
     private String lastRoutingAlgorithm;
+    private DriverProfile driverProfile;
+    private CarFollowingModel carFollowingModel;
+    private double instantaneousSpeedMps;
+    private String plannedRoadId;
+    private double plannedTravelMetres;
+    private boolean plannedMayLeaveRoad;
 
     protected Vehicle(String id, String currentIntersectionId, String destinationIntersectionId, double movementSpeed) {
         this(
@@ -109,6 +131,8 @@ public abstract class Vehicle {
         this.travelHistory = new ArrayList<>();
         this.travelHistory.add(currentIntersectionId);
         this.completedTrafficLightEvents = new HashSet<>();
+        this.carFollowingModel = new KraussCarFollowingModel();
+        this.instantaneousSpeedMps = currentSpeed / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
     }
 
     public abstract VehicleType getType();
@@ -254,6 +278,271 @@ public abstract class Vehicle {
             } else if (nextRouteStepIndex >= currentRoute.getStepCount()) {
                 status = VehicleStatus.BLOCKED;
             }
+        }
+    }
+
+    /**
+     * Advances this vehicle using the microscopic traffic model.
+     *
+     * <p>Where {@link #advance(RoadNetwork, double)} treats a road as a pipe
+     * whose throughput is scaled by an aggregate congestion number, this
+     * overload places the vehicle among the others physically on the road. It
+     * keeps a safe distance from the vehicle in front, brakes for a junction it
+     * has not been cleared to cross, and holds at the stop line when the road
+     * ahead has no room left. Queues, spillback, and the throughput drop of a
+     * saturated road therefore emerge from the interaction of vehicles instead
+     * of being imposed by a formula.</p>
+     *
+     * <p>Junction clearance must already have been decided for this step, so
+     * call {@link TrafficState#resolveJunctions()} first. {@link
+     * team.traffic.simulation.VehicleDynamicsEngine} performs the whole
+     * sequence in the right order.</p>
+     */
+    public void advance(RoadNetwork roadNetwork, TrafficState trafficState, double simulationSeconds) {
+        planMovement(roadNetwork, trafficState, simulationSeconds);
+        commitMovement(roadNetwork, trafficState);
+    }
+
+    /**
+     * First half of a step: decides how fast to go and how far to travel,
+     * without moving. Every vehicle plans against the same unmoved picture of
+     * the road, so a vehicle's progress does not depend on whether its leader
+     * happens to sit earlier or later in the vehicle list.
+     *
+     * <p>Entering a road is part of planning rather than moving, because the
+     * junction has already ensured that at most one vehicle is cleared onto any
+     * given road this step.</p>
+     */
+    public void planMovement(RoadNetwork roadNetwork, TrafficState trafficState, double simulationSeconds) {
+        Objects.requireNonNull(roadNetwork, "Road network must not be null.");
+        Objects.requireNonNull(trafficState, "Traffic state must not be null.");
+        if (!Double.isFinite(simulationSeconds) || simulationSeconds <= 0) {
+            throw new IllegalArgumentException("Simulation seconds must be positive.");
+        }
+
+        plannedRoadId = null;
+
+        if (hasReachedDestination()) {
+            releaseOccupiedRoad(roadNetwork, trafficState);
+            instantaneousSpeedMps = 0;
+            status = VehicleStatus.ARRIVED;
+            return;
+        }
+
+        RouteStep step = getNextRouteStep();
+        if (step == null || !step.getFromIntersectionId().equals(currentIntersectionId)) {
+            releaseOccupiedRoad(roadNetwork, trafficState);
+            instantaneousSpeedMps = 0;
+            status = VehicleStatus.BLOCKED;
+            return;
+        }
+
+        Road road = roadNetwork.getRoad(step.getRoadId());
+        if (road == null) {
+            releaseOccupiedRoad(roadNetwork, trafficState);
+            instantaneousSpeedMps = 0;
+            status = VehicleStatus.BLOCKED;
+            return;
+        }
+
+        if (occupiedRoadId == null && !enterRoadUnderJunctionControl(roadNetwork, trafficState, step, road)) {
+            return;
+        }
+
+        LaneOccupancy lane = trafficState.occupancyOf(road.getId());
+        LeaderGap leaderGap = lane == null ? LeaderGap.FREE_ROAD : lane.findLeaderFor(this);
+        double distanceToExitMetres = lane == null
+                ? (1.0 - roadProgress) * road.getDistance() * 1_000.0
+                : lane.distanceToExitMetres(this);
+
+        plannedMayLeaveRoad = canLeaveRoadAhead(roadNetwork, trafficState);
+        double stopDistanceMetres = plannedMayLeaveRoad ? Double.POSITIVE_INFINITY : distanceToExitMetres;
+
+        instantaneousSpeedMps = getCarFollowingModel().nextSpeedMps(new FollowContext(
+                instantaneousSpeedMps,
+                desiredSpeedMps(road),
+                acceleration,
+                deceleration,
+                getDriverProfile(),
+                leaderGap,
+                stopDistanceMetres,
+                simulationSeconds,
+                reproducibleNoise(trafficState.getTick())));
+
+        plannedTravelMetres = Math.min(instantaneousSpeedMps * simulationSeconds, distanceToExitMetres);
+        plannedRoadId = road.getId();
+    }
+
+    /**
+     * Second half of a step: applies the movement worked out by
+     * {@link #planMovement}, and hands the vehicle over to the next road when
+     * it runs off the end of this one.
+     */
+    public void commitMovement(RoadNetwork roadNetwork, TrafficState trafficState) {
+        Objects.requireNonNull(roadNetwork, "Road network must not be null.");
+        if (plannedRoadId == null) {
+            return;
+        }
+
+        Road road = roadNetwork.getRoad(plannedRoadId);
+        RouteStep step = getNextRouteStep();
+        plannedRoadId = null;
+        if (road == null || step == null) {
+            return;
+        }
+
+        double previousProgress = roadProgress;
+        roadProgress = Math.min(1.0, roadProgress + plannedTravelMetres / (road.getDistance() * 1_000.0));
+        distanceTravelledKm += (roadProgress - previousProgress) * road.getDistance();
+
+        if (instantaneousSpeedMps < QUEUEING_THRESHOLD_MPS) {
+            waitingTicks++;
+            status = VehicleStatus.WAITING;
+        } else {
+            status = VehicleStatus.MOVING;
+        }
+
+        if (roadProgress >= 1.0 && plannedMayLeaveRoad) {
+            nextRouteStepIndex++;
+            moveTo(step.getToIntersectionId());
+            releaseOccupiedRoad(roadNetwork, trafficState);
+            if (hasReachedDestination()) {
+                instantaneousSpeedMps = 0;
+                status = VehicleStatus.ARRIVED;
+            } else if (nextRouteStepIndex >= currentRoute.getStepCount()) {
+                instantaneousSpeedMps = 0;
+                status = VehicleStatus.BLOCKED;
+            }
+        }
+    }
+
+    /**
+     * Describes this vehicle's intention to cross the junction it is standing
+     * at, so the junction can rank it against the others waiting there. Returns
+     * an empty result for a vehicle that is already on a road or has nowhere to
+     * go.
+     */
+    public Optional<JunctionApproach> planJunctionApproach(RoadNetwork roadNetwork, TrafficState trafficState) {
+        Objects.requireNonNull(roadNetwork, "Road network must not be null.");
+        if (occupiedRoadId != null || hasReachedDestination()) {
+            return Optional.empty();
+        }
+
+        RouteStep step = getNextRouteStep();
+        if (step == null || !step.getFromIntersectionId().equals(currentIntersectionId)) {
+            return Optional.empty();
+        }
+
+        Road targetRoad = roadNetwork.getRoad(step.getRoadId());
+        if (targetRoad == null || !targetRoad.isAvailable()) {
+            return Optional.empty();
+        }
+
+        RouteStep previousStep = nextRouteStepIndex > 0
+                ? currentRoute.getSteps().get(nextRouteStepIndex - 1)
+                : null;
+        Road approachRoad = previousStep == null ? null : roadNetwork.getRoad(previousStep.getRoadId());
+        Intersection origin = previousStep == null
+                ? null
+                : roadNetwork.getIntersection(previousStep.getFromIntersectionId());
+        TurnDirection turnDirection = TurnDirection.of(
+                origin,
+                roadNetwork.getIntersection(currentIntersectionId),
+                roadNetwork.getIntersection(step.getToIntersectionId()));
+
+        return Optional.of(new JunctionApproach(
+                this,
+                currentIntersectionId,
+                approachRoad,
+                targetRoad,
+                turnDirection,
+                0.0,
+                waitingTicks));
+    }
+
+    /**
+     * Speed this driver would hold on an empty road, in metres per second.
+     *
+     * <p>Takes the lower of the vehicle's own maximum and the posted limit,
+     * adjusts it by the driver's habitual speed factor, and slows it down for
+     * congestion imposed by traffic events. Vehicle density is deliberately
+     * left out: under the microscopic model, crowding already shows up as the
+     * vehicle in front being close.</p>
+     */
+    private double desiredSpeedMps(Road road) {
+        double postedKph = Math.min(maxSpeed, road.getSpeedLimit()) * getDriverProfile().speedFactor();
+        double eventSlowdown = 1.0 + road.getCondition().getCongestionLevel();
+        return postedKph / eventSlowdown / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
+    }
+
+    /**
+     * Takes the vehicle onto its next road if the junction has cleared it and
+     * the road physically has room. Returns false when it must keep waiting.
+     */
+    private boolean enterRoadUnderJunctionControl(
+            RoadNetwork roadNetwork,
+            TrafficState trafficState,
+            RouteStep step,
+            Road road) {
+        if (!isStepAvailable(roadNetwork, step)) {
+            instantaneousSpeedMps = 0;
+            status = VehicleStatus.BLOCKED;
+            return false;
+        }
+        if (!trafficState.isCleared(id)) {
+            instantaneousSpeedMps = 0;
+            waitingTicks++;
+            status = VehicleStatus.WAITING;
+            return false;
+        }
+
+        enterNextRoad(roadNetwork, step);
+        roadStartIntersectionId = step.getFromIntersectionId();
+        roadEndIntersectionId = step.getToIntersectionId();
+        roadProgress = 0.0;
+        trafficState.invalidateOccupancy(road.getId());
+        return true;
+    }
+
+    /**
+     * Whether the vehicle may run off the end of its current road. It may when
+     * this road takes it to its destination, and otherwise only when the next
+     * road still has physical room for it. Refusing otherwise is what makes a
+     * queue back up through the junction into the road behind.
+     */
+    private boolean canLeaveRoadAhead(RoadNetwork roadNetwork, TrafficState trafficState) {
+        if (currentRoute == null || nextRouteStepIndex + 1 >= currentRoute.getStepCount()) {
+            return true;
+        }
+
+        RouteStep followingStep = currentRoute.getSteps().get(nextRouteStepIndex + 1);
+        Road followingRoad = roadNetwork.getRoad(followingStep.getRoadId());
+        if (followingRoad == null || !followingRoad.isAvailable()) {
+            return false;
+        }
+
+        LaneOccupancy followingLane = trafficState.occupancyOf(followingRoad.getId());
+        return followingLane == null || followingLane.canAdmit(this);
+    }
+
+    /**
+     * Reproducible substitute for a random draw. The same vehicle at the same
+     * tick always yields the same value, so driver imperfection never makes an
+     * experiment unrepeatable or dependent on the order of the vehicle list.
+     */
+    private double reproducibleNoise(long tick) {
+        long mixed = id.hashCode() * 0x9E3779B97F4A7C15L + tick;
+        mixed ^= (mixed >>> 33);
+        mixed *= 0xFF51AFD7ED558CCDL;
+        mixed ^= (mixed >>> 33);
+        return (mixed >>> 11) * 0x1.0p-53;
+    }
+
+    private void releaseOccupiedRoad(RoadNetwork roadNetwork, TrafficState trafficState) {
+        String releasedRoadId = occupiedRoadId;
+        releaseOccupiedRoad(roadNetwork);
+        if (trafficState != null) {
+            trafficState.invalidateOccupancy(releasedRoadId);
         }
     }
 
@@ -473,6 +762,63 @@ public abstract class Vehicle {
      */
     public int getPriorityLevel() {
         return priorityLevel;
+    }
+
+    /**
+     * Behaviour parameters of this vehicle's driver. Defaults to the profile
+     * for its type and can be replaced to model a specific driver.
+     */
+    public DriverProfile getDriverProfile() {
+        if (driverProfile == null) {
+            driverProfile = DriverProfile.forType(getType());
+        }
+        return driverProfile;
+    }
+
+    public void setDriverProfile(DriverProfile driverProfile) {
+        if (driverProfile == null) {
+            throw new IllegalArgumentException("Driver profile is required.");
+        }
+        this.driverProfile = driverProfile;
+    }
+
+    /**
+     * Model this driver uses to choose a speed behind another vehicle.
+     * Defaults to {@link KraussCarFollowingModel}.
+     */
+    public CarFollowingModel getCarFollowingModel() {
+        return carFollowingModel;
+    }
+
+    public void setCarFollowingModel(CarFollowingModel carFollowingModel) {
+        if (carFollowingModel == null) {
+            throw new IllegalArgumentException("Car-following model is required.");
+        }
+        this.carFollowingModel = carFollowingModel;
+    }
+
+    /**
+     * Speed the vehicle is actually travelling at right now, in metres per
+     * second, as chosen by the car-following model.
+     *
+     * <p>This is distinct from {@link #getCurrentSpeed()}, which is the speed
+     * the driver would like to hold. The two differ exactly when traffic is
+     * getting in the way, so their ratio is a direct measure of delay.</p>
+     */
+    public double getInstantaneousSpeedMps() {
+        return instantaneousSpeedMps;
+    }
+
+    /** Actual travelling speed in kilometres per hour. */
+    public double getInstantaneousSpeedKph() {
+        return instantaneousSpeedMps * KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
+    }
+
+    public void setInstantaneousSpeedMps(double instantaneousSpeedMps) {
+        if (!Double.isFinite(instantaneousSpeedMps) || instantaneousSpeedMps < 0) {
+            throw new IllegalArgumentException("Instantaneous speed must not be negative.");
+        }
+        this.instantaneousSpeedMps = instantaneousSpeedMps;
     }
 
     /**
