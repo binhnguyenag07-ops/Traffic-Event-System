@@ -122,8 +122,13 @@ public class TickProcessor {
         if (state == null) {
             return;
         }
-        for (Road road : network.getRoads().values()) {
-            road.getCondition().setVehicleDensity(state.physicalJamRatioOf(road.getId()));
+        // Empty roads already read zero from the road's own count, so only the
+        // occupied ones need republishing.
+        for (String roadId : state.getOccupiedRoadIds()) {
+            Road road = network.getRoad(roadId);
+            if (road != null) {
+                road.getCondition().setVehicleDensity(state.physicalJamRatioOf(roadId));
+            }
         }
     }
 
