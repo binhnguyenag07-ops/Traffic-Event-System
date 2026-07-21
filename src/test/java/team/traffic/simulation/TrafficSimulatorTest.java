@@ -245,6 +245,51 @@ class TrafficSimulatorTest {
         assertThat(simulator.getCompletedTrips()).isEmpty();
     }
 
+    // --- vehicle trace timeline ---
+
+    @Test
+    void everyTickIsRecordedInTheVehicleTrace() {
+        simulator.initialize(List.of(new VehicleConfig("car-1", "CAR", "A", "B")), List.of());
+        simulator.advanceTick();
+        simulator.advanceTick();
+
+        assertThat(simulator.getVehicleTraceSummary().recordedTickCount()).isEqualTo(3);
+        assertThat(simulator.getVehicleTrace("car-1", 0, 2))
+                .extracting(point -> point.tick())
+                .containsExactly(0L, 1L, 2L);
+        assertThat(simulator.hasVehicleTraceAtTick(2)).isTrue();
+        assertThat(simulator.getVehicleStatesAtTick(1))
+                .singleElement()
+                .satisfies(point -> assertThat(point.vehicleId()).isEqualTo("car-1"));
+    }
+
+    @Test
+    void resetStartsANewTraceAtTickZero() {
+        simulator.initialize(List.of(new VehicleConfig("car-1", "CAR", "A", "B")), List.of());
+        simulator.advanceTick();
+        simulator.advanceTick();
+
+        simulator.reset();
+
+        assertThat(simulator.getVehicleTraceSummary().firstTick()).isZero();
+        assertThat(simulator.getVehicleTraceSummary().lastTick()).isZero();
+        assertThat(simulator.getVehicleTraceSummary().recordedTickCount()).isEqualTo(1);
+        assertThat(simulator.getVehicleTrace("car-1", 0, 10))
+                .extracting(point -> point.tick())
+                .containsExactly(0L);
+    }
+
+    @Test
+    void aRecordedPointDoesNotChangeWhenTheVehicleMovesOn() {
+        simulator.initialize(List.of(new VehicleConfig("car-1", "CAR", "A", "B")), List.of());
+        simulator.advanceTick();
+
+        var atTickOne = simulator.getVehicleStateAtTick("car-1", 1).orElseThrow();
+        simulator.advanceTick();
+
+        assertThat(simulator.getVehicleStateAtTick("car-1", 1).orElseThrow()).isEqualTo(atTickOne);
+    }
+
     // --- validation ---
 
     @Test
