@@ -41,34 +41,24 @@ class VehicleServiceImplTest {
     }
 
     @Test
-    void updateAllVehiclesAdvancesRoadProgressAndUpdatesRoadDensity() {
+    void updateAllVehiclesRequestsRouteMovesVehicleAndUpdatesRoadDensity() {
         RoadNetwork network = createLinearNetwork();
         RoutingService routingService = createRoutingService();
         Vehicle vehicle = vehicleService.createVehicle(VehicleType.CAR, "A", "C", network);
 
         vehicleService.updateAllVehicles(network, routingService);
 
-        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("A");
+        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("B");
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.MOVING);
-        assertThat(vehicle.getCurrentRoadId()).isEqualTo("AB");
-        assertThat(vehicle.getRoadProgress()).isCloseTo(5.0 / 6.0, org.assertj.core.data.Offset.offset(0.000_001));
+        assertThat(vehicle.getOccupiedRoadId()).isEqualTo("AB");
         assertThat(network.getRoad("AB").getCurrentVehicleCount()).isEqualTo(1);
         assertThat(network.getRoad("AB").getCondition().getVehicleDensity()).isEqualTo(0.1);
 
         vehicleService.updateAllVehicles(network, routingService);
 
-        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("B");
-        assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.WAITING);
-        assertThat(vehicle.getCurrentRoadId()).isNull();
-        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
-
-        vehicleService.updateAllVehicles(network, routingService);
-        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("B");
-        assertThat(vehicle.getCurrentRoadId()).isEqualTo("BC");
-
-        vehicleService.updateAllVehicles(network, routingService);
         assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("C");
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.ARRIVED);
+        assertThat(vehicle.getOccupiedRoadId()).isNull();
         assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
         assertThat(network.getRoad("BC").getCurrentVehicleCount()).isZero();
     }
@@ -90,9 +80,8 @@ class VehicleServiceImplTest {
         vehicleService.updateAllVehicles(network, routingService);
 
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.MOVING);
-        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("A");
-        assertThat(vehicle.getCurrentRoadId()).isEqualTo("AD");
-        assertThat(vehicle.getRoadProgress()).isCloseTo(5.0 / 6.0, org.assertj.core.data.Offset.offset(0.000_001));
+        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("D");
+        assertThat(vehicle.getOccupiedRoadId()).isEqualTo("AD");
         assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
         assertThat(network.getRoad("AD").getCurrentVehicleCount()).isEqualTo(1);
     }

@@ -71,7 +71,6 @@ public class RoadNetwork {
         if (!intersections.containsKey(road.getEndIntersectionId())) {
             throw new IllegalArgumentException("End intersection does not exist: " + road.getEndIntersectionId());
         }
-        validateRoadGeometry(road);
         roads.put(road.getId(), road);
         outgoingRoads.get(road.getStartIntersectionId()).add(road);
         incomingRoads.get(road.getEndIntersectionId()).add(road);
@@ -107,21 +106,6 @@ public class RoadNetwork {
             neighbors.add(intersections.get(road.getEndIntersectionId()));
         }
         return List.copyOf(neighbors);
-    }
-
-    /** Returns both directed sides (when present) of one physical road segment. */
-    public List<Road> findRoadsByPhysicalRoadId(String physicalRoadId) {
-        if (physicalRoadId == null || physicalRoadId.isBlank()) {
-            throw new IllegalArgumentException("Physical road id is required");
-        }
-
-        List<Road> matchingRoads = new ArrayList<>();
-        for (Road road : roads.values()) {
-            if (physicalRoadId.equals(road.getPhysicalRoadId())) {
-                matchingRoads.add(road);
-            }
-        }
-        return List.copyOf(matchingRoads);
     }
 
     // Replaces the current condition of one road.
@@ -263,28 +247,5 @@ public class RoadNetwork {
         if (!Double.isFinite(minimumDensity) || minimumDensity < 0 || minimumDensity > 1) {
             throw new IllegalArgumentException("Minimum density must be finite and between 0 and 1");
         }
-    }
-
-    private void validateRoadGeometry(Road road) {
-        if (!road.hasGeometry()) {
-            return;
-        }
-
-        Intersection start = intersections.get(road.getStartIntersectionId());
-        Intersection end = intersections.get(road.getEndIntersectionId());
-        GeoPoint firstPoint = road.getGeometry().get(0);
-        GeoPoint lastPoint = road.getGeometry().get(road.getGeometry().size() - 1);
-        if (!matches(firstPoint, start)) {
-            throw new IllegalArgumentException("Road geometry must start at intersection: " + start.getId());
-        }
-        if (!matches(lastPoint, end)) {
-            throw new IllegalArgumentException("Road geometry must end at intersection: " + end.getId());
-        }
-    }
-
-    private boolean matches(GeoPoint point, Intersection intersection) {
-        double tolerance = 0.000001;
-        return Math.abs(point.longitude() - intersection.getLongitude()) <= tolerance
-                && Math.abs(point.latitude() - intersection.getLatitude()) <= tolerance;
     }
 }

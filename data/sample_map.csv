@@ -1,7 +1,7 @@
-type,id,name,x,y,startIntersectionId,endIntersectionId,distance,speedLimit,capacity,currentVehicleCount,congestionLevel,vehicleDensity,roadStatus
-INTERSECTION,I1,Trần Hưng Đạo - Nguyễn Thái Học,0.0,0.0,,,,,,,,,
-INTERSECTION,I2,Trần Hưng Đạo - Yersin,1.2,0.4,,,,,,,,,
-INTERSECTION,I3,Võ Văn Kiệt - Yersin,2.4,1.1,,,,,,,,,
-ROAD,R1,,,,I1,I2,1.5,40.0,60,12,0.10,0.20,OPEN
-ROAD,R2,,,,I2,I3,2.0,35.0,45,30,0.55,0.667,CONGESTED
-ROAD,R3,,,,I1,I3,3.8,50.0,50,0,1.0,0.0,BLOCKED
+type,id,name,x,y,locationType,startIntersectionId,endIntersectionId,distance,speedLimit,capacity,currentVehicleCount,congestionLevel,vehicleDensity,roadStatus
+INTERSECTION,I1,Campus Gate,0.0,0.0,NORMAL,,,,,,,,,
+INTERSECTION,I2,Library Junction,1.2,0.4,SCHOOL,,,,,,,,,
+INTERSECTION,I3,Main Avenue,2.4,1.1,COMMERCIAL,,,,,,,,,
+ROAD,R1,,,,,I1,I2,1.5,40.0,60,12,0.10,0.20,OPEN
+ROAD,R2,,,,,I2,I3,2.0,35.0,45,30,0.55,0.667,CONGESTED
+ROAD,R3,,,,,I1,I3,3.8,50.0,50,0,1.0,0.0,BLOCKED

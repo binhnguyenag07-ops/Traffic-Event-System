@@ -1,0 +1,11 @@
+{
+  "vehicles": [
+    {"id":"DEMO-CAR","type":"CAR","startIntersectionId":"I1","destinationIntersectionId":"I6"},
+    {"id":"DEMO-BUS","type":"BUS","startIntersectionId":"I3","destinationIntersectionId":"I1"},
+    {"id":"DEMO-EMS","type":"EMERGENCY","startIntersectionId":"I1","destinationIntersectionId":"I4"}
+  ],
+  "events": [
+    {"id":"DEMO-LIGHT","type":"TRAFFIC_LIGHT_DELAY","affectedRoadId":"R11","startTick":2,"durationTicks":8,"value":3},
+    {"id":"DEMO-CONGESTION","type":"CONGESTION","affectedRoadId":"R13","startTick":5,"durationTicks":10,"value":0.65}
+  ]
+}

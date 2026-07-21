@@ -1,700 +1,110 @@
-# Final Folder Structure and Class Diagram
+# Architecture
 
-This document combines the planning work from all four members into one final reference for the Traffic Event System project.
+The Traffic Event System is a layered Java and React application. The backend
+owns the road graph, routing, simulation clock, events, and statistics. The
+frontend consumes REST endpoints and a Server-Sent Events stream to render the
+current state on an OpenStreetMap basemap.
 
-## Member Contributions
+## Runtime layers
 
-| Member | Area |
+| Layer | Responsibility |
 |---|---|
-| Binh | Road network and persistence |
-| Nguyie | Routing algorithms |
-| Hyo | Vehicle and traffic events |
-| An | Simulation, API, services, and frontend |
+| Domain | Encapsulated roads, intersections, vehicles, routes, events, and statistics records |
+| Routing | Interchangeable BFS, Dijkstra, and A* strategies |
+| Simulation | Ticks, vehicle progress, traffic-light waits, event activation, and completed-trip history |
+| Services | Use-case boundaries for networks, routing, vehicles, events, simulation, and statistics |
+| API | Javalin controllers, DTOs, static frontend hosting, and the live SSE stream |
+| Persistence | JSON/CSV map loading, JSON export, validation, and synthetic grids |
+| Integration | Optional OSRM road geometry with a straight-line fallback |
+| Visualization | React/Leaflet map, controls, editor, statistics, and experiment comparison |
 
-## Complete Folder Structure
+`RoadNetwork` is the graph aggregate. It owns intersections and directed roads,
+including incoming and outgoing adjacency indexes. `TrafficSimulator` is the
+simulation aggregate. It owns the active vehicles and events, advances the
+clock through `TickProcessor`, and archives a `CompletedTrip` when an arrived
+vehicle exits the simulation.
+
+Traffic changes are published through `TrafficEventBus`.
+`DynamicReroutingListener` recalculates only routes whose remaining steps use
+the affected road. `MapImportService` validates a complete replacement graph
+before changing live state. `ExperimentService` works on isolated networks and
+does not mutate the live simulation.
+
+## Current project structure
 
 ```text
 Traffic-Event-System/
-|-- pom.xml
-|-- README.md
-|-- .gitignore
-|-- .editorconfig
-|
-|-- data/
-|   |-- sample_map.csv
-|   |-- sample_map.json
-|   |-- small_city.json
-|   |-- congestion_demo.json
-|   `-- accident_demo.json
-|
-|-- docs/
-|   |-- ARCHITECTURE.md
-|   |-- CLASS_DIAGRAM.md
-|   |-- PLANNING_OVERVIEW.md
-|   |-- API_CONTRACT.md
-|   |-- ALGORITHM_EXPLANATION.md
-|   |-- EXPERIMENT_RESULTS.md
-|   |-- PRESENTATION_SCRIPT.md
-|   `-- planning/
-|       |-- Binh-network-persistence.md
-|       |-- nguynie-routing-algorithms.md
-|       |-- Hyo-vehicle-traffic_event.md
-|       `-- An-simulation-API-services-frontend.md
-|
+|-- data/                         JSON/CSV maps, simulation config, experiment baseline
+|-- docs/                         architecture, class diagram, algorithms, API, demo, results
 |-- frontend/
-|   |-- package.json
-|   |-- vite.config.js
-|   |-- index.html
-|   |-- public/
-|   |   `-- assets/
-|   |       `-- vehicles/
-|   |           `-- README.md
+|   |-- public/vehicles/          top-view SVG vehicle markers
 |   `-- src/
-|       |-- main.jsx
+|       |-- api/trafficAPI.js     REST/SSE client
+|       |-- components/
+|       |   |-- TrafficMap.jsx
+|       |   |-- NetworkEditor.jsx
+|       |   `-- ExperimentPanel.jsx
+|       |-- hooks/useTrafficDashboard.js
+|       |-- demoTraffic.js
 |       |-- App.jsx
-|       |-- styles.css
-|       |
-|       |-- api/
-|       |   `-- trafficApi.js
-|       |
-|       |-- hooks/
-|       |   |-- useRoadNetwork.js
-|       |   |-- useSimulation.js
-|       |   `-- useAlgorithms.js
-|       |
-|       |-- vehicle-assets/
-|       |   |-- VehicleAsset.jsx
-|       |   |-- vehicleAssetRegistry.js
-|       |   `-- vehicleAssetRegistry.test.js
-|       |
-|       `-- components/
-|           |-- MapViewport.jsx
-|           |-- ControlPanel.jsx
-|           |-- AlgorithmPanel.jsx
-|           |-- EventPanel.jsx
-|           |-- VehiclePanel.jsx
-|           `-- StatisticsPanel.jsx
-|
-`-- src/
-    |-- main/
-    |   `-- java/
-    |       `-- team/
-    |           `-- traffic/
-    |               |-- App.java
-    |               |
-    |               |-- config/
-    |               |   `-- ApplicationConfig.java
-    |               |
-    |               |-- api/
-    |               |   |-- TrafficApiServer.java
-    |               |   |-- ApiRouteRegistry.java
-    |               |   |
-    |               |   |-- controller/
-    |               |   |   |-- HealthController.java
-    |               |   |   |-- NetworkController.java
-    |               |   |   |-- RoutingController.java
-    |               |   |   |-- VehicleController.java
-    |               |   |   |-- TrafficEventController.java
-    |               |   |   |-- SimulationController.java
-    |               |   |   `-- StatisticsController.java
-    |               |   |
-    |               |   `-- dto/
-    |               |       |-- ApiResponse.java
-    |               |       |-- RouteRequestDto.java
-    |               |       |-- RouteResultDto.java
-    |               |       |-- VehicleDto.java
-    |               |       |-- TrafficEventDto.java
-    |               |       `-- SimulationSnapshotDto.java
-    |               |
-    |               |-- domain/
-    |               |   |-- network/
-    |               |   |   |-- RoadNetwork.java
-    |               |   |   |-- Intersection.java
-    |               |   |   |-- Road.java
-    |               |   |   |-- RoadCondition.java
-    |               |   |   |-- RoadStatus.java
-    |               |   |   `-- LocationType.java
-    |               |   |
-    |               |   |-- vehicle/
-    |               |   |   |-- Vehicle.java
-    |               |   |   |-- Car.java
-    |               |   |   |-- Bus.java
-    |               |   |   |-- EmergencyVehicle.java
-    |               |   |   |-- VehicleFactory.java
-    |               |   |   |-- VehicleType.java
-    |               |   |   `-- VehicleStatus.java
-    |               |   |
-    |               |   |-- routing/
-    |               |   |   |-- Route.java
-    |               |   |   |-- RouteStep.java
-    |               |   |   |-- RouteRequest.java
-    |               |   |   |-- RouteResult.java
-    |               |   |   `-- RoutePreference.java
-    |               |   |
-    |               |   |-- event/
-    |               |   |   |-- TrafficEvent.java
-    |               |   |   |-- CongestionEvent.java
-    |               |   |   |-- AccidentEvent.java
-    |               |   |   |-- RoadClosureEvent.java
-    |               |   |   |-- TrafficLightDelayEvent.java
-    |               |   |   |-- TrafficEventType.java
-    |               |   |   `-- TrafficEventStatus.java
-    |               |   |
-    |               |   `-- statistics/
-    |               |       |-- TrafficStatistics.java
-    |               |       `-- AlgorithmStatistics.java
-    |               |
-    |               |-- routing/
-    |               |   |-- PathFindingStrategy.java
-    |               |   |-- BfsPathFindingStrategy.java
-    |               |   |-- DijkstraPathFindingStrategy.java
-    |               |   |-- AStarPathFindingStrategy.java
-    |               |   |-- RoutingStrategyRegistry.java
-    |               |   `-- Heuristic.java
-    |               |
-    |               |-- simulation/
-    |               |   |-- TrafficSimulator.java
-    |               |   |-- TickProcessor.java
-    |               |   |-- SimulationClock.java
-    |               |   |-- SimulationSnapshot.java
-    |               |   |-- SimulationCommand.java
-    |               |   |-- SimulationStatus.java
-    |               |   `-- trace/
-    |               |       |-- VehicleTracePoint.java
-    |               |       |-- VehicleTraceSummary.java
-    |               |       `-- VehicleTraceStore.java
-    |               |
-    |               |-- service/
-    |               |   |-- RoadNetworkService.java
-    |               |   |-- RoutingService.java
-    |               |   |-- VehicleService.java
-    |               |   |-- TrafficEventService.java
-    |               |   |-- SimulationService.java
-    |               |   |-- StatisticsService.java
-    |               |   |
-    |               |   `-- impl/
-    |               |       |-- RoadNetworkServiceImpl.java
-    |               |       |-- RoutingServiceImpl.java
-    |               |       |-- VehicleServiceImpl.java
-    |               |       |-- TrafficEventServiceImpl.java
-    |               |       |-- SimulationServiceImpl.java
-    |               |       `-- StatisticsServiceImpl.java
-    |               |
-    |               |-- observer/
-    |               |   |-- TrafficEventBus.java
-    |               |   `-- TrafficEventListener.java
-    |               |
-    |               |-- persistence/
-    |               |   |-- MapLoader.java
-    |               |   |-- CsvMapLoader.java
-    |               |   |-- JsonMapLoader.java
-    |               |   |-- MapSaver.java
-    |               |   `-- SyntheticMapGenerator.java
-    |               |
-    |               `-- exception/
-    |                   |-- InvalidMapException.java
-    |                   |-- RouteNotFoundException.java
-    |                   `-- SimulationException.java
-    |
-    `-- test/
-        `-- java/
-            `-- team/
-                `-- traffic/
-                    |-- RoadNetworkTest.java
-                    |-- MapLoaderTest.java
-                    |-- RoutingStrategyTest.java
-                    |-- VehicleTest.java
-                    |-- TrafficEventTest.java
-                    `-- SimulationTest.java
+|       `-- styles.css
+|-- src/main/java/team/traffic/
+|   |-- api/                      server, routes, controllers, DTOs
+|   |-- domain/                   network, vehicle, route, event, statistics objects
+|   |-- experiment/               deterministic comparison runner
+|   |-- observer/                 traffic event bus and listener
+|   |-- persistence/              JSON/CSV loaders, saver, synthetic maps
+|   |-- routing/                  BFS, Dijkstra, A*, registry, dynamic rerouting
+|   |-- service/                  interfaces and implementations
+|   `-- simulation/               simulator, clock, ticks, configs, snapshots
+|-- src/test/java/team/traffic/   domain, service, API, persistence, routing, simulation tests
+|-- tools/generate_osm_map.py     District 1 OpenStreetMap dataset generator
+|-- pom.xml
+|-- run-demo.sh
+`-- run-demo.ps1
 ```
 
-## Vehicle Visual Assets
-
-Vehicle decoration is selected through `vehicleAssetRegistry.js`, which stores
-renderer-neutral descriptors for each vehicle type: label, icon key, optional
-asset URL, colors, marker size, and marker anchor. `VehicleAsset.jsx` is only the
-React renderer for those descriptors.
-
-Optional PNG, WebP, or SVG decorations live under
-`frontend/public/assets/vehicles/` and are served at `/assets/vehicles/...`.
-Built-in vehicle types currently use bundled Lucide icons, so the application
-does not issue image requests until an `assetUrl` is configured.
-
-This keeps vehicle assets independent from map data and map rendering. A future
-Leaflet adapter can resolve the same descriptor and use its `assetUrl`, size, and
-anchor without importing OpenStreetMap data or changing the vehicle domain model.
-
-## Class Diagram
+## Live data flow
 
 ```mermaid
-classDiagram
-    direction LR
-
-    class RoadNetwork {
-        -Map~String, Intersection~ intersections
-        -Map~String, Road~ roads
-        +addIntersection(Intersection)
-        +removeIntersection(String)
-        +addRoad(Road)
-        +removeRoad(String)
-        +findOutgoingRoads(String) List~Road~
-        +findIncomingRoads(String) List~Road~
-        +updateRoadCondition(String, RoadCondition)
-    }
-
-    class Intersection {
-        -String id
-        -String name
-        -double x
-        -double y
-        -LocationType locationType
-    }
-
-    class Road {
-        -String id
-        -String startIntersectionId
-        -String endIntersectionId
-        -double distance
-        -double speedLimit
-        -int capacity
-        -int currentVehicleCount
-        -RoadCondition condition
-        +calculateTravelCost() double
-        +isAvailable() boolean
-    }
-
-    class RoadCondition {
-        -double congestionLevel
-        -double vehicleDensity
-        -RoadStatus status
-        +increaseCongestion(double)
-        +markBlocked()
-        +markOpen()
-    }
-
-    class RoadStatus {
-        <<enumeration>>
-        OPEN
-        CONGESTED
-        BLOCKED
-        CLOSED
-    }
-
-    class LocationType {
-        <<enumeration>>
-        SCHOOL
-        HOSPITAL
-        BAR
-        RESIDENTIAL
-        COMMERCIAL
-        NORMAL
-    }
-
-    RoadNetwork "1" *-- "*" Intersection
-    RoadNetwork "1" *-- "*" Road
-    Road --> RoadCondition
-    RoadCondition --> RoadStatus
-    Intersection --> LocationType
-
-    class Vehicle {
-        <<abstract>>
-        -String id
-        -String currentIntersectionId
-        -String destinationIntersectionId
-        -Route currentRoute
-        -double movementSpeed
-        -double length
-        -double width
-        -double maxSpeed
-        -double currentSpeed
-        -double acceleration
-        -double deceleration
-        -double vehicleWeight
-        -int priorityLevel
-        -String currentRoadId
-        -String segmentStartIntersectionId
-        -String segmentEndIntersectionId
-        -double roadProgress
-        -int nextRouteStepIndex
-        -VehicleStatus status
-        -List~String~ travelHistory
-        +getType()* VehicleType
-        +requestRoute(RoutingService)
-        +moveOneStep()
-        +recomputeRoute(RoutingService)
-        +hasReachedDestination() boolean
-        +advance(double, RoadNetwork)
-        +accelerate(double)
-        +decelerate(double)
-    }
-
-    class Car {
-        +getType() VehicleType
-    }
-
-    class Bus {
-        -int passengerCapacity
-        +getType() VehicleType
-    }
-
-    class EmergencyVehicle {
-        -int priorityLevel
-        +getType() VehicleType
-    }
-
-    class VehicleFactory {
-        +createVehicle(VehicleType, String, String) Vehicle
-        +createCar(String, String) Car
-        +createBus(String, String) Bus
-        +createEmergencyVehicle(String, String) EmergencyVehicle
-    }
-
-    class VehicleType {
-        <<enumeration>>
-        CAR
-        BUS
-        EMERGENCY
-    }
-
-    class VehicleStatus {
-        <<enumeration>>
-        WAITING
-        MOVING
-        ARRIVED
-        BLOCKED
-    }
-
-    Vehicle <|-- Car
-    Vehicle <|-- Bus
-    Vehicle <|-- EmergencyVehicle
-    Vehicle --> Route
-    Vehicle --> VehicleStatus
-    Vehicle --> VehicleType
-    VehicleFactory --> Vehicle
-
-    class Route {
-        -List~RouteStep~ steps
-        -double totalDistance
-        -double estimatedTravelTime
-        -double totalCost
-    }
-
-    class RouteStep {
-        -String fromIntersectionId
-        -String toIntersectionId
-        -String roadId
-        -double cost
-    }
-
-    class RouteRequest {
-        -String startIntersectionId
-        -String destinationIntersectionId
-        -RoutePreference preference
-    }
-
-    class RouteResult {
-        -Route route
-        -String algorithmName
-        -long computationTimeMillis
-        -int visitedNodes
-    }
-
-    class RoutePreference {
-        <<enumeration>>
-        SHORTEST_DISTANCE
-        SHORTEST_TIME
-        CONGESTION_AWARE
-    }
-
-    Route "1" *-- "*" RouteStep
-    RouteRequest --> RoutePreference
-    RouteResult --> Route
-
-    class PathFindingStrategy {
-        <<interface>>
-        +getName() String
-        +supports(RoutePreference) boolean
-        +findRoute(RoadNetwork, RouteRequest) RouteResult
-    }
-
-    class BfsPathFindingStrategy
-    class DijkstraPathFindingStrategy
-    class AStarPathFindingStrategy
-
-    class Heuristic {
-        <<interface>>
-        +estimate(Intersection, Intersection) double
-    }
-
-    class RoutingStrategyRegistry {
-        -List~PathFindingStrategy~ strategies
-        +register(PathFindingStrategy)
-        +findByName(String) PathFindingStrategy
-        +findForPreference(RoutePreference) PathFindingStrategy
-    }
-
-    PathFindingStrategy <|.. BfsPathFindingStrategy
-    PathFindingStrategy <|.. DijkstraPathFindingStrategy
-    PathFindingStrategy <|.. AStarPathFindingStrategy
-    AStarPathFindingStrategy --> Heuristic
-    RoutingStrategyRegistry "1" *-- "*" PathFindingStrategy
-
-    class TrafficEvent {
-        <<abstract>>
-        -String id
-        -String affectedRoadId
-        -long startTick
-        -long durationTicks
-        -TrafficEventStatus status
-        +getType()* TrafficEventType
-        +apply(RoadNetwork)
-        +resolve(RoadNetwork)
-        +isActive(long) boolean
-    }
-
-    class CongestionEvent {
-        -double congestionIncrease
-    }
-
-    class AccidentEvent {
-        -double capacityReduction
-        -String causingVehicleId
-    }
-
-    class RoadClosureEvent
-
-    class TrafficLightDelayEvent {
-        -long delayTicks
-    }
-
-    class TrafficEventType {
-        <<enumeration>>
-        CONGESTION
-        ACCIDENT
-        ROAD_CLOSURE
-        TRAFFIC_LIGHT_DELAY
-    }
-
-    class TrafficEventStatus {
-        <<enumeration>>
-        SCHEDULED
-        ACTIVE
-        RESOLVED
-    }
-
-    TrafficEvent <|-- CongestionEvent
-    TrafficEvent <|-- AccidentEvent
-    TrafficEvent <|-- RoadClosureEvent
-    TrafficEvent <|-- TrafficLightDelayEvent
-    TrafficEvent --> TrafficEventType
-    TrafficEvent --> TrafficEventStatus
-
-    class TrafficEventListener {
-        <<interface>>
-        +onTrafficEvent(TrafficEvent)
-    }
-
-    class TrafficEventBus {
-        -List~TrafficEventListener~ listeners
-        +subscribe(TrafficEventListener)
-        +unsubscribe(TrafficEventListener)
-        +publish(TrafficEvent)
-    }
-
-    TrafficEventBus --> TrafficEventListener
-    TrafficEventBus --> TrafficEvent
-
-    class TrafficSimulator {
-        -RoadNetwork network
-        -List~Vehicle~ vehicles
-        -List~TrafficEvent~ events
-        -SimulationClock clock
-        -VehicleTraceStore vehicleTraceStore
-        -SimulationStatus status
-        +start()
-        +pause()
-        +resume()
-        +reset()
-        +advanceTick()
-        +getSnapshot() SimulationSnapshot
-        +getVehicleTrace(String, long, long) List~VehicleTracePoint~
-        +getVehicleStateAtTick(String, long) Optional~VehicleTracePoint~
-    }
-
-    class TickProcessor {
-        +processTick(TrafficSimulator)
-        +moveVehicles()
-        +processEvents()
-        +updateCongestion()
-    }
-
-    class SimulationClock {
-        -long currentTick
-        +tick()
-        +reset()
-        +getCurrentTick() long
-    }
-
-    class SimulationSnapshot {
-        -long tick
-        -SimulationStatus status
-        -List~Vehicle~ vehicles
-        -List~TrafficEvent~ trafficEvents
-    }
-
-    class VehicleTraceStore {
-        -NavigableMap statesByTick
-        +reset(long, List~Vehicle~)
-        +record(long, List~Vehicle~)
-        +getVehicleTrace(String, long, long) List~VehicleTracePoint~
-        +getStatesAtTick(long) List~VehicleTracePoint~
-        +getSummary() VehicleTraceSummary
-    }
-
-    class VehicleTracePoint {
-        <<record>>
-        +long tick
-        +String vehicleId
-        +VehicleType type
-        +VehicleStatus status
-        +String currentRoadId
-        +double roadProgress
-        +double currentSpeed
-        +List~String~ routeRoadIds
-    }
-
-    class VehicleTraceSummary {
-        <<record>>
-        +Long firstTick
-        +Long lastTick
-        +int recordedTickCount
-        +List~String~ vehicleIds
-    }
-
-    class SimulationStatus {
-        <<enumeration>>
-        READY
-        RUNNING
-        PAUSED
-        FINISHED
-    }
-
-    TrafficSimulator --> RoadNetwork
-    TrafficSimulator --> Vehicle
-    TrafficSimulator --> TrafficEvent
-    TrafficSimulator --> SimulationClock
-    TrafficSimulator --> SimulationSnapshot
-    TrafficSimulator --> SimulationStatus
-    TrafficSimulator *-- VehicleTraceStore
-    VehicleTraceStore o-- VehicleTracePoint
-    VehicleTraceStore --> VehicleTraceSummary
-    TickProcessor --> TrafficSimulator
-
-    class TrafficStatistics {
-        -int totalVehicles
-        -int arrivedVehicles
-        -double averageTravelTime
-        -double averageCongestionLevel
-        -int blockedRoadCount
-    }
-
-    class AlgorithmStatistics {
-        -String algorithmName
-        -long averageComputationTime
-        -int routeRecalculationCount
-        -double averageRouteCost
-        -int successfulRoutes
-        -int failedRoutes
-    }
-
-    SimulationSnapshot --> TrafficStatistics
-
-    class RoadNetworkService {
-        <<interface>>
-    }
-
-    class RoutingService {
-        <<interface>>
-    }
-
-    class VehicleService {
-        <<interface>>
-    }
-
-    class TrafficEventService {
-        <<interface>>
-    }
-
-    class SimulationService {
-        <<interface>>
-        +getVehicleTraceSummary() VehicleTraceSummary
-        +getVehicleStatesAtTick(long) List~VehicleTracePoint~
-        +getVehicleStateAtTick(String, long) Optional~VehicleTracePoint~
-        +getVehicleTrace(String, long, long) List~VehicleTracePoint~
-    }
-
-    class StatisticsService {
-        <<interface>>
-    }
-
-    class RoadNetworkServiceImpl
-    class RoutingServiceImpl
-    class VehicleServiceImpl
-    class TrafficEventServiceImpl
-    class SimulationServiceImpl
-    class StatisticsServiceImpl
-
-    RoadNetworkService <|.. RoadNetworkServiceImpl
-    RoutingService <|.. RoutingServiceImpl
-    VehicleService <|.. VehicleServiceImpl
-    TrafficEventService <|.. TrafficEventServiceImpl
-    SimulationService <|.. SimulationServiceImpl
-    StatisticsService <|.. StatisticsServiceImpl
-
-    RoutingServiceImpl --> RoutingStrategyRegistry
-    VehicleServiceImpl --> VehicleFactory
-    TrafficEventServiceImpl --> TrafficEventBus
-    SimulationServiceImpl --> TrafficSimulator
-    StatisticsServiceImpl --> TrafficStatistics
-    StatisticsServiceImpl --> AlgorithmStatistics
-
-    class MapLoader {
-        <<interface>>
-        +load(String) RoadNetwork
-    }
-
-    class CsvMapLoader
-    class JsonMapLoader
-    class MapSaver
-    class SyntheticMapGenerator {
-        +generateGridMap(int, int) RoadNetwork
-    }
-
-    MapLoader <|.. CsvMapLoader
-    MapLoader <|.. JsonMapLoader
-    CsvMapLoader --> RoadNetwork
-    JsonMapLoader --> RoadNetwork
-    SyntheticMapGenerator --> RoadNetwork
+flowchart LR
+    UI[React controls] -->|REST commands| API[Javalin controllers]
+    API --> Services[Service interfaces]
+    Services --> Simulator[TrafficSimulator]
+    Simulator --> Graph[RoadNetwork]
+    Simulator --> Tick[TickProcessor]
+    Tick --> Bus[TrafficEventBus]
+    Bus --> Reroute[DynamicReroutingListener]
+    Reroute --> Routing[RoutingService]
+    Simulator -->|SimulationSnapshot| SSE[SSE stream]
+    SSE --> Map[React Leaflet map]
+    Simulator --> Trips[CompletedTrip history]
+    Trips --> Stats[StatisticsService]
+    Stats --> UI
 ```
 
-## Design Patterns
+## OOP and design patterns
 
-| Pattern | Classes |
+| Requirement | Implementation |
 |---|---|
-| Strategy Pattern | `PathFindingStrategy`, `BfsPathFindingStrategy`, `DijkstraPathFindingStrategy`, `AStarPathFindingStrategy` |
-| Factory Pattern | `VehicleFactory`, `Car`, `Bus`, `EmergencyVehicle` |
-| Observer Pattern | `TrafficEventBus`, `TrafficEventListener`, `TrafficEvent` |
-| MVC-like Separation | React components, API controllers, services, domain models |
+| Encapsulation | Domain objects validate and manage their own mutable state |
+| Inheritance | `Vehicle` and `TrafficEvent` define shared abstract behavior |
+| Polymorphism | Routing strategies and event/vehicle subclasses are used through abstractions |
+| Abstraction | Controllers depend on service interfaces; routing uses `PathFindingStrategy` |
+| Strategy | BFS, Dijkstra, and A* implementations |
+| Observer | `TrafficEventBus`, `TrafficEventListener`, and dynamic rerouting |
+| Factory | `VehicleFactory` creates car, bus, and emergency variants |
+| MVC-like separation | React view, API/controllers, services, and domain model |
 
-## Layer Summary
+## Member contributions
 
-| Layer | Purpose |
+| Member | Primary area |
 |---|---|
-| Frontend | Shows the map, controls, vehicles, events, algorithms, and statistics. |
-| API | Receives HTTP requests from the frontend and returns JSON responses. |
-| Service | Coordinates each use case and connects API to domain logic. |
-| Domain | Stores the main OOP models of the system. |
-| Routing | Finds routes using BFS, Dijkstra, and AStar. |
-| Simulation | Advances time, moves vehicles, processes events, and creates snapshots. |
-| Persistence | Loads, saves, and generates road network maps. |
-| Observer | Notifies the system when traffic events happen. |
+| Binh | Road network and persistence |
+| Nguyie | Routing algorithms |
+| Hyo | Vehicles and traffic events |
+| An | Simulation, API, services, and frontend |
+
+See [CLASS_DIAGRAM.md](CLASS_DIAGRAM.md) for the implemented class
+relationships and [API_CONTRACT.md](API_CONTRACT.md) for the external HTTP
+boundary.

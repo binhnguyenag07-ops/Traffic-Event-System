@@ -9,27 +9,44 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.observer.TrafficEventBus;
 import team.traffic.service.RoadNetworkService;
 import team.traffic.service.TrafficEventService;
+import team.traffic.simulation.TrafficSimulator;
 
 public class TrafficEventServiceImpl implements TrafficEventService {
 
     private final List<TrafficEvent> events;
     private final TrafficEventBus eventBus;
     private final RoadNetworkService roadNetworkService;
+    private final TrafficSimulator runtime;
 
     public TrafficEventServiceImpl(TrafficEventBus eventBus, RoadNetworkService roadNetworkService) {
         this.events = new ArrayList<>();
         this.eventBus = eventBus;
         this.roadNetworkService = roadNetworkService;
+        this.runtime = null;
+    }
+
+    public TrafficEventServiceImpl(
+            TrafficEventBus eventBus,
+            RoadNetworkService roadNetworkService,
+            TrafficSimulator runtime) {
+        this.events = new ArrayList<>();
+        this.eventBus = eventBus;
+        this.roadNetworkService = roadNetworkService;
+        this.runtime = runtime;
+    }
+
+    private List<TrafficEvent> currentEvents() {
+        return runtime == null ? events : runtime.getEvents();
     }
 
     @Override
     public List<TrafficEvent> getAllEvents() {
-        return new ArrayList<>(events);
+        return new ArrayList<>(currentEvents());
     }
 
     @Override
     public TrafficEvent getEventById(String id) {
-        return events.stream()
+        return currentEvents().stream()
                 .filter(e -> e.getId().equals(id))
                 .findFirst()
                 .orElse(null);
@@ -37,14 +54,14 @@ public class TrafficEventServiceImpl implements TrafficEventService {
 
     @Override
     public List<TrafficEvent> getActiveEvents() {
-        return events.stream()
+        return currentEvents().stream()
                 .filter(e -> e.getStatus() == TrafficEventStatus.ACTIVE)
                 .collect(Collectors.toList());
     }
 
     @Override
     public List<TrafficEvent> getEventsByRoad(String roadId) {
-        return events.stream()
+        return currentEvents().stream()
                 .filter(e -> e.getAffectedRoadId().equals(roadId))
                 .collect(Collectors.toList());
     }
@@ -52,7 +69,11 @@ public class TrafficEventServiceImpl implements TrafficEventService {
     @Override
     public void addEvent(TrafficEvent event) {
         if (event != null) {
-            events.add(event);
+            if (runtime == null) {
+                events.add(event);
+            } else {
+                runtime.addEvent(event);
+            }
         }
     }
 
@@ -68,7 +89,7 @@ public class TrafficEventServiceImpl implements TrafficEventService {
                 eventBus.publish(event);
             }
         }
-        return events.remove(event);
+        return runtime == null ? events.remove(event) : runtime.removeEvent(id);
     }
 
     @Override
@@ -117,7 +138,7 @@ public class TrafficEventServiceImpl implements TrafficEventService {
             return;
         }
 
-        for (TrafficEvent event : events) {
+        for (TrafficEvent event : currentEvents()) {
             if (event.getStatus() == TrafficEventStatus.SCHEDULED) {
                 if (currentTick >= event.getStartTick()) {
                     event.apply(network);

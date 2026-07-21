@@ -17,4 +17,8 @@ public interface RoadNetworkService {
     double getAverageVehicleDensity();
 
     List<Road> findRoadsAtOrAboveDensity(double minimumDensity);
+
+    default void replaceNetwork(RoadNetwork network) {
+        throw new UnsupportedOperationException("Replacing the network is not supported.");
+    }
 }

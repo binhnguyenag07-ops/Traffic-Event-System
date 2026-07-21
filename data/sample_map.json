@@ -2,21 +2,24 @@
   "intersections": [
     {
       "id": "I1",
-      "name": "Trần Hưng Đạo - Nguyễn Thái Học",
+      "name": "Campus Gate",
       "x": 0.0,
-      "y": 0.0
+      "y": 0.0,
+      "locationType": "NORMAL"
     },
     {
       "id": "I2",
-      "name": "Trần Hưng Đạo - Yersin",
+      "name": "Library Junction",
       "x": 1.2,
-      "y": 0.4
+      "y": 0.4,
+      "locationType": "SCHOOL"
     },
     {
       "id": "I3",
-      "name": "Võ Văn Kiệt - Yersin",
+      "name": "Main Avenue",
       "x": 2.4,
-      "y": 1.1
+      "y": 1.1,
+      "locationType": "COMMERCIAL"
     }
   ],
   "roads": [

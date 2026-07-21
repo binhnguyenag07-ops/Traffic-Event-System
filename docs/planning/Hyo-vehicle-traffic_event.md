@@ -15,7 +15,7 @@ the backend workflow that connects events to vehicle movement and rerouting.
 | 6 | Multi-vehicle demo support | Done in backend/simulation |
 | 7 | Event tests | Done |
 | 8 | OOP docs | Done in planning, architecture, and class-diagram docs |
-| Post-plan extension | Vehicle physical profile, continuous movement, and position snapshot | Done |
+| Post-plan extension | Vehicle physical profile and speed controls | Done |
 
 ## Implemented Packages
 
@@ -69,12 +69,8 @@ Implemented behavior:
 - stores current route, route preference, movement status, and travel history;
 - requests routes through `RoutingService`;
 - recomputes routes when a route becomes blocked or stale;
-- moves continuously along one road using `currentSpeed`, road distance, and a
-  simulation duration in seconds;
-- stores the active road, segment endpoints, and normalized road progress while
-  a vehicle travels between intersections;
-- updates road vehicle counts through `RoadNetwork` when entering and actually
-  leaving a road;
+- moves one route step at a time;
+- updates road vehicle counts through `RoadNetwork` when occupying or leaving a road;
 - becomes `ARRIVED` at the destination;
 - becomes `BLOCKED` when no usable route or road is available.
 
@@ -96,17 +92,10 @@ remain compatible.
 | `priorityLevel` | level | standard vehicles 0; emergency supplied by caller |
 
 `accelerate(seconds)` and `decelerate(seconds)` enforce valid speed bounds.
-Movement now consumes physical time: each default simulation tick represents 60 seconds
-and increases `roadProgress` by `(effectiveSpeed * seconds / 3600) / distance`.
-`effectiveSpeed` is capped by the road speed limit. The vehicle only updates
-`currentIntersectionId` after `roadProgress` reaches `1.0`, preventing the
-former endpoint teleport.
-
-While travelling, snapshots expose `currentRoadId`, segment start/end
-intersections, `roadProgress`, the current route, `nextRouteStepIndex`, and
-travel history. This gives the frontend enough information to interpolate a
-vehicle position on the road and identify the remaining route without inferring
-state from discrete intersection changes.
+They intentionally do not alter the current graph-based movement rule, where a
+simulation tick moves a vehicle by one `RouteStep`. Integrating continuous
+kinematics into tick timing and route cost would require a team-wide simulation
+design decision and is outside this backward-compatible extension.
 
 ## Event Responsibilities
 
@@ -133,7 +122,7 @@ events remember the previous road condition before applying their effect.
 - stores vehicles in memory;
 - updates all vehicles per tick;
 - requests or recomputes routes when needed;
-- advances vehicles and updates road density through `Vehicle.advance`.
+- moves vehicles and updates road density through `Vehicle.moveOneStep`.
 
 `TrafficEventServiceImpl`:
 
@@ -186,9 +175,8 @@ Relevant tests:
 
 | Test class | Coverage |
 |---|---|
-| `VehicleTest` | route request, continuous progress, blocked roads, mid-road rerouting |
-| `VehicleServiceImplTest` | vehicle creation, validation, continuous multi-vehicle updates |
-| `VehicleDtoTest` | road position, route, and travel-history snapshot fields |
+| `VehicleTest` | route request, movement, blocked roads, route recomputation |
+| `VehicleServiceImplTest` | vehicle creation, validation, multi-vehicle updates |
 | `VehicleControllerTest` | vehicle API payload handling |
 | `TrafficEventTest` | event apply/resolve and road-condition restore |
 | `TrafficEventServiceImplTest` | event storage, activation, resolution, publishing |

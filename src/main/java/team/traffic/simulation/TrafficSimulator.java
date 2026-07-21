@@ -9,57 +9,62 @@ import team.traffic.domain.event.TrafficEventStatus;
 import team.traffic.domain.event.TrafficEventType;
 import team.traffic.domain.event.TrafficLightDelayEvent;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleFactory;
 import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.service.RoutingService;
 import team.traffic.service.TrafficEventService;
-import team.traffic.simulation.trace.VehicleTracePoint;
-import team.traffic.simulation.trace.VehicleTraceStore;
-import team.traffic.simulation.trace.VehicleTraceSummary;
+import team.traffic.observer.TrafficEventBus;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 public class TrafficSimulator {
-    private final RoadNetwork network;
+    private RoadNetwork network;
     private final RoutingService routingService;
     private final VehicleFactory vehicleFactory;
     private final TickProcessor tickProcessor;
     private final SimulationClock clock;
-    private final VehicleTraceStore vehicleTraceStore;
 
     private SimulationStatus status;
     private List<Vehicle> vehicles;
     private List<TrafficEvent> events;
+    private final List<CompletedTrip> completedTrips;
     private List<VehicleConfig> vehicleConfigs;
     private List<EventConfig> eventConfigs;
+    private double simulationSecondsPerTick;
 
     public TrafficSimulator(RoadNetwork network, RoutingService routingService) {
+        this(network, routingService, null);
+    }
+
+    public TrafficSimulator(RoadNetwork network, RoutingService routingService, TrafficEventBus eventBus) {
         this.network = network;
         this.routingService = routingService;
         this.vehicleFactory = new VehicleFactory();
-        this.tickProcessor = new TickProcessor(routingService);
+        this.tickProcessor = new TickProcessor(routingService, eventBus);
         this.clock = new SimulationClock();
-        this.vehicleTraceStore = new VehicleTraceStore();
         this.status = SimulationStatus.READY;
         this.vehicles = new ArrayList<>();
         this.events = new ArrayList<>();
+        this.completedTrips = new ArrayList<>();
         this.vehicleConfigs = new ArrayList<>();
         this.eventConfigs = new ArrayList<>();
+        this.simulationSecondsPerTick = TickProcessor.DEFAULT_SIMULATION_SECONDS_PER_TICK;
     }
 
     public synchronized void initialize(List<VehicleConfig> vehicleConfigs, List<EventConfig> eventConfigs) {
         resolveActiveEvents();
+        releaseVehicleOccupancy();
         this.vehicleConfigs = new ArrayList<>(vehicleConfigs);
         this.eventConfigs = new ArrayList<>(eventConfigs);
         this.vehicles = buildVehicles(this.vehicleConfigs);
         this.events = buildEvents(this.eventConfigs);
+        this.completedTrips.clear();
         this.clock.reset();
         this.status = SimulationStatus.READY;
-        this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
     }
 
     public synchronized void start() {
@@ -85,17 +90,28 @@ public class TrafficSimulator {
 
     public synchronized void reset() {
         resolveActiveEvents();
+        releaseVehicleOccupancy();
         this.vehicles = buildVehicles(this.vehicleConfigs);
         this.events = buildEvents(this.eventConfigs);
+        this.completedTrips.clear();
         this.clock.reset();
         this.status = SimulationStatus.READY;
-        this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
     }
 
     public synchronized void advanceTick() {
-        tickProcessor.process(clock.getCurrentTick(), network, vehicles, events);
+        tickProcessor.process(clock.getCurrentTick(), network, vehicles, events, simulationSecondsPerTick);
         clock.tick();
-        vehicleTraceStore.record(clock.getCurrentTick(), vehicles);
+    }
+
+    public synchronized double getSimulationSecondsPerTick() {
+        return simulationSecondsPerTick;
+    }
+
+    public synchronized void setSimulationSecondsPerTick(double simulationSecondsPerTick) {
+        if (!Double.isFinite(simulationSecondsPerTick) || simulationSecondsPerTick <= 0) {
+            throw new IllegalArgumentException("Simulation seconds per tick must be positive.");
+        }
+        this.simulationSecondsPerTick = simulationSecondsPerTick;
     }
 
     public synchronized SimulationStatus getStatus() {
@@ -114,37 +130,79 @@ public class TrafficSimulator {
         return Collections.unmodifiableList(events);
     }
 
+    public synchronized List<CompletedTrip> getCompletedTrips() {
+        return List.copyOf(completedTrips);
+    }
+
     public synchronized SimulationSnapshot getSnapshot() {
         return new SimulationSnapshot(clock.getCurrentTick(), status, vehicles, events);
     }
 
-    public synchronized VehicleTraceSummary getVehicleTraceSummary() {
-        return vehicleTraceStore.getSummary();
-    }
-
-    public synchronized boolean hasVehicleTraceAtTick(long tick) {
-        return vehicleTraceStore.hasTick(tick);
-    }
-
-    public synchronized List<VehicleTracePoint> getVehicleStatesAtTick(long tick) {
-        return vehicleTraceStore.getStatesAtTick(tick);
-    }
-
-    public synchronized Optional<VehicleTracePoint> getVehicleStateAtTick(String vehicleId, long tick) {
-        return vehicleTraceStore.getVehicleStateAtTick(vehicleId, tick);
-    }
-
-    public synchronized List<VehicleTracePoint> getVehicleTrace(
-            String vehicleId,
-            long fromTick,
-            long toTick) {
-        return vehicleTraceStore.getVehicleTrace(vehicleId, fromTick, toTick);
-    }
-
     public synchronized void addEvent(TrafficEvent event) {
-        if (event != null) {
+        if (event != null && events.stream().noneMatch(existing -> existing.getId().equals(event.getId()))) {
             events.add(event);
         }
+    }
+
+    public synchronized boolean removeEvent(String eventId) {
+        TrafficEvent event = events.stream()
+                .filter(candidate -> candidate.getId().equals(eventId))
+                .findFirst()
+                .orElse(null);
+        if (event == null) {
+            return false;
+        }
+        if (event.getStatus() == TrafficEventStatus.ACTIVE) {
+            event.resolve(network);
+        }
+        return events.remove(event);
+    }
+
+    public synchronized void addVehicle(Vehicle vehicle) {
+        if (vehicle != null && vehicles.stream().noneMatch(existing -> existing.getId().equals(vehicle.getId()))) {
+            vehicle.requestRoute(network, routingService);
+            vehicles.add(vehicle);
+        }
+    }
+
+    public synchronized boolean removeVehicle(String vehicleId) {
+        Vehicle vehicle = vehicles.stream()
+                .filter(candidate -> candidate.getId().equals(vehicleId))
+                .findFirst()
+                .orElse(null);
+        if (vehicle == null) {
+            return false;
+        }
+        vehicle.releaseRoad(network);
+        if (vehicle.hasReachedDestination()) {
+            completedTrips.add(new CompletedTrip(
+                    vehicle.getId(),
+                    vehicle.getType(),
+                    vehicle.getTravelTimeSeconds(),
+                    vehicle.getDistanceTravelledKm(),
+                    vehicle.getRouteRecalculationCount()));
+        }
+        return vehicles.remove(vehicle);
+    }
+
+    public synchronized RoadNetwork getNetwork() {
+        return network;
+    }
+
+    public synchronized void replaceNetwork(RoadNetwork replacement) {
+        if (replacement == null) {
+            throw new IllegalArgumentException("Road network is required.");
+        }
+        resolveActiveEvents();
+        releaseVehicleOccupancy();
+        network = replacement;
+        vehicles = new ArrayList<>();
+        events = new ArrayList<>();
+        completedTrips.clear();
+        vehicleConfigs = new ArrayList<>();
+        eventConfigs = new ArrayList<>();
+        clock.reset();
+        status = SimulationStatus.READY;
     }
 
     /**
@@ -244,6 +302,12 @@ public class TrafficSimulator {
                 } catch (Exception ignored) {
                 }
             }
+        }
+    }
+
+    private void releaseVehicleOccupancy() {
+        for (Vehicle vehicle : vehicles) {
+            vehicle.releaseRoad(network);
         }
     }
 

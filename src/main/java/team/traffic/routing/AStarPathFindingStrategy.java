@@ -52,21 +52,29 @@ public class AStarPathFindingStrategy implements PathFindingStrategy {
         }
 
         Map<String, Double> gScore = new HashMap<>();
-        Map<String, Double> fScore = new HashMap<>();
         Map<String, String> prev = new HashMap<>();
         Map<String, String> prevRoad = new HashMap<>();
-        PriorityQueue<String> openSet = new PriorityQueue<>(Comparator.comparingDouble(fScore::get));
+        PriorityQueue<QueueEntry> openSet = new PriorityQueue<>(Comparator.comparingDouble(QueueEntry::score));
+        double maximumSpeed = network.getRoads().values().stream()
+                .mapToDouble(Road::getSpeedLimit)
+                .max()
+                .orElse(1.0);
 
         gScore.put(startId, 0.0);
 
         Intersection startIntersection = network.getIntersections().get(startId);
-        double h = (startIntersection != null) ? heuristic.estimate(startIntersection, destIntersection) : 0;
-        fScore.put(startId, h);
-
-        openSet.add(startId);
+        double h = estimateCost(startIntersection, destIntersection, maximumSpeed);
+        openSet.add(new QueueEntry(startId, h));
 
         while (!openSet.isEmpty()) {
-            String currentId = openSet.poll();
+            QueueEntry current = openSet.poll();
+            String currentId = current.intersectionId();
+            Intersection currentIntersection = network.getIntersection(currentId);
+            double expectedScore = gScore.getOrDefault(currentId, Double.POSITIVE_INFINITY)
+                    + estimateCost(currentIntersection, destIntersection, maximumSpeed);
+            if (current.score() > expectedScore) {
+                continue;
+            }
             visitedNodes++;
 
             if (currentId.equals(destId)) {
@@ -89,14 +97,8 @@ public class AStarPathFindingStrategy implements PathFindingStrategy {
                     gScore.put(neighborId, tentativeG);
 
                     Intersection neighborIntersection = network.getIntersections().get(neighborId);
-                    double heuristicValue = (neighborIntersection != null)
-                            ? heuristic.estimate(neighborIntersection, destIntersection)
-                            : 0;
-                    fScore.put(neighborId, tentativeG + heuristicValue);
-
-                    if (!openSet.contains(neighborId)) {
-                        openSet.add(neighborId);
-                    }
+                    double heuristicValue = estimateCost(neighborIntersection, destIntersection, maximumSpeed);
+                    openSet.add(new QueueEntry(neighborId, tentativeG + heuristicValue));
                 }
             }
         }
@@ -110,4 +112,14 @@ public class AStarPathFindingStrategy implements PathFindingStrategy {
         long elapsed = System.currentTimeMillis() - startTime;
         return new RouteResult(route, NAME, elapsed, visitedNodes);
     }
+
+    private double estimateCost(Intersection from, Intersection destination, double maximumSpeed) {
+        if (from == null || destination == null) {
+            return 0.0;
+        }
+        double estimatedDistance = Math.max(0.0, heuristic.estimate(from, destination));
+        return estimatedDistance / maximumSpeed;
+    }
+
+    private record QueueEntry(String intersectionId, double score) {}
 }

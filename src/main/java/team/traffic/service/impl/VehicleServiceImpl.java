@@ -10,25 +10,34 @@ import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.service.RoutingService;
 import team.traffic.service.VehicleService;
+import team.traffic.simulation.TrafficSimulator;
 
 public class VehicleServiceImpl implements VehicleService {
 
     private final List<Vehicle> vehicles;
     private final VehicleFactory vehicleFactory;
+    private final TrafficSimulator runtime;
 
     public VehicleServiceImpl() {
         this.vehicles = new ArrayList<>();
         this.vehicleFactory = new VehicleFactory();
+        this.runtime = null;
+    }
+
+    public VehicleServiceImpl(TrafficSimulator runtime) {
+        this.vehicles = new ArrayList<>();
+        this.vehicleFactory = new VehicleFactory();
+        this.runtime = runtime;
     }
 
     @Override
     public List<Vehicle> getAllVehicles() {
-        return new ArrayList<>(vehicles);
+        return runtime == null ? new ArrayList<>(vehicles) : new ArrayList<>(runtime.getVehicles());
     }
 
     @Override
     public Vehicle getVehicleById(String id) {
-        return vehicles.stream()
+        return getAllVehicles().stream()
                 .filter(v -> v.getId().equals(id))
                 .findFirst()
                 .orElse(null);
@@ -40,7 +49,11 @@ public class VehicleServiceImpl implements VehicleService {
 
         String id = "V-" + UUID.randomUUID().toString().substring(0, 8);
         Vehicle vehicle = vehicleFactory.createVehicle(type, id, startIntersectionId, destinationIntersectionId);
-        vehicles.add(vehicle);
+        if (runtime == null) {
+            vehicles.add(vehicle);
+        } else {
+            runtime.addVehicle(vehicle);
+        }
         return vehicle;
     }
 
@@ -50,7 +63,7 @@ public class VehicleServiceImpl implements VehicleService {
             return;
         }
 
-        for (Vehicle vehicle : vehicles) {
+        for (Vehicle vehicle : getAllVehicles()) {
             if (vehicle.getStatus() == VehicleStatus.ARRIVED) {
                 continue;
             }
@@ -68,9 +81,17 @@ public class VehicleServiceImpl implements VehicleService {
         }
     }
 
+    @Override
+    public boolean removeVehicle(String id) {
+        if (runtime != null) {
+            return runtime.removeVehicle(id);
+        }
+        return vehicles.removeIf(vehicle -> vehicle.getId().equals(id));
+    }
+
     private void moveIfReady(Vehicle vehicle, RoadNetwork network) {
         if (vehicle.getStatus() == VehicleStatus.WAITING || vehicle.getStatus() == VehicleStatus.MOVING) {
-            vehicle.advance(Vehicle.DEFAULT_TICK_DURATION_SECONDS, network);
+            vehicle.moveOneStep(network);
         }
     }
 

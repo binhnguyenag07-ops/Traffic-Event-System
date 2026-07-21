@@ -10,9 +10,9 @@ import java.util.List;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
+import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
@@ -39,6 +39,13 @@ public class MapSaver {
             Files.createDirectories(parent);
         }
         objectMapper.writeValue(path.toFile(), MapData.from(roadNetwork));
+    }
+
+    public String toJson(RoadNetwork roadNetwork) throws IOException {
+        if (roadNetwork == null) {
+            throw new IllegalArgumentException("Road network is required");
+        }
+        return objectMapper.writeValueAsString(MapData.from(roadNetwork));
     }
 
     static class MapData {
@@ -68,52 +75,56 @@ public class MapSaver {
     static class IntersectionData {
         public String id;
         public String name;
-        public double longitude;
-        public double latitude;
+        public double x;
+        public double y;
+        public String locationType;
+        public Double latitude;
+        public Double longitude;
 
         static IntersectionData from(Intersection intersection) {
             IntersectionData data = new IntersectionData();
             data.id = intersection.getId();
             data.name = intersection.getName();
-            data.longitude = intersection.getLongitude();
+            data.x = intersection.getX();
+            data.y = intersection.getY();
+            data.locationType = intersection.getLocationType().name();
             data.latitude = intersection.getLatitude();
+            data.longitude = intersection.getLongitude();
             return data;
         }
     }
 
     static class RoadData {
         public String id;
-        public String name;
-        public String physicalRoadId;
         public String startIntersectionId;
         public String endIntersectionId;
         public double distance;
         public double speedLimit;
         public int capacity;
         public int currentVehicleCount;
-        public int laneCount;
-        public List<GeoPoint> geometry;
         public double congestionLevel;
         public double vehicleDensity;
         public RoadStatus roadStatus;
+        public RoadClass roadClass;
+        public List<List<Double>> geometry;
 
         static RoadData from(Road road) {
             RoadCondition condition = road.getCondition();
             RoadData data = new RoadData();
             data.id = road.getId();
-            data.name = road.getName();
-            data.physicalRoadId = road.getPhysicalRoadId();
             data.startIntersectionId = road.getStartIntersectionId();
             data.endIntersectionId = road.getEndIntersectionId();
             data.distance = road.getDistance();
             data.speedLimit = road.getSpeedLimit();
             data.capacity = road.getCapacity();
             data.currentVehicleCount = road.getCurrentVehicleCount();
-            data.laneCount = road.getLaneCount();
-            data.geometry = road.getGeometry();
             data.congestionLevel = condition.getCongestionLevel();
             data.vehicleDensity = condition.getVehicleDensity();
             data.roadStatus = condition.getRoadStatus();
+            data.roadClass = road.getRoadClass();
+            data.geometry = road.getGeometry().stream()
+                    .map(point -> List.of(point.latitude(), point.longitude()))
+                    .toList();
             return data;
         }
     }

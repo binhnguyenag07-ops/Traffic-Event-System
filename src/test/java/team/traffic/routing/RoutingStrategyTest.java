@@ -284,6 +284,35 @@ class RoutingStrategyTest {
             assertThat(result.getRoute().isEmpty()).isFalse();
             assertThat(result.getRoute().getSteps().get(0).getFromIntersectionId()).isEqualTo("A");
         }
+
+        @Test
+        @DisplayName("keeps distance heuristic in the same units as travel time")
+        void usesAdmissibleTimeHeuristic() {
+            RoadNetwork network = new RoadNetwork();
+            network.addIntersection(new team.traffic.domain.network.Intersection(
+                    "A", "A", 0, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addIntersection(new team.traffic.domain.network.Intersection(
+                    "C", "C", 10, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addIntersection(new team.traffic.domain.network.Intersection(
+                    "D", "D", 2, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addRoad(new team.traffic.domain.network.Road("AD", "A", "D", 2, 1, 10, 0,
+                    new team.traffic.domain.network.RoadCondition(0, 0,
+                            team.traffic.domain.network.RoadStatus.OPEN)));
+            network.addRoad(new team.traffic.domain.network.Road("AC", "A", "C", 10, 100, 10, 0,
+                    new team.traffic.domain.network.RoadCondition(0, 0,
+                            team.traffic.domain.network.RoadStatus.OPEN)));
+            network.addRoad(new team.traffic.domain.network.Road("CD", "C", "D", 8, 100, 10, 0,
+                    new team.traffic.domain.network.RoadCondition(0, 0,
+                            team.traffic.domain.network.RoadStatus.OPEN)));
+
+            RouteRequest request = new RouteRequest("A", "D", RoutePreference.SHORTEST_TIME);
+            RouteResult result = astar.findRoute(network, request);
+
+            assertThat(result.getRoute().getSteps()).extracting(step -> step.getRoadId())
+                    .containsExactly("AC", "CD");
+            assertThat(result.getRoute().getEstimatedTravelTime()).isCloseTo(0.18,
+                    org.assertj.core.data.Offset.offset(0.0001));
+        }
     }
 
     // ── RoutingStrategyRegistry ──────────────────────────

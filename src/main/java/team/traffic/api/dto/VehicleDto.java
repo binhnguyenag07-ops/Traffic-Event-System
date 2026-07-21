@@ -1,10 +1,10 @@
 package team.traffic.api.dto;
 
-import java.util.List;
-import java.util.stream.Collectors;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.routing.RoutePreference;
+import java.util.List;
 
 public class VehicleDto {
     private String id;
@@ -21,12 +21,18 @@ public class VehicleDto {
     private double deceleration;
     private double vehicleWeight;
     private int priorityLevel;
-    private String currentRoadId;
-    private String segmentStartIntersectionId;
-    private String segmentEndIntersectionId;
-    private double roadProgress;
-    private List<RouteResultDto.RouteStepDto> currentRoute;
+    private RouteDto currentRoute;
     private int nextRouteStepIndex;
+    private RoutePreference routePreference;
+    private String occupiedRoadId;
+    private String roadStartIntersectionId;
+    private String roadEndIntersectionId;
+    private double roadProgress;
+    private long waitTicksRemaining;
+    private double distanceTravelledKm;
+    private double travelTimeSeconds;
+    private long waitingTicks;
+    private int routeRecalculationCount;
     private List<String> travelHistory;
 
     public VehicleDto() {}
@@ -46,21 +52,19 @@ public class VehicleDto {
         this.deceleration = vehicle.getDeceleration();
         this.vehicleWeight = vehicle.getVehicleWeight();
         this.priorityLevel = vehicle.getPriorityLevel();
-        this.currentRoadId = vehicle.getCurrentRoadId();
-        this.segmentStartIntersectionId = vehicle.getSegmentStartIntersectionId();
-        this.segmentEndIntersectionId = vehicle.getSegmentEndIntersectionId();
-        this.roadProgress = vehicle.getRoadProgress();
+        this.currentRoute = vehicle.getCurrentRoute() == null ? null : new RouteDto(vehicle.getCurrentRoute());
         this.nextRouteStepIndex = vehicle.getNextRouteStepIndex();
-        this.currentRoute = vehicle.getCurrentRoute() == null
-                ? List.of()
-                : vehicle.getCurrentRoute().getSteps().stream()
-                        .map(step -> new RouteResultDto.RouteStepDto(
-                                step.getFromIntersectionId(),
-                                step.getToIntersectionId(),
-                                step.getRoadId(),
-                                step.getCost()))
-                        .collect(Collectors.toList());
-        this.travelHistory = List.copyOf(vehicle.getTravelHistory());
+        this.routePreference = vehicle.getRoutePreference();
+        this.occupiedRoadId = vehicle.getOccupiedRoadId();
+        this.roadStartIntersectionId = vehicle.getRoadStartIntersectionId();
+        this.roadEndIntersectionId = vehicle.getRoadEndIntersectionId();
+        this.roadProgress = vehicle.getRoadProgress();
+        this.waitTicksRemaining = vehicle.getWaitTicksRemaining();
+        this.distanceTravelledKm = vehicle.getDistanceTravelledKm();
+        this.travelTimeSeconds = vehicle.getTravelTimeSeconds();
+        this.waitingTicks = vehicle.getWaitingTicks();
+        this.routeRecalculationCount = vehicle.getRouteRecalculationCount();
+        this.travelHistory = vehicle.getTravelHistory();
     }
 
     public String getId() { return id; }
@@ -91,18 +95,30 @@ public class VehicleDto {
     public void setVehicleWeight(double vehicleWeight) { this.vehicleWeight = vehicleWeight; }
     public int getPriorityLevel() { return priorityLevel; }
     public void setPriorityLevel(int priorityLevel) { this.priorityLevel = priorityLevel; }
-    public String getCurrentRoadId() { return currentRoadId; }
-    public void setCurrentRoadId(String currentRoadId) { this.currentRoadId = currentRoadId; }
-    public String getSegmentStartIntersectionId() { return segmentStartIntersectionId; }
-    public void setSegmentStartIntersectionId(String segmentStartIntersectionId) { this.segmentStartIntersectionId = segmentStartIntersectionId; }
-    public String getSegmentEndIntersectionId() { return segmentEndIntersectionId; }
-    public void setSegmentEndIntersectionId(String segmentEndIntersectionId) { this.segmentEndIntersectionId = segmentEndIntersectionId; }
-    public double getRoadProgress() { return roadProgress; }
-    public void setRoadProgress(double roadProgress) { this.roadProgress = roadProgress; }
-    public List<RouteResultDto.RouteStepDto> getCurrentRoute() { return currentRoute; }
-    public void setCurrentRoute(List<RouteResultDto.RouteStepDto> currentRoute) { this.currentRoute = currentRoute; }
+    public RouteDto getCurrentRoute() { return currentRoute; }
+    public void setCurrentRoute(RouteDto currentRoute) { this.currentRoute = currentRoute; }
     public int getNextRouteStepIndex() { return nextRouteStepIndex; }
     public void setNextRouteStepIndex(int nextRouteStepIndex) { this.nextRouteStepIndex = nextRouteStepIndex; }
+    public RoutePreference getRoutePreference() { return routePreference; }
+    public void setRoutePreference(RoutePreference routePreference) { this.routePreference = routePreference; }
+    public String getOccupiedRoadId() { return occupiedRoadId; }
+    public void setOccupiedRoadId(String occupiedRoadId) { this.occupiedRoadId = occupiedRoadId; }
+    public String getRoadStartIntersectionId() { return roadStartIntersectionId; }
+    public void setRoadStartIntersectionId(String roadStartIntersectionId) { this.roadStartIntersectionId = roadStartIntersectionId; }
+    public String getRoadEndIntersectionId() { return roadEndIntersectionId; }
+    public void setRoadEndIntersectionId(String roadEndIntersectionId) { this.roadEndIntersectionId = roadEndIntersectionId; }
+    public double getRoadProgress() { return roadProgress; }
+    public void setRoadProgress(double roadProgress) { this.roadProgress = roadProgress; }
+    public long getWaitTicksRemaining() { return waitTicksRemaining; }
+    public void setWaitTicksRemaining(long waitTicksRemaining) { this.waitTicksRemaining = waitTicksRemaining; }
+    public double getDistanceTravelledKm() { return distanceTravelledKm; }
+    public void setDistanceTravelledKm(double distanceTravelledKm) { this.distanceTravelledKm = distanceTravelledKm; }
+    public double getTravelTimeSeconds() { return travelTimeSeconds; }
+    public void setTravelTimeSeconds(double travelTimeSeconds) { this.travelTimeSeconds = travelTimeSeconds; }
+    public long getWaitingTicks() { return waitingTicks; }
+    public void setWaitingTicks(long waitingTicks) { this.waitingTicks = waitingTicks; }
+    public int getRouteRecalculationCount() { return routeRecalculationCount; }
+    public void setRouteRecalculationCount(int routeRecalculationCount) { this.routeRecalculationCount = routeRecalculationCount; }
     public List<String> getTravelHistory() { return travelHistory; }
     public void setTravelHistory(List<String> travelHistory) { this.travelHistory = travelHistory; }
 }

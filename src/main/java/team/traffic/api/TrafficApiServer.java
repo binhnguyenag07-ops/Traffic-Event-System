@@ -1,6 +1,7 @@
 package team.traffic.api;
 
 import io.javalin.Javalin;
+import io.javalin.http.staticfiles.Location;
 
 public class TrafficApiServer {
     private final Javalin app;
@@ -13,6 +14,12 @@ public class TrafficApiServer {
         this.port = port;
         this.app = Javalin.create(config -> {
             config.bundledPlugins.enableCors(cors -> cors.addRule(rule -> rule.anyHost()));
+            config.staticFiles.add(staticFiles -> {
+                staticFiles.hostedPath = "/";
+                staticFiles.directory = "/public";
+                staticFiles.location = Location.CLASSPATH;
+            });
+            config.spaRoot.addFile("/", "/public/index.html", Location.CLASSPATH);
         });
         routeRegistry.register(app);
     }

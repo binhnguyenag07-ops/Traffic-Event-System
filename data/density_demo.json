@@ -2,27 +2,31 @@
   "intersections": [
     {
       "id": "D1",
-      "name": "Trần Hưng Đạo - Nguyễn Thái Học",
+      "name": "North Gate",
       "x": 0.0,
-      "y": 0.0
+      "y": 0.0,
+      "locationType": "NORMAL"
     },
     {
       "id": "D2",
-      "name": "Trần Hưng Đạo - Yersin",
+      "name": "Library Corner",
       "x": 1.0,
-      "y": 0.0
+      "y": 0.0,
+      "locationType": "SCHOOL"
     },
     {
       "id": "D3",
-      "name": "Trần Hưng Đạo - Ký Con",
+      "name": "Market Street",
       "x": 2.0,
-      "y": 0.0
+      "y": 0.0,
+      "locationType": "COMMERCIAL"
     },
     {
       "id": "D4",
-      "name": "Trần Hưng Đạo - Calmette",
+      "name": "Dormitory Road",
       "x": 3.0,
-      "y": 0.0
+      "y": 0.0,
+      "locationType": "RESIDENTIAL"
     }
   ],
   "roads": [

@@ -12,6 +12,7 @@ import team.traffic.service.RoadNetworkService;
 import team.traffic.service.RoutingService;
 
 import java.util.Map;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
@@ -26,6 +27,8 @@ public class RoutingController {
 
     public void registerRoutes(Javalin app) {
         app.post("/api/routes", this::findRoute);
+        app.get("/api/routing/algorithms", this::getAlgorithms);
+        app.post("/api/routes/compare", this::compareRoutes);
     }
 
     private void findRoute(Context ctx) {
@@ -76,7 +79,7 @@ public class RoutingController {
                 preference);
 
         try {
-            RouteResult result = routingService.findRoute(network, request);
+            RouteResult result = routingService.findRoute(network, request, dto.algorithm);
             ctx.status(200).json(toDto(result));
         } catch (NoSuchElementException e) {
             ctx.status(404).json(error("No route found: " + e.getMessage()));
@@ -85,6 +88,71 @@ public class RoutingController {
         } catch (Exception e) {
             ctx.status(500).json(error("Internal server error: " + e.getMessage()));
         }
+    }
+
+    private void getAlgorithms(Context ctx) {
+        ctx.json(routingService.getStrategies().stream().map(strategy -> Map.of(
+                "algorithmName", strategy.getName(),
+                "supportedPreferences", java.util.Arrays.stream(RoutePreference.values())
+                        .filter(strategy::supports)
+                        .map(Enum::name)
+                        .toList())).toList());
+    }
+
+    private void compareRoutes(Context ctx) {
+        RouteRequestDto dto;
+        try {
+            dto = ctx.bodyAsClass(RouteRequestDto.class);
+        } catch (Exception exception) {
+            ctx.status(400).json(error("Invalid request body: " + exception.getMessage()));
+            return;
+        }
+        RoadNetwork network = networkService.getNetwork();
+        if (dto.startIntersectionId == null || dto.destinationIntersectionId == null
+                || !network.containsIntersection(dto.startIntersectionId)
+                || !network.containsIntersection(dto.destinationIntersectionId)) {
+            ctx.status(400).json(error("Valid startIntersectionId and destinationIntersectionId are required"));
+            return;
+        }
+        RoutePreference weightedPreference;
+        try {
+            weightedPreference = dto.preference == null
+                    ? RoutePreference.CONGESTION_AWARE
+                    : RoutePreference.valueOf(dto.preference.toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            ctx.status(400).json(error("Invalid preference: " + dto.preference));
+            return;
+        }
+
+        List<Map<String, Object>> results = new java.util.ArrayList<>();
+        for (var strategy : routingService.getStrategies()) {
+            RoutePreference effectivePreference = strategy.supports(weightedPreference)
+                    ? weightedPreference
+                    : java.util.Arrays.stream(RoutePreference.values())
+                            .filter(strategy::supports)
+                            .findFirst()
+                            .orElse(null);
+            Map<String, Object> item = new java.util.LinkedHashMap<>();
+            item.put("algorithm", strategy.getName());
+            item.put("preference", effectivePreference == null ? null : effectivePreference.name());
+            if (effectivePreference == null) {
+                item.put("success", false);
+                item.put("error", "No compatible preference");
+            } else {
+                try {
+                    RouteResult result = routingService.findRoute(network, new RouteRequest(
+                            dto.startIntersectionId, dto.destinationIntersectionId, effectivePreference), strategy.getName());
+                    RouteResultDto resultDto = toDto(result);
+                    item.put("success", true);
+                    item.put("result", resultDto);
+                } catch (Exception exception) {
+                    item.put("success", false);
+                    item.put("error", exception.getMessage());
+                }
+            }
+            results.add(item);
+        }
+        ctx.json(Map.of("results", results));
     }
 
     private RouteResultDto toDto(RouteResult result) {

@@ -1,6 +1,7 @@
 package team.traffic.persistence;
 
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -10,6 +11,7 @@ public class SyntheticMapGenerator {
     private static final double DEFAULT_ROAD_DISTANCE_KM = 1.0;
     private static final double DEFAULT_SPEED_LIMIT_KMH = 50.0;
     private static final int DEFAULT_ROAD_CAPACITY = 100;
+    private static final LocationType[] LOCATION_TYPES = LocationType.values();
 
     /**
      * Creates a rectangular grid where every horizontal or vertical neighbor
@@ -37,7 +39,8 @@ public class SyntheticMapGenerator {
                         intersectionId(row, column),
                         "Intersection " + row + "-" + column,
                         column,
-                        row));
+                        row,
+                        chooseLocationType(row, column)));
             }
         }
     }
@@ -75,6 +78,12 @@ public class SyntheticMapGenerator {
                 DEFAULT_ROAD_CAPACITY,
                 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN));
+    }
+
+    // Gives demo maps a small mix of location types.
+    private LocationType chooseLocationType(int row, int column) {
+        int value = (row + column) % LOCATION_TYPES.length;
+        return LOCATION_TYPES[value];
     }
 
     private String intersectionId(int row, int column) {
