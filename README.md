@@ -92,6 +92,10 @@ The Vite dev server will print the local frontend URL.
 | `POST /api/simulation/reset` | reset simulation |
 | `POST /api/simulation/tick` | advance one tick |
 | `GET /api/simulation/snapshot` | current simulation snapshot |
+| `GET /api/simulation/trace` | trace range and vehicle summary |
+| `GET /api/simulation/trace/ticks/{tick}` | all vehicle states at one recorded tick |
+| `GET /api/simulation/trace/vehicles/{vehicleId}` | one vehicle trace; accepts `fromTick` and `toTick` |
+| `GET /api/simulation/trace/vehicles/{vehicleId}/ticks/{tick}` | one vehicle state at an exact tick |
 | `GET /api/statistics` | combined statistics |
 | `GET /api/statistics/traffic` | traffic statistics |
 | `GET /api/statistics/algorithm/{name}` | algorithm statistics |
@@ -127,6 +131,14 @@ travelCost = distance / speedLimit
 ```
 
 A blocked, closed, or full road has an infinite routing cost.
+
+## Vehicle Trace
+
+The simulator records immutable vehicle states at tick `0` during initialize or
+reset, then records another state after each completed tick. The trace belongs to
+the current in-memory simulation run; reset clears the previous run and starts a
+new trace. Each point includes position, road progress, speed, status, route step,
+and route road IDs for timeline playback and later reporting.
 
 ## Example Simulation Payload
 
