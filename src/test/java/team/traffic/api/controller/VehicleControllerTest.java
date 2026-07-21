@@ -138,10 +138,6 @@ class VehicleControllerTest {
             return vehicle;
         }
 
-        @Override
-        public void updateAllVehicles(RoadNetwork network, RoutingService routingService) {
-        }
-
     }
 
     private static class StubRoadNetworkService implements RoadNetworkService {

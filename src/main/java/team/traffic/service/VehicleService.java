@@ -9,7 +9,6 @@ public interface VehicleService {
     List<Vehicle> getAllVehicles();
     Vehicle getVehicleById(String id);
     Vehicle createVehicle(VehicleType type, String startIntersectionId, String destinationIntersectionId, RoadNetwork network);
-    void updateAllVehicles(RoadNetwork network, RoutingService routingService);
 
     default boolean removeVehicle(String id) {
         return false;
