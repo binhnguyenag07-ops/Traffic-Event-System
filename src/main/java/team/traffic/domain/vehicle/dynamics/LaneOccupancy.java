@@ -5,7 +5,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import team.traffic.domain.network.Road;
-import team.traffic.domain.vehicle.Vehicle;
+
 
 /**
  * Physical state of one road: which vehicles are on it, where they are, and how
@@ -27,9 +27,9 @@ public final class LaneOccupancy {
     private final Road road;
     private final double roadLengthMetres;
     /** Sorted by position ascending, so the vehicle nearest the exit is last. */
-    private final List<Vehicle> vehicles;
+    private final List<TrafficParticipant> vehicles;
 
-    private LaneOccupancy(Road road, List<Vehicle> vehicles) {
+    private LaneOccupancy(Road road, List<TrafficParticipant> vehicles) {
         this.road = road;
         this.roadLengthMetres = road.getDistance() * 1_000.0;
         this.vehicles = vehicles;
@@ -39,14 +39,14 @@ public final class LaneOccupancy {
      * Captures the vehicles currently occupying {@code road}, ordered from the
      * entry of the road towards its exit.
      */
-    public static LaneOccupancy of(Road road, Collection<Vehicle> candidates) {
+    public static LaneOccupancy of(Road road, Collection<? extends TrafficParticipant> candidates) {
         if (road == null) {
             throw new IllegalArgumentException("Road is required.");
         }
 
-        List<Vehicle> onRoad = new ArrayList<>();
+        List<TrafficParticipant> onRoad = new ArrayList<>();
         if (candidates != null) {
-            for (Vehicle vehicle : candidates) {
+            for (TrafficParticipant vehicle : candidates) {
                 if (road.getId().equals(vehicle.getOccupiedRoadId())) {
                     onRoad.add(vehicle);
                 }
@@ -61,11 +61,11 @@ public final class LaneOccupancy {
      * which turns rebuilding occupancy from a scan of the whole fleet into a
      * lookup.
      */
-    static LaneOccupancy ofVehiclesAlreadyOnRoad(Road road, List<Vehicle> vehiclesOnRoad) {
-        List<Vehicle> ordered = new ArrayList<>(vehiclesOnRoad);
+    static LaneOccupancy ofVehiclesAlreadyOnRoad(Road road, List<TrafficParticipant> vehiclesOnRoad) {
+        List<TrafficParticipant> ordered = new ArrayList<>(vehiclesOnRoad);
         // Ties are broken by id so the ordering never depends on list order.
-        ordered.sort(Comparator.comparingDouble(Vehicle::getRoadProgress)
-                .thenComparing(Vehicle::getId));
+        ordered.sort(Comparator.comparingDouble(TrafficParticipant::getRoadProgress)
+                .thenComparing(TrafficParticipant::getId));
         return new LaneOccupancy(road, ordered);
     }
 
@@ -81,12 +81,12 @@ public final class LaneOccupancy {
         return vehicles.size();
     }
 
-    public List<Vehicle> getVehicles() {
+    public List<TrafficParticipant> getVehicles() {
         return List.copyOf(vehicles);
     }
 
     /** Position of a vehicle's front bumper, in metres from the road start. */
-    public double positionMetresOf(Vehicle vehicle) {
+    public double positionMetresOf(TrafficParticipant vehicle) {
         return vehicle.getRoadProgress() * roadLengthMetres;
     }
 
@@ -96,7 +96,7 @@ public final class LaneOccupancy {
      */
     public double getOccupiedLengthMetres() {
         double occupied = 0;
-        for (Vehicle vehicle : vehicles) {
+        for (TrafficParticipant vehicle : vehicles) {
             occupied += vehicle.getDriverProfile().jamSpacingMetres(vehicle.getLength());
         }
         return occupied;
@@ -120,7 +120,7 @@ public final class LaneOccupancy {
         if (vehicles.isEmpty()) {
             return roadLengthMetres;
         }
-        Vehicle rearmost = vehicles.get(0);
+        TrafficParticipant rearmost = vehicles.get(0);
         return Math.max(0.0, positionMetresOf(rearmost) - rearmost.getLength());
     }
 
@@ -129,7 +129,7 @@ public final class LaneOccupancy {
      * its body and standstill gap, and the space just past the entry must be
      * clear of the queue tail.
      */
-    public boolean canAdmit(Vehicle arriving) {
+    public boolean canAdmit(TrafficParticipant arriving) {
         if (arriving == null) {
             return false;
         }
@@ -142,14 +142,14 @@ public final class LaneOccupancy {
      * Space and speed of the vehicle directly ahead of {@code follower}, or
      * {@link LeaderGap#FREE_ROAD} when the road ahead is clear.
      */
-    public LeaderGap findLeaderFor(Vehicle follower) {
+    public LeaderGap findLeaderFor(TrafficParticipant follower) {
         if (follower == null) {
             return LeaderGap.FREE_ROAD;
         }
 
         double followerPosition = positionMetresOf(follower);
-        Vehicle leader = null;
-        for (Vehicle candidate : vehicles) {
+        TrafficParticipant leader = null;
+        for (TrafficParticipant candidate : vehicles) {
             if (candidate == follower || candidate.getId().equals(follower.getId())) {
                 continue;
             }
@@ -172,7 +172,7 @@ public final class LaneOccupancy {
     }
 
     /** Remaining distance from a vehicle's front bumper to the road exit. */
-    public double distanceToExitMetres(Vehicle vehicle) {
+    public double distanceToExitMetres(TrafficParticipant vehicle) {
         return Math.max(0.0, roadLengthMetres - positionMetresOf(vehicle));
     }
 }
