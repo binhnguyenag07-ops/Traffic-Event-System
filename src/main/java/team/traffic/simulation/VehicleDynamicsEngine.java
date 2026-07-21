@@ -1,10 +1,13 @@
 package team.traffic.simulation;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.dynamics.GapAcceptanceModel;
+import team.traffic.domain.vehicle.dynamics.MovementPlan;
 import team.traffic.domain.vehicle.dynamics.PriorityRightOfWayPolicy;
 import team.traffic.domain.vehicle.dynamics.RightOfWayPolicy;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
@@ -103,15 +106,15 @@ public class VehicleDynamicsEngine {
             List<Vehicle> vehicles,
             TrafficState state,
             double subStepSeconds) {
+        Map<Vehicle, MovementPlan> plans = new LinkedHashMap<>();
         for (Vehicle vehicle : vehicles) {
             if (isDormant(vehicle)) {
                 continue;
             }
-            vehicle.planMovement(network, state, subStepSeconds);
+            vehicle.planMovement(network, state, subStepSeconds)
+                    .ifPresent(plan -> plans.put(vehicle, plan));
         }
-        for (Vehicle vehicle : vehicles) {
-            vehicle.commitMovement(network, state);
-        }
+        plans.forEach((vehicle, plan) -> vehicle.commitMovement(plan, network, state));
     }
 
     /** A vehicle that has finished its trip takes no further part in the step. */

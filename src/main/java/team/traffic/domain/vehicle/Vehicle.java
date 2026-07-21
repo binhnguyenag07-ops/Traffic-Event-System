@@ -23,6 +23,7 @@ import team.traffic.domain.vehicle.dynamics.JunctionApproach;
 import team.traffic.domain.vehicle.dynamics.KraussCarFollowingModel;
 import team.traffic.domain.vehicle.dynamics.LaneOccupancy;
 import team.traffic.domain.vehicle.dynamics.LeaderGap;
+import team.traffic.domain.vehicle.dynamics.MovementPlan;
 import team.traffic.domain.vehicle.dynamics.TrafficParticipant;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.domain.vehicle.dynamics.TurnDirection;
@@ -65,9 +66,6 @@ public abstract class Vehicle implements TrafficParticipant {
     private DriverProfile driverProfile;
     private CarFollowingModel carFollowingModel;
     private double instantaneousSpeedMps;
-    private String plannedRoadId;
-    private double plannedTravelMetres;
-    private boolean plannedMayLeaveRoad;
 
     protected Vehicle(String id, String currentIntersectionId, String destinationIntersectionId, double movementSpeed) {
         this(
@@ -300,8 +298,8 @@ public abstract class Vehicle implements TrafficParticipant {
      * sequence in the right order.</p>
      */
     public void advance(RoadNetwork roadNetwork, TrafficState trafficState, double simulationSeconds) {
-        planMovement(roadNetwork, trafficState, simulationSeconds);
-        commitMovement(roadNetwork, trafficState);
+        planMovement(roadNetwork, trafficState, simulationSeconds)
+                .ifPresent(plan -> commitMovement(plan, roadNetwork, trafficState));
     }
 
     /**
@@ -314,20 +312,21 @@ public abstract class Vehicle implements TrafficParticipant {
      * junction has already ensured that at most one vehicle is cleared onto any
      * given road this step.</p>
      */
-    public void planMovement(RoadNetwork roadNetwork, TrafficState trafficState, double simulationSeconds) {
+    public Optional<MovementPlan> planMovement(
+            RoadNetwork roadNetwork,
+            TrafficState trafficState,
+            double simulationSeconds) {
         Objects.requireNonNull(roadNetwork, "Road network must not be null.");
         Objects.requireNonNull(trafficState, "Traffic state must not be null.");
         if (!Double.isFinite(simulationSeconds) || simulationSeconds <= 0) {
             throw new IllegalArgumentException("Simulation seconds must be positive.");
         }
 
-        plannedRoadId = null;
-
         if (hasReachedDestination()) {
             releaseOccupiedRoad(roadNetwork, trafficState);
             instantaneousSpeedMps = 0;
             status = VehicleStatus.ARRIVED;
-            return;
+            return Optional.empty();
         }
 
         RouteStep step = getNextRouteStep();
@@ -335,7 +334,7 @@ public abstract class Vehicle implements TrafficParticipant {
             releaseOccupiedRoad(roadNetwork, trafficState);
             instantaneousSpeedMps = 0;
             status = VehicleStatus.BLOCKED;
-            return;
+            return Optional.empty();
         }
 
         Road road = roadNetwork.getRoad(step.getRoadId());
@@ -343,11 +342,11 @@ public abstract class Vehicle implements TrafficParticipant {
             releaseOccupiedRoad(roadNetwork, trafficState);
             instantaneousSpeedMps = 0;
             status = VehicleStatus.BLOCKED;
-            return;
+            return Optional.empty();
         }
 
         if (occupiedRoadId == null && !enterRoadUnderJunctionControl(roadNetwork, trafficState, step, road)) {
-            return;
+            return Optional.empty();
         }
 
         LaneOccupancy lane = trafficState.occupancyOf(road.getId());
@@ -356,10 +355,10 @@ public abstract class Vehicle implements TrafficParticipant {
                 ? (1.0 - roadProgress) * road.getDistance() * 1_000.0
                 : lane.distanceToExitMetres(this);
 
-        plannedMayLeaveRoad = canLeaveRoadAhead(roadNetwork, trafficState);
-        double stopDistanceMetres = plannedMayLeaveRoad ? Double.POSITIVE_INFINITY : distanceToExitMetres;
+        boolean mayLeaveRoad = canLeaveRoadAhead(roadNetwork, trafficState);
+        double stopDistanceMetres = mayLeaveRoad ? Double.POSITIVE_INFINITY : distanceToExitMetres;
 
-        instantaneousSpeedMps = getCarFollowingModel().nextSpeedMps(new FollowContext(
+        double plannedSpeedMps = getCarFollowingModel().nextSpeedMps(new FollowContext(
                 instantaneousSpeedMps,
                 desiredSpeedMps(road),
                 acceleration,
@@ -370,30 +369,37 @@ public abstract class Vehicle implements TrafficParticipant {
                 simulationSeconds,
                 reproducibleNoise(trafficState.getTick())));
 
-        plannedTravelMetres = Math.min(instantaneousSpeedMps * simulationSeconds, distanceToExitMetres);
-        plannedRoadId = road.getId();
+        return Optional.of(new MovementPlan(
+                road.getId(),
+                plannedSpeedMps,
+                Math.min(plannedSpeedMps * simulationSeconds, distanceToExitMetres),
+                mayLeaveRoad));
     }
 
     /**
-     * Second half of a step: applies the movement worked out by
-     * {@link #planMovement}, and hands the vehicle over to the next road when
-     * it runs off the end of this one.
+     * Second half of a step: carries out a plan made by {@link #planMovement},
+     * and hands the vehicle over to the next road when it runs off the end of
+     * this one.
      */
-    public void commitMovement(RoadNetwork roadNetwork, TrafficState trafficState) {
+    public void commitMovement(MovementPlan plan, RoadNetwork roadNetwork, TrafficState trafficState) {
         Objects.requireNonNull(roadNetwork, "Road network must not be null.");
-        if (plannedRoadId == null) {
+        if (plan == null) {
             return;
         }
 
-        Road road = roadNetwork.getRoad(plannedRoadId);
+        Road road = roadNetwork.getRoad(plan.roadId());
         RouteStep step = getNextRouteStep();
-        plannedRoadId = null;
         if (road == null || step == null) {
             return;
         }
 
+        // The new speed only takes effect now, so a vehicle planning later in
+        // the step still reads its leader at the speed it was going, not the
+        // one it just chose.
+        instantaneousSpeedMps = plan.speedMps();
+
         double previousProgress = roadProgress;
-        roadProgress = Math.min(1.0, roadProgress + plannedTravelMetres / (road.getDistance() * 1_000.0));
+        roadProgress = Math.min(1.0, roadProgress + plan.travelMetres() / (road.getDistance() * 1_000.0));
         distanceTravelledKm += (roadProgress - previousProgress) * road.getDistance();
 
         if (instantaneousSpeedMps < QUEUEING_THRESHOLD_MPS) {
@@ -403,7 +409,7 @@ public abstract class Vehicle implements TrafficParticipant {
             status = VehicleStatus.MOVING;
         }
 
-        if (roadProgress >= 1.0 && plannedMayLeaveRoad) {
+        if (roadProgress >= 1.0 && plan.mayLeaveRoad()) {
             nextRouteStepIndex++;
             moveTo(step.getToIntersectionId());
             releaseOccupiedRoad(roadNetwork, trafficState);
