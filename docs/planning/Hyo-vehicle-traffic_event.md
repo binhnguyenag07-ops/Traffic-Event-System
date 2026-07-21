@@ -19,6 +19,7 @@ the backend workflow that connects events to vehicle movement and rerouting.
 | Post-plan extension | Backend vehicle trace timeline | Done |
 | Post-plan extension | Microscopic traffic model: car following, right of way, physical road capacity | Done |
 | Post-plan extension | Vehicle pose: map position and heading for true-scale rendering | Done |
+| Post-plan extension | Structural refactor: cycle, temporal coupling, `VehicleProfile`, drop legacy movement | Done |
 
 ## Implemented Packages
 
@@ -279,11 +280,66 @@ has no lane index and no lateral offset from the centreline, and every vehicle
 would be drawn along the middle of the road. Closing that needs a lane count
 and a road width, which belong to `domain/network`.
 
-### Backward Compatibility
+## Student C Refactor: Structure
 
-`advance(RoadNetwork, double)` is untouched and still applies the original
-aggregate rule. `TickProcessor` accepts a `null` engine to select it. Nothing in
-`domain/network`, `routing`, `persistence`, or the frontend was modified.
+Four changes made once the model was working, each fixing something specific.
+
+**A dependency cycle.** `domain.vehicle.dynamics` imported `Vehicle` while
+`Vehicle` imported the dynamics package, so neither could be reasoned about or
+tested alone. The model never needed a whole vehicle: it needs a length, a
+position on a road, a speed, a driver profile and a dispatch priority. Those
+seven methods are now `TrafficParticipant`, `Vehicle` implements it, and the
+dependency runs one way.
+
+**Temporal coupling, and a bug it hid.** `planMovement` wrote its decision into
+mutable fields that `commitMovement` later read; nothing said one had to run
+before the other. It now returns a `MovementPlan` that commit takes as an
+argument. That exposed a real defect: the newly chosen speed was written
+straight back to the vehicle, and a follower reads its leader's speed when
+judging the gap, so a vehicle planning later in the step saw its leader at the
+speed it had *just picked*. The speed now rides in the plan. Reversing the
+vehicle list reproduces every position to the last bit.
+
+**Two state machines out of `Vehicle`.** `TrafficLightWait` owns the signal
+countdown and which signals have been served. `TripRecord` owns distance, time,
+waiting ticks, reroute count and the visited-junction list.
+
+**The physical profile, and the old movement path.** The seven fixed physical
+properties became `VehicleProfile`, an immutable record that validates itself.
+The original graph-based movement — `moveOneStep(...)`, `advance(RoadNetwork,
+double)` and `VehicleService.updateAllVehicles(...)` — is deleted. It had no
+production caller left: the tick loop goes through `VehicleDynamicsEngine`, and
+only tests kept the old path alive. `Vehicle` went from 920 to 754 lines.
+
+## What Is Still Missing For True-Scale Rendering
+
+Ordered by what blocks what.
+
+| Work | Owner | Blocked by |
+|---|---|---|
+| Cornering speed limit from road curvature | Student C | nobody |
+| Junctions with real length and turn paths | Student C | nobody |
+| `Road.laneCount` and lane width | Student A | nobody |
+| Lane index and lateral offset on a vehicle | Student C | `laneCount` |
+| Reading the OSM `lanes` tag in the map generator | unassigned | nobody |
+
+The critical path is the map generator, then `laneCount`, then lane placement.
+Without lane data every road defaults to one lane and lane placement is
+meaningless. The first two rows are independent of all of it.
+
+Two known defects that are not Student C's to fix:
+
+- `Road.setCurrentVehicleCount()` recomputes `vehicleDensity` from its own
+  headcount, so within a tick the count-based and physical values disagree
+  until the tick ends. The field has two writers.
+- `TrafficMap.jsx` still computes vehicle positions and bearings itself rather
+  than reading the published pose, and places every vehicle waiting at a
+  junction on the same point.
+
+## Compatibility
+
+Nothing in `domain/network`, `routing`, `persistence`, or the frontend was
+modified.
 
 ## Event Responsibilities
 
@@ -307,10 +363,10 @@ events remember the previous road condition before applying their effect.
 
 - creates vehicles with generated unique `V-...` ids;
 - validates start and destination intersections;
-- stores vehicles in memory;
-- updates all vehicles per tick;
-- requests or recomputes routes when needed;
-- moves vehicles and updates road density through `Vehicle.moveOneStep`.
+- delegates to `TrafficSimulator` so the API and the simulation read one list.
+
+Moving vehicles is not its job. That belongs to the tick loop, which is the
+only place with the whole-network picture the microscopic model needs.
 
 `TrafficEventServiceImpl`:
 
@@ -385,6 +441,10 @@ Relevant tests:
 | `PolylineGeometryTest` | metric sampling of a road shape, bearings, short-way turns |
 | `VehiclePoseResolverTest` | pose on a road, at a junction, and at every moment of a trip |
 | `SimulationSnapshotDtoTest` | pose published with a network, absent without one |
+| `LaneOccupancyTest` | physical occupancy, tested with no `Vehicle` in the fixtures |
+| `TrafficLightWaitTest` | signal countdown, served-once rule |
+| `TripRecordTest` | journey accumulation and its validation |
+| `TickProcessorTest` | rerouting a blocked vehicle, republishing physical density |
 
 ## Completion Notes
 
