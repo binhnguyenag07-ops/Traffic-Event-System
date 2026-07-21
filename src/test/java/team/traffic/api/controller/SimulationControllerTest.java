@@ -10,6 +10,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,11 +18,15 @@ import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.Vehicle;
+import team.traffic.domain.vehicle.VehicleStatus;
+import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.VehicleConfig;
+import team.traffic.simulation.trace.VehicleTracePoint;
+import team.traffic.simulation.trace.VehicleTraceSummary;
 
 class SimulationControllerTest {
     private Javalin app;
@@ -89,6 +94,50 @@ class SimulationControllerTest {
         assertThat(response.body()).contains("\"ev-1\"");
     }
 
+    @Test
+    void traceEndpointsExposeTheSummaryARangeAndASingleState() throws Exception {
+        HttpResponse<String> summaryResponse = get("/api/simulation/trace");
+        HttpResponse<String> rangeResponse = get("/api/simulation/trace/vehicles/car-1?fromTick=1&toTick=3");
+        HttpResponse<String> exactResponse = get("/api/simulation/trace/vehicles/car-1/ticks/3");
+        HttpResponse<String> tickResponse = get("/api/simulation/trace/ticks/3");
+
+        assertThat(summaryResponse.statusCode()).isEqualTo(200);
+        assertThat(summaryResponse.body()).contains("\"recordedTickCount\":4");
+        assertThat(summaryResponse.body()).contains("\"vehicleIds\":[\"car-1\"]");
+        assertThat(rangeResponse.statusCode()).isEqualTo(200);
+        assertThat(rangeResponse.body()).contains("\"vehicleId\":\"car-1\"");
+        assertThat(rangeResponse.body()).contains("\"tick\":3");
+        assertThat(simulationService.capturedFromTick).isEqualTo(1L);
+        assertThat(simulationService.capturedToTick).isEqualTo(3L);
+        assertThat(exactResponse.statusCode()).isEqualTo(200);
+        assertThat(exactResponse.body()).contains("\"currentRoadId\":\"AB\"");
+        assertThat(tickResponse.statusCode()).isEqualTo(200);
+        assertThat(tickResponse.body()).contains("\"roadProgress\":0.5");
+    }
+
+    @Test
+    void aVehicleTraceRangeDefaultsToTheWholeRunWhenNoTicksAreGiven() throws Exception {
+        HttpResponse<String> response = get("/api/simulation/trace/vehicles/car-1");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(simulationService.capturedFromTick).isZero();
+        assertThat(simulationService.capturedToTick).isEqualTo(3L);
+    }
+
+    @Test
+    void traceEndpointsValidateTicksAndReturnNotFoundForMissingState() throws Exception {
+        HttpResponse<String> invalidRange = get("/api/simulation/trace/vehicles/car-1?fromTick=4&toTick=2");
+        HttpResponse<String> negativeTick = get("/api/simulation/trace/vehicles/car-1?fromTick=-1");
+        HttpResponse<String> missingTick = get("/api/simulation/trace/ticks/99");
+        HttpResponse<String> missingVehicle = get("/api/simulation/trace/vehicles/missing/ticks/3");
+
+        assertThat(invalidRange.statusCode()).isEqualTo(400);
+        assertThat(invalidRange.body()).contains("fromTick");
+        assertThat(negativeTick.statusCode()).isEqualTo(400);
+        assertThat(missingTick.statusCode()).isEqualTo(404);
+        assertThat(missingVehicle.statusCode()).isEqualTo(404);
+    }
+
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + app.port() + path))
@@ -111,6 +160,24 @@ class SimulationControllerTest {
         private List<EventConfig> events = new ArrayList<>();
         private List<Vehicle> domainVehicles = List.of();
         private List<TrafficEvent> trafficEvents = List.of();
+        private long capturedFromTick;
+        private long capturedToTick;
+
+        private final VehicleTracePoint tracePoint = new VehicleTracePoint(
+                3,
+                "car-1",
+                VehicleType.CAR,
+                VehicleStatus.MOVING,
+                "A",
+                "B",
+                "AB",
+                "A",
+                "B",
+                0.5,
+                30.0,
+                24.0,
+                1,
+                List.of("AB"));
 
         @Override
         public void initialize(List<VehicleConfig> vehicles, List<EventConfig> events) {
@@ -134,5 +201,37 @@ class SimulationControllerTest {
 
         @Override public List<Vehicle> getVehicles() { return domainVehicles; }
         @Override public List<TrafficEvent> getEvents() { return trafficEvents; }
+
+        @Override
+        public VehicleTraceSummary getVehicleTraceSummary() {
+            return new VehicleTraceSummary(0L, 3L, 4, List.of("car-1"));
+        }
+
+        @Override
+        public boolean hasVehicleTraceAtTick(long tick) {
+            return tick == 3;
+        }
+
+        @Override
+        public List<VehicleTracePoint> getVehicleStatesAtTick(long tick) {
+            return tick == 3 ? List.of(tracePoint) : List.of();
+        }
+
+        @Override
+        public Optional<VehicleTracePoint> getVehicleStateAtTick(String vehicleId, long tick) {
+            return "car-1".equals(vehicleId) && tick == 3 ? Optional.of(tracePoint) : Optional.empty();
+        }
+
+        @Override
+        public List<VehicleTracePoint> getVehicleTrace(String vehicleId, long fromTick, long toTick) {
+            capturedFromTick = fromTick;
+            capturedToTick = toTick;
+            if (fromTick > toTick) {
+                throw new IllegalArgumentException("Trace fromTick must not exceed toTick.");
+            }
+            return "car-1".equals(vehicleId) && fromTick <= 3 && toTick >= 3
+                    ? List.of(tracePoint)
+                    : List.of();
+        }
     }
 }

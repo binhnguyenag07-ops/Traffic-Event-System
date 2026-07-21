@@ -15,11 +15,15 @@ import team.traffic.domain.vehicle.VehicleFactory;
 import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.service.RoutingService;
 import team.traffic.service.TrafficEventService;
+import team.traffic.simulation.trace.VehicleTracePoint;
+import team.traffic.simulation.trace.VehicleTraceStore;
+import team.traffic.simulation.trace.VehicleTraceSummary;
 import team.traffic.observer.TrafficEventBus;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 public class TrafficSimulator {
     private RoadNetwork network;
@@ -27,6 +31,7 @@ public class TrafficSimulator {
     private final VehicleFactory vehicleFactory;
     private final TickProcessor tickProcessor;
     private final SimulationClock clock;
+    private final VehicleTraceStore vehicleTraceStore;
 
     private SimulationStatus status;
     private List<Vehicle> vehicles;
@@ -46,6 +51,7 @@ public class TrafficSimulator {
         this.vehicleFactory = new VehicleFactory();
         this.tickProcessor = new TickProcessor(routingService, eventBus);
         this.clock = new SimulationClock();
+        this.vehicleTraceStore = new VehicleTraceStore();
         this.status = SimulationStatus.READY;
         this.vehicles = new ArrayList<>();
         this.events = new ArrayList<>();
@@ -65,6 +71,7 @@ public class TrafficSimulator {
         this.completedTrips.clear();
         this.clock.reset();
         this.status = SimulationStatus.READY;
+        this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
     }
 
     public synchronized void start() {
@@ -96,11 +103,13 @@ public class TrafficSimulator {
         this.completedTrips.clear();
         this.clock.reset();
         this.status = SimulationStatus.READY;
+        this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
     }
 
     public synchronized void advanceTick() {
         tickProcessor.process(clock.getCurrentTick(), network, vehicles, events, simulationSecondsPerTick);
         clock.tick();
+        vehicleTraceStore.record(clock.getCurrentTick(), vehicles);
     }
 
     public synchronized double getSimulationSecondsPerTick() {
@@ -136,6 +145,29 @@ public class TrafficSimulator {
 
     public synchronized SimulationSnapshot getSnapshot() {
         return new SimulationSnapshot(clock.getCurrentTick(), status, vehicles, events);
+    }
+
+    public synchronized VehicleTraceSummary getVehicleTraceSummary() {
+        return vehicleTraceStore.getSummary();
+    }
+
+    public synchronized boolean hasVehicleTraceAtTick(long tick) {
+        return vehicleTraceStore.hasTick(tick);
+    }
+
+    public synchronized List<VehicleTracePoint> getVehicleStatesAtTick(long tick) {
+        return vehicleTraceStore.getStatesAtTick(tick);
+    }
+
+    public synchronized Optional<VehicleTracePoint> getVehicleStateAtTick(String vehicleId, long tick) {
+        return vehicleTraceStore.getVehicleStateAtTick(vehicleId, tick);
+    }
+
+    public synchronized List<VehicleTracePoint> getVehicleTrace(
+            String vehicleId,
+            long fromTick,
+            long toTick) {
+        return vehicleTraceStore.getVehicleTrace(vehicleId, fromTick, toTick);
     }
 
     public synchronized void addEvent(TrafficEvent event) {
@@ -203,6 +235,7 @@ public class TrafficSimulator {
         eventConfigs = new ArrayList<>();
         clock.reset();
         status = SimulationStatus.READY;
+        vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
     }
 
     /**

@@ -4,6 +4,7 @@ import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.domain.routing.RoutePreference;
+import team.traffic.domain.vehicle.pose.VehiclePose;
 import java.util.List;
 
 public class VehicleDto {
@@ -34,8 +35,27 @@ public class VehicleDto {
     private long waitingTicks;
     private int routeRecalculationCount;
     private List<String> travelHistory;
+    private double instantaneousSpeed;
+    private Double latitude;
+    private Double longitude;
+    private Double headingDegrees;
+    private boolean inJunction;
 
     public VehicleDto() {}
+
+    /**
+     * Adds the vehicle's resolved map position and heading, so a client can
+     * draw it to scale without reimplementing the road geometry itself.
+     */
+    public VehicleDto(Vehicle vehicle, VehiclePose pose) {
+        this(vehicle);
+        if (pose != null) {
+            this.latitude = pose.latitude();
+            this.longitude = pose.longitude();
+            this.headingDegrees = pose.headingDegrees();
+            this.inJunction = pose.inJunction();
+        }
+    }
 
     public VehicleDto(Vehicle vehicle) {
         this.id = vehicle.getId();
@@ -65,6 +85,7 @@ public class VehicleDto {
         this.waitingTicks = vehicle.getWaitingTicks();
         this.routeRecalculationCount = vehicle.getRouteRecalculationCount();
         this.travelHistory = vehicle.getTravelHistory();
+        this.instantaneousSpeed = vehicle.getInstantaneousSpeedKph();
     }
 
     public String getId() { return id; }
@@ -121,4 +142,14 @@ public class VehicleDto {
     public void setRouteRecalculationCount(int routeRecalculationCount) { this.routeRecalculationCount = routeRecalculationCount; }
     public List<String> getTravelHistory() { return travelHistory; }
     public void setTravelHistory(List<String> travelHistory) { this.travelHistory = travelHistory; }
+    public double getInstantaneousSpeed() { return instantaneousSpeed; }
+    public void setInstantaneousSpeed(double instantaneousSpeed) { this.instantaneousSpeed = instantaneousSpeed; }
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
+    public Double getHeadingDegrees() { return headingDegrees; }
+    public void setHeadingDegrees(Double headingDegrees) { this.headingDegrees = headingDegrees; }
+    public boolean isInJunction() { return inJunction; }
+    public void setInJunction(boolean inJunction) { this.inJunction = inJunction; }
 }

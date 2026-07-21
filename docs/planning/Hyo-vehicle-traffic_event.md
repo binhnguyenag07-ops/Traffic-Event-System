@@ -16,6 +16,9 @@ the backend workflow that connects events to vehicle movement and rerouting.
 | 7 | Event tests | Done |
 | 8 | OOP docs | Done in planning, architecture, and class-diagram docs |
 | Post-plan extension | Vehicle physical profile and speed controls | Done |
+| Post-plan extension | Backend vehicle trace timeline | Done |
+| Post-plan extension | Microscopic traffic model: car following, right of way, physical road capacity | Done |
+| Post-plan extension | Vehicle pose: map position and heading for true-scale rendering | Done |
 
 ## Implemented Packages
 
@@ -53,8 +56,16 @@ src/main/java/team/traffic/
     |-- TrafficSimulator.java
     |-- TickProcessor.java
     |-- VehicleConfig.java
-    `-- EventConfig.java
+    |-- EventConfig.java
+    `-- trace/
+        |-- VehicleTracePoint.java
+        |-- VehicleTraceStore.java
+        `-- VehicleTraceSummary.java
 ```
+
+Two later extensions add to this list and are described in their own sections
+below: the vehicle physical profile, and the microscopic traffic model in
+`domain/vehicle/dynamics`.
 
 ## Vehicle Responsibilities
 
@@ -92,10 +103,187 @@ remain compatible.
 | `priorityLevel` | level | standard vehicles 0; emergency supplied by caller |
 
 `accelerate(seconds)` and `decelerate(seconds)` enforce valid speed bounds.
-They intentionally do not alter the current graph-based movement rule, where a
-simulation tick moves a vehicle by one `RouteStep`. Integrating continuous
-kinematics into tick timing and route cost would require a team-wide simulation
-design decision and is outside this backward-compatible extension.
+They intentionally do not alter the original graph-based movement rule, where a
+simulation tick moves a vehicle by one `RouteStep`.
+
+## Student C Extension: Microscopic Traffic Model
+
+The physical profile above described vehicles that never actually interacted:
+`length` was carried around but nothing read it, and a road was considered full
+purely by counting vehicles, so a 12 m bus and a 4.5 m car each consumed one
+unit of a road's `capacity`. This extension closes that gap. It lives in
+`domain/vehicle/dynamics` plus one engine class in `simulation`, and follows the
+conventions of the SUMO microsimulator so parameter values can be compared
+against published defaults.
+
+### Packages
+
+```text
+src/main/java/team/traffic/
+|-- domain/vehicle/dynamics/
+|   |-- DriverProfile.java              behaviour parameters of the driver
+|   |-- CarFollowingModel.java          interface: choose a speed for one step
+|   |-- KraussCarFollowingModel.java    SUMO's default car-following model
+|   |-- FollowContext.java              inputs to one car-following decision
+|   |-- LeaderGap.java                  space and speed of the vehicle ahead
+|   |-- LaneOccupancy.java              physical state of one road
+|   |-- TrafficState.java               working state of one simulation step
+|   |-- JunctionEnvironment.java        interface: what a junction can observe
+|   |-- JunctionApproach.java           one vehicle asking to cross
+|   |-- JunctionController.java         arbitrates one junction per step
+|   |-- RightOfWayPolicy.java           interface: who goes first, what conflicts
+|   |-- PriorityRightOfWayPolicy.java   hierarchy-based right of way
+|   |-- GapAcceptanceModel.java         will this driver pull out?
+|   `-- TurnDirection.java              straight / left / right / U-turn
+`-- simulation/
+    `-- VehicleDynamicsEngine.java      runs observe, arbitrate, move
+```
+
+### Driver Profile
+
+Separate from the physical profile, because they describe different things: the
+vehicle is the machine, the driver is the person operating it.
+
+| Property | Unit | Car | Bus | Emergency |
+|---|---:|---:|---:|---:|
+| `minimumGapMetres` (SUMO `minGap`) | m | 2.5 | 3.0 | 2.0 |
+| `reactionTimeSeconds` (SUMO `tau`) | s | 1.0 | 1.4 | 0.7 |
+| `imperfection` (SUMO `sigma`) | 0..1 | 0.5 | 0.4 | 0.1 |
+| `gapAcceptanceSeconds` | s | 3.0 | 4.5 | 1.5 |
+| `speedFactor` | multiplier | 1.0 | 0.95 | 1.3 |
+
+### Physical Road Occupancy
+
+`LaneOccupancy` holds the vehicles on one road ordered by position and answers
+the questions the old count-based model could not:
+
+- `getPhysicalJamRatio()` — share of the road's length consumed, where each
+  vehicle takes `length + minimumGap` metres. A 100 m road holds roughly 14
+  cars but only 6 buses.
+- `canAdmit(vehicle)` — whether an arriving vehicle physically fits, both in
+  total length and in the space immediately past the entry.
+- `findLeaderFor(vehicle)` — bumper-to-bumper gap and speed of the vehicle
+  directly ahead.
+
+`TickProcessor` republishes each road's `vehicleDensity` from this ratio at the
+end of every tick, so routing cost, the statistics panel, and the map colouring
+all see size-aware congestion. The road's own `capacity` is untouched and still
+serves as a hard upper bound.
+
+### Car Following
+
+`KraussCarFollowingModel` computes the fastest speed from which a vehicle could
+still stop behind its leader:
+
+```text
+vSafe = vLeader + (gap - vLeader * tau) / ((vLeader + vFollower) / (2 * b) + tau)
+v     = min(vDesired, v + a * dt, vSafe) - sigma * a * min(dt, tau) * noise
+```
+
+Two deviations from the textbook formulation, both deliberate:
+
+- `noise` is supplied by the caller and derived from the vehicle id and tick, so
+  driver imperfection never makes an experiment unrepeatable;
+- the imperfection term is integrated over `min(dt, tau)` rather than `dt`,
+  because a coarse step would otherwise subtract minutes' worth of acceleration
+  and bring every vehicle to a standstill.
+
+`Vehicle.currentSpeed` keeps its original meaning of the speed the driver wants.
+The new `instantaneousSpeedMps` is the speed actually being travelled. Their
+ratio is a direct measure of delay.
+
+### Right Of Way And Gap Acceptance
+
+`JunctionController` collects every `JunctionApproach` at a junction, sorts them
+with a `RightOfWayPolicy`, then walks the list once, clearing a movement only
+when it does not conflict with one already cleared, the driver accepts the gap,
+and the target road physically has room.
+
+`PriorityRightOfWayPolicy` orders approaches by dispatch priority (emergency
+first), then starvation, then street hierarchy, then manoeuvre (straight before
+right before left before U-turn), then distance to the stop line, then vehicle
+id. The starvation rule promotes anyone held for six ticks so a side street is
+never blocked forever by a steady stream on the main road.
+
+`GapAcceptanceModel` requires a driver turning across the opposing stream to see
+a headway of at least `gapAcceptanceSeconds` before pulling out. An ambulance
+accepts a 1.5 s gap a bus driver would refuse.
+
+### Step Sequence
+
+`VehicleDynamicsEngine` runs three phases per sub-step:
+
+1. **Observe** — `TrafficState.capture` records where every vehicle is;
+2. **Arbitrate** — every waiting vehicle registers its approach and all
+   junctions resolve at once;
+3. **Move** — every vehicle calls `planMovement`, then every vehicle calls
+   `commitMovement`.
+
+Splitting plan from commit is what makes the result independent of the order of
+the vehicle list: a vehicle sees its leader unmoved whether that leader sits
+earlier or later in the list.
+
+A tick is normally ten simulated seconds, far too coarse for a model tuned to a
+one-second reaction time, so the engine splits it into sub-steps of at most one
+second (capped at 60 per tick) and runs all three phases in each.
+
+### Emergent Behaviour
+
+None of the following is imposed by a formula; all of it falls out of vehicles
+interacting:
+
+- queues form behind a blockage, at spacing set by vehicle length and `minGap`;
+- a full road refuses arrivals, so queues spill back through the junction into
+  the road behind;
+- throughput drops as a road saturates, because followers must brake;
+- a lane of buses saturates long before a lane of cars.
+
+## Student C Extension: Vehicle Pose
+
+Everything above simulates where a vehicle is; this publishes it. The snapshot
+used to say which road a vehicle was on and how far along it was, leaving each
+client to interpolate the road shape for itself. That put the same geometry in
+two places, and it broke down entirely at junctions.
+
+```text
+domain/vehicle/pose/
+|-- PolylineGeometry.java      sample a position and bearing along a road shape
+|-- VehiclePose.java           where a vehicle is, which way it faces, how big it is
+`-- VehiclePoseResolver.java   resolve one vehicle against the network
+```
+
+`PolylineGeometry` measures a road by its length in metres rather than by its
+point count. A degree of longitude is shorter than a degree of latitude away
+from the equator, so treating the two alike misplaces a vehicle on any road
+that does not run due north or east.
+
+The junction case is the one that mattered. A vehicle waiting to cross holds no
+road, so it had no shape to sample and therefore no position and no heading at
+all — a renderer had nothing but the junction itself, and waiting vehicles
+snapped round to face north. Junction arbitration made this more visible rather
+than less, because vehicles now queue at stop lines instead of crossing
+straight through: a probe over four junctions found **15.8%** of vehicle-ticks
+in that state. Such a vehicle is now placed at the junction still facing the
+way it arrived, taken from the route step before the one it waits on.
+
+`SimulationSnapshotDto` resolves a pose per vehicle when it is given a network,
+so `VehicleDto` carries `latitude`, `longitude`, `headingDegrees`, and
+`inJunction` beside the existing `length` and `width`. That is enough to draw a
+vehicle to true scale. Without a network the fields stay null and the original
+progress-based fields are unchanged.
+
+### Still Missing For True-Scale Rendering
+
+Lane-level placement. `LaneOccupancy` models one road as one lane, so a vehicle
+has no lane index and no lateral offset from the centreline, and every vehicle
+would be drawn along the middle of the road. Closing that needs a lane count
+and a road width, which belong to `domain/network`.
+
+### Backward Compatibility
+
+`advance(RoadNetwork, double)` is untouched and still applies the original
+aggregate rule. `TickProcessor` accepts a `null` engine to select it. Nothing in
+`domain/network`, `routing`, `persistence`, or the frontend was modified.
 
 ## Event Responsibilities
 
@@ -168,6 +356,10 @@ Student C functionality is exposed through:
 | Observer | `TrafficEventBus`, `TrafficEventListener`, `DynamicReroutingListener` | decouples event publication from rerouting reaction |
 | Template Method style | `TrafficEvent.apply/resolve` overridden by subclasses | shared event lifecycle with subclass-specific road effect |
 | Polymorphism | `Vehicle`, `TrafficEvent` hierarchies | common workflow with concrete behavior per type |
+| Strategy | `CarFollowingModel`, `RightOfWayPolicy` | swap how vehicles follow and who yields without touching the simulator |
+| Value Object | `DriverProfile`, `LeaderGap`, `FollowContext`, `JunctionApproach` | immutable records carrying one decision's inputs |
+| Mediator | `JunctionController` | vehicles never negotiate with each other; the junction decides for all of them |
+| Interface Segregation | `JunctionEnvironment` | a junction sees only what it needs, so it can be tested without a network |
 
 ## Test Coverage
 
@@ -184,6 +376,15 @@ Relevant tests:
 | `TrafficEventBusTest` | observer subscription and publish behavior |
 | `DynamicReroutingListenerTest` | rerouting after affected-road events |
 | `TrafficSimulatorTest` | multi-vehicle/event simulation setup and event creation |
+| `VehicleTraceStoreTest` | immutable per-tick vehicle timeline and range queries |
+| `KraussCarFollowingModelTest` | safe speed, stop points, no overshoot, coarse steps, reproducibility |
+| `TurnDirectionTest` | manoeuvre classification from map geometry |
+| `PriorityRightOfWayPolicyTest` | emergency priority, hierarchy, turns, starvation, conflicts |
+| `JunctionControllerTest` | arbitration, gap acceptance, refusing a full road |
+| `VehicleDynamicsEngineTest` | queueing, physical capacity, spillback, order independence |
+| `PolylineGeometryTest` | metric sampling of a road shape, bearings, short-way turns |
+| `VehiclePoseResolverTest` | pose on a road, at a junction, and at every moment of a trip |
+| `SimulationSnapshotDtoTest` | pose published with a network, absent without one |
 
 ## Completion Notes
 
