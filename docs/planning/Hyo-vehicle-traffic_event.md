@@ -18,6 +18,7 @@ the backend workflow that connects events to vehicle movement and rerouting.
 | Post-plan extension | Vehicle physical profile and speed controls | Done |
 | Post-plan extension | Backend vehicle trace timeline | Done |
 | Post-plan extension | Microscopic traffic model: car following, right of way, physical road capacity | Done |
+| Post-plan extension | Vehicle pose: map position and heading for true-scale rendering | Done |
 
 ## Implemented Packages
 
@@ -237,6 +238,47 @@ interacting:
 - throughput drops as a road saturates, because followers must brake;
 - a lane of buses saturates long before a lane of cars.
 
+## Student C Extension: Vehicle Pose
+
+Everything above simulates where a vehicle is; this publishes it. The snapshot
+used to say which road a vehicle was on and how far along it was, leaving each
+client to interpolate the road shape for itself. That put the same geometry in
+two places, and it broke down entirely at junctions.
+
+```text
+domain/vehicle/pose/
+|-- PolylineGeometry.java      sample a position and bearing along a road shape
+|-- VehiclePose.java           where a vehicle is, which way it faces, how big it is
+`-- VehiclePoseResolver.java   resolve one vehicle against the network
+```
+
+`PolylineGeometry` measures a road by its length in metres rather than by its
+point count. A degree of longitude is shorter than a degree of latitude away
+from the equator, so treating the two alike misplaces a vehicle on any road
+that does not run due north or east.
+
+The junction case is the one that mattered. A vehicle waiting to cross holds no
+road, so it had no shape to sample and therefore no position and no heading at
+all — a renderer had nothing but the junction itself, and waiting vehicles
+snapped round to face north. Junction arbitration made this more visible rather
+than less, because vehicles now queue at stop lines instead of crossing
+straight through: a probe over four junctions found **15.8%** of vehicle-ticks
+in that state. Such a vehicle is now placed at the junction still facing the
+way it arrived, taken from the route step before the one it waits on.
+
+`SimulationSnapshotDto` resolves a pose per vehicle when it is given a network,
+so `VehicleDto` carries `latitude`, `longitude`, `headingDegrees`, and
+`inJunction` beside the existing `length` and `width`. That is enough to draw a
+vehicle to true scale. Without a network the fields stay null and the original
+progress-based fields are unchanged.
+
+### Still Missing For True-Scale Rendering
+
+Lane-level placement. `LaneOccupancy` models one road as one lane, so a vehicle
+has no lane index and no lateral offset from the centreline, and every vehicle
+would be drawn along the middle of the road. Closing that needs a lane count
+and a road width, which belong to `domain/network`.
+
 ### Backward Compatibility
 
 `advance(RoadNetwork, double)` is untouched and still applies the original
@@ -340,6 +382,9 @@ Relevant tests:
 | `PriorityRightOfWayPolicyTest` | emergency priority, hierarchy, turns, starvation, conflicts |
 | `JunctionControllerTest` | arbitration, gap acceptance, refusing a full road |
 | `VehicleDynamicsEngineTest` | queueing, physical capacity, spillback, order independence |
+| `PolylineGeometryTest` | metric sampling of a road shape, bearings, short-way turns |
+| `VehiclePoseResolverTest` | pose on a road, at a junction, and at every moment of a trip |
+| `SimulationSnapshotDtoTest` | pose published with a network, absent without one |
 
 ## Completion Notes
 
