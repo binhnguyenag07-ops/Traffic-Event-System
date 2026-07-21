@@ -52,10 +52,21 @@ public final class LaneOccupancy {
                 }
             }
         }
+        return ofVehiclesAlreadyOnRoad(road, onRoad);
+    }
+
+    /**
+     * Builds occupancy from a list the caller has already narrowed to this
+     * road. {@link TrafficState} indexes every vehicle by road once per step,
+     * which turns rebuilding occupancy from a scan of the whole fleet into a
+     * lookup.
+     */
+    static LaneOccupancy ofVehiclesAlreadyOnRoad(Road road, List<Vehicle> vehiclesOnRoad) {
+        List<Vehicle> ordered = new ArrayList<>(vehiclesOnRoad);
         // Ties are broken by id so the ordering never depends on list order.
-        onRoad.sort(Comparator.comparingDouble(Vehicle::getRoadProgress)
+        ordered.sort(Comparator.comparingDouble(Vehicle::getRoadProgress)
                 .thenComparing(Vehicle::getId));
-        return new LaneOccupancy(road, onRoad);
+        return new LaneOccupancy(road, ordered);
     }
 
     public Road getRoad() {

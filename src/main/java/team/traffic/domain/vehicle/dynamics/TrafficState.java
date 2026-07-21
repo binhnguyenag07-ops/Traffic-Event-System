@@ -37,6 +37,7 @@ public final class TrafficState implements JunctionEnvironment {
     private final Map<String, LaneOccupancy> occupancyCache = new HashMap<>();
     private final Map<String, JunctionController> controllers = new LinkedHashMap<>();
     private final Set<String> clearedVehicleIds = new HashSet<>();
+    private Map<String, List<Vehicle>> vehiclesByRoadId;
 
     private TrafficState(
             long tick,
@@ -102,9 +103,38 @@ public final class TrafficState implements JunctionEnvironment {
         if (road == null) {
             return null;
         }
-        LaneOccupancy occupancy = LaneOccupancy.of(road, vehicles);
+        LaneOccupancy occupancy =
+                LaneOccupancy.ofVehiclesAlreadyOnRoad(road, vehiclesOn(roadId));
         occupancyCache.put(roadId, occupancy);
         return occupancy;
+    }
+
+    /** Ids of the roads that currently carry at least one vehicle. */
+    public Set<String> getOccupiedRoadIds() {
+        return Set.copyOf(vehiclesByRoadId().keySet());
+    }
+
+    private List<Vehicle> vehiclesOn(String roadId) {
+        return vehiclesByRoadId().getOrDefault(roadId, List.of());
+    }
+
+    /**
+     * Groups vehicles by the road they occupy, built once and then reused.
+     * Rebuilt from scratch whenever a vehicle enters or leaves a road, which
+     * happens far less often than occupancy is read.
+     */
+    private Map<String, List<Vehicle>> vehiclesByRoadId() {
+        if (vehiclesByRoadId == null) {
+            Map<String, List<Vehicle>> index = new HashMap<>();
+            for (Vehicle vehicle : vehicles) {
+                String roadId = vehicle.getOccupiedRoadId();
+                if (roadId != null) {
+                    index.computeIfAbsent(roadId, id -> new ArrayList<>()).add(vehicle);
+                }
+            }
+            vehiclesByRoadId = index;
+        }
+        return vehiclesByRoadId;
     }
 
     /**
@@ -121,6 +151,7 @@ public final class TrafficState implements JunctionEnvironment {
     public void invalidateOccupancy(String roadId) {
         if (roadId != null) {
             occupancyCache.remove(roadId);
+            vehiclesByRoadId = null;
         }
     }
 
