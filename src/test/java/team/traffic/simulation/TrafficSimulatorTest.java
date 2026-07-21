@@ -212,6 +212,28 @@ class TrafficSimulatorTest {
         assertThat(vehicle.getCurrentRoadId()).isEqualTo("AB");
         assertThat(vehicle.getRoadProgress()).isCloseTo(5.0 / 6.0, org.assertj.core.data.Offset.offset(0.000_001));
         assertThat(network.getRoad("AB").getCurrentVehicleCount()).isEqualTo(1);
+        assertThat(continuousSimulator.getVehicleTrace("car-1", 0, 1)).hasSize(2);
+        assertThat(continuousSimulator.getVehicleStateAtTick("car-1", 0).orElseThrow().currentRoadId()).isNull();
+        assertThat(continuousSimulator.getVehicleStateAtTick("car-1", 1).orElseThrow().currentRoadId())
+                .isEqualTo("AB");
+        assertThat(continuousSimulator.getVehicleStateAtTick("car-1", 1).orElseThrow().roadProgress())
+                .isCloseTo(5.0 / 6.0, org.assertj.core.data.Offset.offset(0.000_001));
+    }
+
+    @Test
+    void resetStartsANewTraceAtTickZero() {
+        simulator.initialize(List.of(new VehicleConfig("car-1", "CAR", "A", "B")), List.of());
+        simulator.advanceTick();
+        simulator.advanceTick();
+
+        simulator.reset();
+
+        assertThat(simulator.getVehicleTraceSummary().firstTick()).isZero();
+        assertThat(simulator.getVehicleTraceSummary().lastTick()).isZero();
+        assertThat(simulator.getVehicleTraceSummary().recordedTickCount()).isEqualTo(1);
+        assertThat(simulator.getVehicleTrace("car-1", 0, 10))
+                .extracting(point -> point.tick())
+                .containsExactly(0L);
     }
 
     // --- validation ---

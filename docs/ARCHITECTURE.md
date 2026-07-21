@@ -158,7 +158,11 @@ Traffic-Event-System/
     |               |   |-- SimulationClock.java
     |               |   |-- SimulationSnapshot.java
     |               |   |-- SimulationCommand.java
-    |               |   `-- SimulationStatus.java
+    |               |   |-- SimulationStatus.java
+    |               |   `-- trace/
+    |               |       |-- VehicleTracePoint.java
+    |               |       |-- VehicleTraceSummary.java
+    |               |       `-- VehicleTraceStore.java
     |               |
     |               |-- service/
     |               |   |-- RoadNetworkService.java
@@ -501,17 +505,20 @@ classDiagram
     TrafficEventBus --> TrafficEvent
 
     class TrafficSimulator {
-        -RoadNetwork roadNetwork
+        -RoadNetwork network
         -List~Vehicle~ vehicles
         -List~TrafficEvent~ events
         -SimulationClock clock
+        -VehicleTraceStore vehicleTraceStore
         -SimulationStatus status
         +start()
         +pause()
         +resume()
         +reset()
-        +advanceOneTick()
-        +createSnapshot() SimulationSnapshot
+        +advanceTick()
+        +getSnapshot() SimulationSnapshot
+        +getVehicleTrace(String, long, long) List~VehicleTracePoint~
+        +getVehicleStateAtTick(String, long) Optional~VehicleTracePoint~
     }
 
     class TickProcessor {
@@ -532,8 +539,36 @@ classDiagram
         -long tick
         -SimulationStatus status
         -List~Vehicle~ vehicles
-        -RoadNetwork roadNetwork
-        -TrafficStatistics statistics
+        -List~TrafficEvent~ trafficEvents
+    }
+
+    class VehicleTraceStore {
+        -NavigableMap statesByTick
+        +reset(long, List~Vehicle~)
+        +record(long, List~Vehicle~)
+        +getVehicleTrace(String, long, long) List~VehicleTracePoint~
+        +getStatesAtTick(long) List~VehicleTracePoint~
+        +getSummary() VehicleTraceSummary
+    }
+
+    class VehicleTracePoint {
+        <<record>>
+        +long tick
+        +String vehicleId
+        +VehicleType type
+        +VehicleStatus status
+        +String currentRoadId
+        +double roadProgress
+        +double currentSpeed
+        +List~String~ routeRoadIds
+    }
+
+    class VehicleTraceSummary {
+        <<record>>
+        +Long firstTick
+        +Long lastTick
+        +int recordedTickCount
+        +List~String~ vehicleIds
     }
 
     class SimulationStatus {
@@ -550,6 +585,9 @@ classDiagram
     TrafficSimulator --> SimulationClock
     TrafficSimulator --> SimulationSnapshot
     TrafficSimulator --> SimulationStatus
+    TrafficSimulator *-- VehicleTraceStore
+    VehicleTraceStore o-- VehicleTracePoint
+    VehicleTraceStore --> VehicleTraceSummary
     TickProcessor --> TrafficSimulator
 
     class TrafficStatistics {
@@ -589,6 +627,10 @@ classDiagram
 
     class SimulationService {
         <<interface>>
+        +getVehicleTraceSummary() VehicleTraceSummary
+        +getVehicleStatesAtTick(long) List~VehicleTracePoint~
+        +getVehicleStateAtTick(String, long) Optional~VehicleTracePoint~
+        +getVehicleTrace(String, long, long) List~VehicleTracePoint~
     }
 
     class StatisticsService {

@@ -375,5 +375,23 @@ class TrafficEventControllerTest {
         }
         @Override public List<Vehicle> getVehicles() { return List.of(); }
         @Override public List<TrafficEvent> getEvents() { return List.of(); }
+        @Override public team.traffic.simulation.trace.VehicleTraceSummary getVehicleTraceSummary() {
+            return new team.traffic.simulation.trace.VehicleTraceSummary(null, null, 0, List.of());
+        }
+        @Override public boolean hasVehicleTraceAtTick(long tick) { return false; }
+        @Override public List<team.traffic.simulation.trace.VehicleTracePoint> getVehicleStatesAtTick(long tick) {
+            return List.of();
+        }
+        @Override public java.util.Optional<team.traffic.simulation.trace.VehicleTracePoint> getVehicleStateAtTick(
+                String vehicleId,
+                long tick) {
+            return java.util.Optional.empty();
+        }
+        @Override public List<team.traffic.simulation.trace.VehicleTracePoint> getVehicleTrace(
+                String vehicleId,
+                long fromTick,
+                long toTick) {
+            return List.of();
+        }
     }
 }
