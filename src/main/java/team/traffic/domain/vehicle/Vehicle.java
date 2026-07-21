@@ -1,13 +1,9 @@
 package team.traffic.domain.vehicle;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.HashSet;
-import java.util.Set;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
@@ -54,14 +50,8 @@ public abstract class Vehicle implements TrafficParticipant {
     private String roadStartIntersectionId;
     private String roadEndIntersectionId;
     private double roadProgress;
-    private final List<String> travelHistory;
-    private String activeTrafficLightEventId;
-    private long waitTicksRemaining;
-    private final Set<String> completedTrafficLightEvents;
-    private double distanceTravelledKm;
-    private double travelTimeSeconds;
-    private long waitingTicks;
-    private int routeRecalculationCount;
+    private final TripRecord trip;
+    private final TrafficLightWait trafficLightWait;
     private String lastRoutingAlgorithm;
     private DriverProfile driverProfile;
     private CarFollowingModel carFollowingModel;
@@ -127,9 +117,8 @@ public abstract class Vehicle implements TrafficParticipant {
         this.priorityLevel = priorityLevel;
         this.routePreference = RoutePreference.CONGESTION_AWARE;
         this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
-        this.travelHistory = new ArrayList<>();
-        this.travelHistory.add(currentIntersectionId);
-        this.completedTrafficLightEvents = new HashSet<>();
+        this.trip = new TripRecord(currentIntersectionId);
+        this.trafficLightWait = new TrafficLightWait();
         this.carFollowingModel = new KraussCarFollowingModel();
         this.instantaneousSpeedMps = currentSpeed / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
     }
@@ -265,7 +254,7 @@ public abstract class Vehicle implements TrafficParticipant {
         double distanceThisTick = effectiveSpeedKph * simulationSeconds / 3600.0;
         double previousProgress = roadProgress;
         roadProgress = Math.min(1.0, roadProgress + distanceThisTick / road.getDistance());
-        distanceTravelledKm += (roadProgress - previousProgress) * road.getDistance();
+        trip.addDistanceKm((roadProgress - previousProgress) * road.getDistance());
         status = VehicleStatus.MOVING;
 
         if (roadProgress >= 1.0) {
@@ -400,10 +389,10 @@ public abstract class Vehicle implements TrafficParticipant {
 
         double previousProgress = roadProgress;
         roadProgress = Math.min(1.0, roadProgress + plan.travelMetres() / (road.getDistance() * 1_000.0));
-        distanceTravelledKm += (roadProgress - previousProgress) * road.getDistance();
+        trip.addDistanceKm((roadProgress - previousProgress) * road.getDistance());
 
         if (instantaneousSpeedMps < QUEUEING_THRESHOLD_MPS) {
-            waitingTicks++;
+            trip.recordWaitingTick();
             status = VehicleStatus.WAITING;
         } else {
             status = VehicleStatus.MOVING;
@@ -464,7 +453,7 @@ public abstract class Vehicle implements TrafficParticipant {
                 targetRoad,
                 turnDirection,
                 0.0,
-                waitingTicks));
+                trip.getWaitingTicks()));
     }
 
     /**
@@ -498,7 +487,7 @@ public abstract class Vehicle implements TrafficParticipant {
         }
         if (!trafficState.isCleared(id)) {
             instantaneousSpeedMps = 0;
-            waitingTicks++;
+            trip.recordWaitingTick();
             status = VehicleStatus.WAITING;
             return false;
         }
@@ -565,7 +554,7 @@ public abstract class Vehicle implements TrafficParticipant {
             RoadNetwork roadNetwork,
             RoutingService routingService,
             RoutePreference preference) {
-        routeRecalculationCount++;
+        trip.recordRouteRecalculation();
         requestRoute(roadNetwork, routingService, preference);
         if (lastRoutingAlgorithm != null) {
             routingService.recordRouteRecalculation(lastRoutingAlgorithm);
@@ -578,7 +567,7 @@ public abstract class Vehicle implements TrafficParticipant {
         }
 
         this.currentIntersectionId = nextIntersectionId;
-        this.travelHistory.add(nextIntersectionId);
+        this.trip.recordArrivalAt(nextIntersectionId);
         this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.MOVING;
     }
 
@@ -650,46 +639,35 @@ public abstract class Vehicle implements TrafficParticipant {
      * delay. Each event delays this vehicle at most once.
      */
     public boolean waitForTrafficLight(String eventId, long delayTicks) {
-        if (eventId == null || eventId.isBlank() || delayTicks <= 0 || completedTrafficLightEvents.contains(eventId)) {
+        if (!trafficLightWait.hold(eventId, delayTicks)) {
             return false;
         }
-        if (!eventId.equals(activeTrafficLightEventId)) {
-            activeTrafficLightEventId = eventId;
-            waitTicksRemaining = delayTicks;
-        }
-        if (waitTicksRemaining > 0) {
-            waitTicksRemaining--;
-            waitingTicks++;
-            status = VehicleStatus.WAITING;
-            if (waitTicksRemaining == 0) {
-                completedTrafficLightEvents.add(eventId);
-                activeTrafficLightEventId = null;
-            }
-            return true;
-        }
-        return false;
+        trip.recordWaitingTick();
+        status = VehicleStatus.WAITING;
+        return true;
     }
 
     public void clearTrafficLightWait() {
-        activeTrafficLightEventId = null;
-        waitTicksRemaining = 0;
+        trafficLightWait.clear();
     }
 
     public long getWaitTicksRemaining() {
-        return waitTicksRemaining;
+        return trafficLightWait.getTicksRemaining();
     }
 
     public void addTravelTime(double simulationSeconds) {
-        if (!Double.isFinite(simulationSeconds) || simulationSeconds < 0) {
-            throw new IllegalArgumentException("Simulation seconds must not be negative.");
-        }
-        travelTimeSeconds += simulationSeconds;
+        trip.addTravelTime(simulationSeconds);
     }
 
-    public double getDistanceTravelledKm() { return distanceTravelledKm; }
-    public double getTravelTimeSeconds() { return travelTimeSeconds; }
-    public long getWaitingTicks() { return waitingTicks; }
-    public int getRouteRecalculationCount() { return routeRecalculationCount; }
+    /** Everything this vehicle accumulated over its journey. */
+    public TripRecord getTrip() {
+        return trip;
+    }
+
+    public double getDistanceTravelledKm() { return trip.getDistanceTravelledKm(); }
+    public double getTravelTimeSeconds() { return trip.getTravelTimeSeconds(); }
+    public long getWaitingTicks() { return trip.getWaitingTicks(); }
+    public int getRouteRecalculationCount() { return trip.getRouteRecalculationCount(); }
 
     /**
      * Returns the legacy simulation-speed value. New code should use
@@ -853,7 +831,7 @@ public abstract class Vehicle implements TrafficParticipant {
     }
 
     public List<String> getTravelHistory() {
-        return Collections.unmodifiableList(travelHistory);
+        return trip.getVisitedIntersections();
     }
 
     private static void validatePositive(String name, double value) {
