@@ -16,6 +16,7 @@ import team.traffic.domain.routing.Route;
 import team.traffic.domain.routing.RoutePreference;
 import team.traffic.domain.routing.RouteResult;
 import team.traffic.domain.routing.RouteStep;
+import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.service.RoutingService;
 
 class VehicleTest {
@@ -62,13 +63,11 @@ class VehicleTest {
 
     @Test
     void rejectsInvalidPhysicalProfiles() {
-        assertThatThrownBy(() -> new Car(
-                "car-1", "A", "B", 0.0, 1.8, 120.0, 50.0, 2.5, 6.5, 1_500.0))
+        assertThatThrownBy(() -> new VehicleProfile(0.0, 1.8, 120.0, 2.5, 6.5, 1_500.0, 0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Length must be positive.");
 
-        assertThatThrownBy(() -> new Bus(
-                "bus-1", "A", "B", 40, 12.0, 2.5, 90.0, 91.0, 1.0, 5.0, 12_000.0))
+        assertThatThrownBy(() -> new Bus("bus-1", "A", "B", 40, VehicleProfile.bus(), 91.0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Current speed must be between zero and the maximum speed.");
 
@@ -90,13 +89,12 @@ class VehicleTest {
         assertThat(vehicle.getCurrentRoute()).isSameAs(route);
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.WAITING);
 
-        vehicle.moveOneStep(network);
-        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("B");
+        drive(network, vehicle, 3);
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.MOVING);
         assertThat(vehicle.getOccupiedRoadId()).isEqualTo("AB");
         assertThat(network.getRoad("AB").getCurrentVehicleCount()).isEqualTo(1);
 
-        vehicle.moveOneStep(network);
+        drive(network, vehicle, 40);
         assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("C");
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.ARRIVED);
         assertThat(vehicle.getTravelHistory()).containsExactly("A", "B", "C");
@@ -128,10 +126,11 @@ class VehicleTest {
         vehicle.setCurrentRoute(route);
         network.getRoad("AB").getCondition().setRoadStatus(RoadStatus.CLOSED);
 
-        vehicle.moveOneStep(network);
+        drive(network, vehicle, 1);
 
         assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("A");
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.BLOCKED);
+        assertThat(vehicle.getOccupiedRoadId()).isNull();
     }
 
     @Test
@@ -155,6 +154,16 @@ class VehicleTest {
         assertThat(vehicle.getCurrentRoute()).isSameAs(route);
         assertThat(vehicle.getRoutePreference()).isEqualTo(RoutePreference.CONGESTION_AWARE);
         assertThat(vehicle.getNextRouteStepIndex()).isZero();
+    }
+
+    /** Runs the microscopic model for one vehicle, as the engine would. */
+    private void drive(RoadNetwork network, Vehicle vehicle, int ticks) {
+        for (int tick = 0; tick < ticks; tick++) {
+            TrafficState state = TrafficState.capture(tick, network, List.of(vehicle));
+            vehicle.planJunctionApproach(network, state).ifPresent(state::requestCrossing);
+            state.resolveJunctions();
+            vehicle.advance(network, state, 10.0);
+        }
     }
 
     private RoadNetwork createNetwork() {
