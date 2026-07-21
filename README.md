@@ -19,11 +19,20 @@ The repository currently includes:
 - simulation clock, tick processing, pause/resume/reset, and snapshots;
 - server-owned live playback with configurable tick timing and SSE snapshots;
 - progress-based vehicle movement along roads with congestion-aware speed;
+- open-boundary demo traffic where completed vehicles exit and different
+  same-type vehicles enter from reachable boundary roads;
 - traffic and algorithm statistics services;
 - React operations console with an OpenStreetMap/Leaflet map, live vehicles,
   traffic layers, controls, route comparison, events, and statistics;
 - session-scoped network editing for junctions, directed/two-way roads, road
   conditions, connected-road searches, and JSON export;
+- atomic browser JSON import for geographic HCMC networks, with stored/OSRM/
+  straight-fallback road geometry;
+- event-based traffic-light waiting with remaining-delay snapshots;
+- total and average trip time, actual route length, density, rerouting, and
+  path-optimality statistics;
+- reproducible normal, congestion, random-event, and 20×20-grid experiments
+  with tables and frontend comparison charts;
 - unit and integration tests for domain, routing, persistence, services,
   controllers, and simulation.
 
@@ -110,6 +119,7 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `PUT /api/network/roads/{id}/condition` | update road status and congestion |
 | `GET /api/network/intersections/{id}/roads` | list incoming and outgoing roads |
 | `GET /api/network/export` | download the current network as JSON |
+| `POST /api/scenarios/import` | upload a geographic JSON map in multipart field `map` |
 | `POST /api/routes` | compute route |
 | `GET /api/vehicles` | list vehicles |
 | `POST /api/vehicles` | create vehicle |
@@ -131,6 +141,8 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `GET /api/statistics` | combined statistics |
 | `GET /api/statistics/traffic` | traffic statistics |
 | `GET /api/statistics/algorithm/{name}` | algorithm statistics |
+| `GET /api/experiments/latest` | checked-in experiment baseline |
+| `POST /api/experiments/run` | rerun the deterministic experiment suite |
 
 ## Map Data
 
@@ -140,10 +152,13 @@ Available map files:
 |---|---|
 | `data/sample_map.json` | small JSON loader example |
 | `data/sample_map.csv` | CSV equivalent of the sample map |
+| `data/district1_network.json` | default full-viewport District 1 arterial network |
 | `data/small_city.json` | real central District 1 landmark and street routing scenario |
 | `data/congestion_demo.json` | Week 6 congestion scenario |
 | `data/accident_demo.json` | Week 6 accident scenario |
 | `data/density_demo.json` | road-density scenario |
+| `data/demo_simulation.json` | reusable vehicles and event configuration |
+| `data/experiment_results.json` | reproducible experiment baseline |
 
 ### Units
 
@@ -151,6 +166,7 @@ Available map files:
 |---|---|
 | `distance` | kilometres |
 | `speedLimit` | kilometres per hour |
+| `roadClass` | street hierarchy used for zoom-aware rendering |
 | travel time and routing cost | hours |
 | `congestionLevel` | `0.0` to `1.0` |
 | `vehicleDensity` | `0.0` to `1.0` |
@@ -164,10 +180,12 @@ travelCost = distance / speedLimit
 
 A blocked, closed, or full road has an infinite routing cost.
 
-The Small City coordinates and street geometries are derived from
-OpenStreetMap data and routed with OSRM. They are stored locally so simulation
+The District 1 and Small City coordinates and street geometries are derived from
+OpenStreetMap data. They are stored locally so simulation
 and routing do not depend on an external routing service at runtime. Map data
 © OpenStreetMap contributors, available under the ODbL.
+
+Regenerate the full-viewport network with `python3 tools/generate_osm_map.py`.
 
 ### Network Editor
 
@@ -182,6 +200,28 @@ vehicle endpoint, and roads referenced by unresolved events cannot be deleted.
 Waiting vehicles recompute their routes after topology or condition changes.
 Edits last for the current server session; use **Export network JSON** to save
 the result without overwriting the bundled scenarios.
+
+Use **Import JSON** in the header to load a real-map network. Imports require
+latitude/longitude inside the displayed HCMC operating area, are limited to
+2 MB, 600 junctions, and 1,200 directed roads, and replace the network only after the whole file validates. Stored road
+geometry is preserved; missing geometry uses OSRM with a straight fallback.
+
+## Statistics and Experiments
+
+The Performance panel reports completed-trip time and distance, network
+density, waiting vehicles, routing computation time, dynamic recalculations,
+and path optimality. Completed trips remain in the run statistics after their
+vehicles leave the map; initialize, reset, scenario activation, and map import
+start a new statistical run. Signal-delay events hold a vehicle before road
+entry for the configured number of ticks.
+
+Run the four required algorithm experiments:
+
+```powershell
+mvn -q exec:java -Dexec.mainClass=team.traffic.experiment.ExperimentRunner
+```
+
+Use `-Dexec.args=--write` to refresh the baseline JSON and Markdown report.
 
 ## Example Simulation Payload
 
@@ -252,7 +292,7 @@ Optional environment variables:
 | Variable | Default | Purpose |
 |---|---:|---|
 | `PORT` | `7070` | HTTP server port |
-| `MAP_FILE` | `data/small_city.json` | initial scenario map |
+| `MAP_FILE` | `data/district1_network.json` | initial scenario map |
 | `VITE_TILE_URL` | OpenStreetMap | frontend tile provider URL |
 | `VITE_TILE_ATTRIBUTION` | OpenStreetMap attribution | tile attribution text |
 
@@ -260,6 +300,10 @@ Optional environment variables:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Class diagram](docs/CLASS_DIAGRAM.md)
+- [API contract](docs/API_CONTRACT.md)
+- [Algorithm explanation](docs/ALGORITHM_EXPLANATION.md)
+- [Experiment results](docs/EXPERIMENT_RESULTS.md)
+- [Live demo guide](docs/DEMO_GUIDE.md)
 - [Planning overview](docs/PLANNING_OVERVIEW.md)
 - [Student A network and persistence notes](docs/planning/Binh-network-persistence.md)
 - [Student B routing notes](docs/planning/nguynie-routing-algorithms.md)
