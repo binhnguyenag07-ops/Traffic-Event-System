@@ -8,8 +8,11 @@ import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.VehicleConfig;
+import team.traffic.simulation.trace.VehicleTracePoint;
+import team.traffic.simulation.trace.VehicleTraceSummary;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 public interface SimulationService {
@@ -64,5 +67,29 @@ public interface SimulationService {
 
     default void replaceNetwork(RoadNetwork network) {
         throw new UnsupportedOperationException("Replacing the network is not supported.");
+    }
+
+    // --- vehicle trace timeline ---
+    // Declared as defaults so a partial implementation, such as a test stub,
+    // stays valid; an implementation that keeps no history reports none.
+
+    default VehicleTraceSummary getVehicleTraceSummary() {
+        return new VehicleTraceSummary(null, null, 0, List.of());
+    }
+
+    default boolean hasVehicleTraceAtTick(long tick) {
+        return false;
+    }
+
+    default List<VehicleTracePoint> getVehicleStatesAtTick(long tick) {
+        return List.of();
+    }
+
+    default Optional<VehicleTracePoint> getVehicleStateAtTick(String vehicleId, long tick) {
+        return Optional.empty();
+    }
+
+    default List<VehicleTracePoint> getVehicleTrace(String vehicleId, long fromTick, long toTick) {
+        return List.of();
     }
 }

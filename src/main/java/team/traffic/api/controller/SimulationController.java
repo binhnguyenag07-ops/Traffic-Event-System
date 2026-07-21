@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import team.traffic.api.dto.SimulationSnapshotDto;
+import team.traffic.api.dto.VehicleTracePointDto;
+import team.traffic.api.dto.VehicleTraceSummaryDto;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.VehicleConfig;
@@ -35,6 +37,10 @@ public class SimulationController {
         app.get("/api/simulation/status", this::getStatus);
         app.get("/api/simulation/snapshot", this::getSnapshot);
         app.get("/api/simulation/tick/current", this::getCurrentTick);
+        app.get("/api/simulation/trace", this::getTraceSummary);
+        app.get("/api/simulation/trace/ticks/{tick}", this::getStatesAtTick);
+        app.get("/api/simulation/trace/vehicles/{vehicleId}", this::getVehicleTrace);
+        app.get("/api/simulation/trace/vehicles/{vehicleId}/ticks/{tick}", this::getVehicleStateAtTick);
         app.put("/api/simulation/parameters", this::setParameters);
         app.sse("/api/simulation/stream", client -> {
             Consumer<SimulationSnapshot> listener = snapshot -> client.sendEvent(
@@ -183,6 +189,73 @@ public class SimulationController {
             if (f != null && !f.isNull() && !f.asText().isBlank()) return f.asText();
         }
         return null;
+    }
+
+    private void getTraceSummary(Context ctx) {
+        ctx.json(new VehicleTraceSummaryDto(simulationService.getVehicleTraceSummary()));
+    }
+
+    private void getStatesAtTick(Context ctx) {
+        try {
+            long tick = parseNonNegativeLong(ctx.pathParam("tick"), "tick");
+            if (!simulationService.hasVehicleTraceAtTick(tick)) {
+                ctx.status(404).json(error("No vehicle trace recorded at tick " + tick + "."));
+                return;
+            }
+            ctx.json(simulationService.getVehicleStatesAtTick(tick).stream()
+                    .map(VehicleTracePointDto::new)
+                    .toList());
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).json(error(e.getMessage()));
+        }
+    }
+
+    private void getVehicleTrace(Context ctx) {
+        try {
+            String vehicleId = ctx.pathParam("vehicleId");
+            long fromTick = parseOptionalNonNegativeLong(ctx.queryParam("fromTick"), 0, "fromTick");
+            long toTick = parseOptionalNonNegativeLong(
+                    ctx.queryParam("toTick"),
+                    simulationService.getCurrentTick(),
+                    "toTick");
+            ctx.json(simulationService.getVehicleTrace(vehicleId, fromTick, toTick).stream()
+                    .map(VehicleTracePointDto::new)
+                    .toList());
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).json(error(e.getMessage()));
+        }
+    }
+
+    private void getVehicleStateAtTick(Context ctx) {
+        try {
+            String vehicleId = ctx.pathParam("vehicleId");
+            long tick = parseNonNegativeLong(ctx.pathParam("tick"), "tick");
+            simulationService.getVehicleStateAtTick(vehicleId, tick)
+                    .ifPresentOrElse(
+                            point -> ctx.json(new VehicleTracePointDto(point)),
+                            () -> ctx.status(404).json(error(
+                                    "No trace for vehicle " + vehicleId + " at tick " + tick + ".")));
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).json(error(e.getMessage()));
+        }
+    }
+
+    private long parseOptionalNonNegativeLong(String value, long defaultValue, String fieldName) {
+        return value == null || value.isBlank()
+                ? defaultValue
+                : parseNonNegativeLong(value, fieldName);
+    }
+
+    private long parseNonNegativeLong(String value, String fieldName) {
+        try {
+            long parsed = Long.parseLong(value);
+            if (parsed < 0) {
+                throw new IllegalArgumentException(fieldName + " must not be negative.");
+            }
+            return parsed;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(fieldName + " must be an integer.");
+        }
     }
 
     private Map<String, String> error(String message) {
