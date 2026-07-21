@@ -58,41 +58,11 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
-    public void updateAllVehicles(RoadNetwork network, RoutingService routingService) {
-        if (network == null || routingService == null) {
-            return;
-        }
-
-        for (Vehicle vehicle : getAllVehicles()) {
-            if (vehicle.getStatus() == VehicleStatus.ARRIVED) {
-                continue;
-            }
-
-            if (vehicle.getCurrentRoute() == null || vehicle.getStatus() == VehicleStatus.BLOCKED) {
-                vehicle.recomputeRoute(network, routingService);
-            }
-
-            moveIfReady(vehicle, network);
-
-            if (vehicle.getStatus() == VehicleStatus.BLOCKED && !vehicle.hasReachedDestination()) {
-                vehicle.recomputeRoute(network, routingService);
-                moveIfReady(vehicle, network);
-            }
-        }
-    }
-
-    @Override
     public boolean removeVehicle(String id) {
         if (runtime != null) {
             return runtime.removeVehicle(id);
         }
         return vehicles.removeIf(vehicle -> vehicle.getId().equals(id));
-    }
-
-    private void moveIfReady(Vehicle vehicle, RoadNetwork network) {
-        if (vehicle.getStatus() == VehicleStatus.WAITING || vehicle.getStatus() == VehicleStatus.MOVING) {
-            vehicle.moveOneStep(network);
-        }
     }
 
     private void validateVehicleRequest(

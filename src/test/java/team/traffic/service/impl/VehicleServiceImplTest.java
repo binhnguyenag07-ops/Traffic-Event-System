@@ -40,52 +40,6 @@ class VehicleServiceImplTest {
                 .hasMessageContaining("Start intersection not found");
     }
 
-    @Test
-    void updateAllVehiclesRequestsRouteMovesVehicleAndUpdatesRoadDensity() {
-        RoadNetwork network = createLinearNetwork();
-        RoutingService routingService = createRoutingService();
-        Vehicle vehicle = vehicleService.createVehicle(VehicleType.CAR, "A", "C", network);
-
-        vehicleService.updateAllVehicles(network, routingService);
-
-        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("B");
-        assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.MOVING);
-        assertThat(vehicle.getOccupiedRoadId()).isEqualTo("AB");
-        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isEqualTo(1);
-        assertThat(network.getRoad("AB").getCondition().getVehicleDensity()).isEqualTo(0.1);
-
-        vehicleService.updateAllVehicles(network, routingService);
-
-        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("C");
-        assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.ARRIVED);
-        assertThat(vehicle.getOccupiedRoadId()).isNull();
-        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
-        assertThat(network.getRoad("BC").getCurrentVehicleCount()).isZero();
-    }
-
-    @Test
-    void updateAllVehiclesReroutesBlockedVehicleAndMovesOnAlternativeRoad() {
-        RoadNetwork network = createNetworkWithAlternativeRoute();
-        RoutingService routingService = createRoutingService();
-        Vehicle vehicle = vehicleService.createVehicle(VehicleType.CAR, "A", "C", network);
-        vehicle.setCurrentRoute(new Route(
-                List.of(
-                        new RouteStep("A", "B", "AB", 1.0),
-                        new RouteStep("B", "C", "BC", 1.0)),
-                2.0,
-                2.0,
-                2.0));
-        network.getRoad("AB").getCondition().setRoadStatus(RoadStatus.CLOSED);
-
-        vehicleService.updateAllVehicles(network, routingService);
-
-        assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.MOVING);
-        assertThat(vehicle.getCurrentIntersectionId()).isEqualTo("D");
-        assertThat(vehicle.getOccupiedRoadId()).isEqualTo("AD");
-        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
-        assertThat(network.getRoad("AD").getCurrentVehicleCount()).isEqualTo(1);
-    }
-
     private RoutingService createRoutingService() {
         RoutingStrategyRegistry registry = new RoutingStrategyRegistry();
         registry.register(new DijkstraPathFindingStrategy());

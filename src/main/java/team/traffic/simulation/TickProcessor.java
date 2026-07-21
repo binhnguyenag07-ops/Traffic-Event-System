@@ -28,16 +28,14 @@ public class TickProcessor {
         this(routingService, eventBus, new VehicleDynamicsEngine());
     }
 
-    /**
-     * Creates a processor with a specific vehicle-dynamics engine. Passing
-     * {@code null} falls back to the original movement rule, where each vehicle
-     * travels at its own speed scaled by the road's aggregate congestion and
-     * density, ignoring the vehicles physically around it.
-     */
+    /** Creates a processor with a specific vehicle-dynamics engine. */
     public TickProcessor(
             RoutingService routingService,
             TrafficEventBus eventBus,
             VehicleDynamicsEngine dynamicsEngine) {
+        if (dynamicsEngine == null) {
+            throw new IllegalArgumentException("Vehicle dynamics engine is required.");
+        }
         this.routingService = routingService;
         this.eventBus = eventBus;
         this.dynamicsEngine = dynamicsEngine;
@@ -97,13 +95,6 @@ public class TickProcessor {
             RoadNetwork network,
             List<Vehicle> movable,
             double simulationSecondsPerTick) {
-        if (dynamicsEngine == null) {
-            for (Vehicle vehicle : movable) {
-                vehicle.advance(network, simulationSecondsPerTick);
-            }
-            return;
-        }
-
         TrafficState state = dynamicsEngine.step(currentTick, network, movable, simulationSecondsPerTick);
         publishPhysicalDensity(network, state);
     }
