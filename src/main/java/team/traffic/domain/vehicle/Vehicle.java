@@ -1,13 +1,9 @@
 package team.traffic.domain.vehicle;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.HashSet;
-import java.util.Set;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
@@ -23,11 +19,13 @@ import team.traffic.domain.vehicle.dynamics.JunctionApproach;
 import team.traffic.domain.vehicle.dynamics.KraussCarFollowingModel;
 import team.traffic.domain.vehicle.dynamics.LaneOccupancy;
 import team.traffic.domain.vehicle.dynamics.LeaderGap;
+import team.traffic.domain.vehicle.dynamics.MovementPlan;
+import team.traffic.domain.vehicle.dynamics.TrafficParticipant;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.domain.vehicle.dynamics.TurnDirection;
 import team.traffic.service.RoutingService;
 
-public abstract class Vehicle {
+public abstract class Vehicle implements TrafficParticipant {
     /** Conversion factor between kilometres per hour and metres per second. */
     private static final double KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND = 3.6;
     /** Below this speed a vehicle is reported as queueing rather than moving. */
@@ -52,21 +50,12 @@ public abstract class Vehicle {
     private String roadStartIntersectionId;
     private String roadEndIntersectionId;
     private double roadProgress;
-    private final List<String> travelHistory;
-    private String activeTrafficLightEventId;
-    private long waitTicksRemaining;
-    private final Set<String> completedTrafficLightEvents;
-    private double distanceTravelledKm;
-    private double travelTimeSeconds;
-    private long waitingTicks;
-    private int routeRecalculationCount;
+    private final TripRecord trip;
+    private final TrafficLightWait trafficLightWait;
     private String lastRoutingAlgorithm;
     private DriverProfile driverProfile;
     private CarFollowingModel carFollowingModel;
     private double instantaneousSpeedMps;
-    private String plannedRoadId;
-    private double plannedTravelMetres;
-    private boolean plannedMayLeaveRoad;
 
     protected Vehicle(String id, String currentIntersectionId, String destinationIntersectionId, double movementSpeed) {
         this(
@@ -128,9 +117,8 @@ public abstract class Vehicle {
         this.priorityLevel = priorityLevel;
         this.routePreference = RoutePreference.CONGESTION_AWARE;
         this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
-        this.travelHistory = new ArrayList<>();
-        this.travelHistory.add(currentIntersectionId);
-        this.completedTrafficLightEvents = new HashSet<>();
+        this.trip = new TripRecord(currentIntersectionId);
+        this.trafficLightWait = new TrafficLightWait();
         this.carFollowingModel = new KraussCarFollowingModel();
         this.instantaneousSpeedMps = currentSpeed / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
     }
@@ -266,7 +254,7 @@ public abstract class Vehicle {
         double distanceThisTick = effectiveSpeedKph * simulationSeconds / 3600.0;
         double previousProgress = roadProgress;
         roadProgress = Math.min(1.0, roadProgress + distanceThisTick / road.getDistance());
-        distanceTravelledKm += (roadProgress - previousProgress) * road.getDistance();
+        trip.addDistanceKm((roadProgress - previousProgress) * road.getDistance());
         status = VehicleStatus.MOVING;
 
         if (roadProgress >= 1.0) {
@@ -299,8 +287,8 @@ public abstract class Vehicle {
      * sequence in the right order.</p>
      */
     public void advance(RoadNetwork roadNetwork, TrafficState trafficState, double simulationSeconds) {
-        planMovement(roadNetwork, trafficState, simulationSeconds);
-        commitMovement(roadNetwork, trafficState);
+        planMovement(roadNetwork, trafficState, simulationSeconds)
+                .ifPresent(plan -> commitMovement(plan, roadNetwork, trafficState));
     }
 
     /**
@@ -313,20 +301,21 @@ public abstract class Vehicle {
      * junction has already ensured that at most one vehicle is cleared onto any
      * given road this step.</p>
      */
-    public void planMovement(RoadNetwork roadNetwork, TrafficState trafficState, double simulationSeconds) {
+    public Optional<MovementPlan> planMovement(
+            RoadNetwork roadNetwork,
+            TrafficState trafficState,
+            double simulationSeconds) {
         Objects.requireNonNull(roadNetwork, "Road network must not be null.");
         Objects.requireNonNull(trafficState, "Traffic state must not be null.");
         if (!Double.isFinite(simulationSeconds) || simulationSeconds <= 0) {
             throw new IllegalArgumentException("Simulation seconds must be positive.");
         }
 
-        plannedRoadId = null;
-
         if (hasReachedDestination()) {
             releaseOccupiedRoad(roadNetwork, trafficState);
             instantaneousSpeedMps = 0;
             status = VehicleStatus.ARRIVED;
-            return;
+            return Optional.empty();
         }
 
         RouteStep step = getNextRouteStep();
@@ -334,7 +323,7 @@ public abstract class Vehicle {
             releaseOccupiedRoad(roadNetwork, trafficState);
             instantaneousSpeedMps = 0;
             status = VehicleStatus.BLOCKED;
-            return;
+            return Optional.empty();
         }
 
         Road road = roadNetwork.getRoad(step.getRoadId());
@@ -342,11 +331,11 @@ public abstract class Vehicle {
             releaseOccupiedRoad(roadNetwork, trafficState);
             instantaneousSpeedMps = 0;
             status = VehicleStatus.BLOCKED;
-            return;
+            return Optional.empty();
         }
 
         if (occupiedRoadId == null && !enterRoadUnderJunctionControl(roadNetwork, trafficState, step, road)) {
-            return;
+            return Optional.empty();
         }
 
         LaneOccupancy lane = trafficState.occupancyOf(road.getId());
@@ -355,10 +344,10 @@ public abstract class Vehicle {
                 ? (1.0 - roadProgress) * road.getDistance() * 1_000.0
                 : lane.distanceToExitMetres(this);
 
-        plannedMayLeaveRoad = canLeaveRoadAhead(roadNetwork, trafficState);
-        double stopDistanceMetres = plannedMayLeaveRoad ? Double.POSITIVE_INFINITY : distanceToExitMetres;
+        boolean mayLeaveRoad = canLeaveRoadAhead(roadNetwork, trafficState);
+        double stopDistanceMetres = mayLeaveRoad ? Double.POSITIVE_INFINITY : distanceToExitMetres;
 
-        instantaneousSpeedMps = getCarFollowingModel().nextSpeedMps(new FollowContext(
+        double plannedSpeedMps = getCarFollowingModel().nextSpeedMps(new FollowContext(
                 instantaneousSpeedMps,
                 desiredSpeedMps(road),
                 acceleration,
@@ -369,40 +358,47 @@ public abstract class Vehicle {
                 simulationSeconds,
                 reproducibleNoise(trafficState.getTick())));
 
-        plannedTravelMetres = Math.min(instantaneousSpeedMps * simulationSeconds, distanceToExitMetres);
-        plannedRoadId = road.getId();
+        return Optional.of(new MovementPlan(
+                road.getId(),
+                plannedSpeedMps,
+                Math.min(plannedSpeedMps * simulationSeconds, distanceToExitMetres),
+                mayLeaveRoad));
     }
 
     /**
-     * Second half of a step: applies the movement worked out by
-     * {@link #planMovement}, and hands the vehicle over to the next road when
-     * it runs off the end of this one.
+     * Second half of a step: carries out a plan made by {@link #planMovement},
+     * and hands the vehicle over to the next road when it runs off the end of
+     * this one.
      */
-    public void commitMovement(RoadNetwork roadNetwork, TrafficState trafficState) {
+    public void commitMovement(MovementPlan plan, RoadNetwork roadNetwork, TrafficState trafficState) {
         Objects.requireNonNull(roadNetwork, "Road network must not be null.");
-        if (plannedRoadId == null) {
+        if (plan == null) {
             return;
         }
 
-        Road road = roadNetwork.getRoad(plannedRoadId);
+        Road road = roadNetwork.getRoad(plan.roadId());
         RouteStep step = getNextRouteStep();
-        plannedRoadId = null;
         if (road == null || step == null) {
             return;
         }
 
+        // The new speed only takes effect now, so a vehicle planning later in
+        // the step still reads its leader at the speed it was going, not the
+        // one it just chose.
+        instantaneousSpeedMps = plan.speedMps();
+
         double previousProgress = roadProgress;
-        roadProgress = Math.min(1.0, roadProgress + plannedTravelMetres / (road.getDistance() * 1_000.0));
-        distanceTravelledKm += (roadProgress - previousProgress) * road.getDistance();
+        roadProgress = Math.min(1.0, roadProgress + plan.travelMetres() / (road.getDistance() * 1_000.0));
+        trip.addDistanceKm((roadProgress - previousProgress) * road.getDistance());
 
         if (instantaneousSpeedMps < QUEUEING_THRESHOLD_MPS) {
-            waitingTicks++;
+            trip.recordWaitingTick();
             status = VehicleStatus.WAITING;
         } else {
             status = VehicleStatus.MOVING;
         }
 
-        if (roadProgress >= 1.0 && plannedMayLeaveRoad) {
+        if (roadProgress >= 1.0 && plan.mayLeaveRoad()) {
             nextRouteStepIndex++;
             moveTo(step.getToIntersectionId());
             releaseOccupiedRoad(roadNetwork, trafficState);
@@ -457,7 +453,7 @@ public abstract class Vehicle {
                 targetRoad,
                 turnDirection,
                 0.0,
-                waitingTicks));
+                trip.getWaitingTicks()));
     }
 
     /**
@@ -491,7 +487,7 @@ public abstract class Vehicle {
         }
         if (!trafficState.isCleared(id)) {
             instantaneousSpeedMps = 0;
-            waitingTicks++;
+            trip.recordWaitingTick();
             status = VehicleStatus.WAITING;
             return false;
         }
@@ -558,7 +554,7 @@ public abstract class Vehicle {
             RoadNetwork roadNetwork,
             RoutingService routingService,
             RoutePreference preference) {
-        routeRecalculationCount++;
+        trip.recordRouteRecalculation();
         requestRoute(roadNetwork, routingService, preference);
         if (lastRoutingAlgorithm != null) {
             routingService.recordRouteRecalculation(lastRoutingAlgorithm);
@@ -571,7 +567,7 @@ public abstract class Vehicle {
         }
 
         this.currentIntersectionId = nextIntersectionId;
-        this.travelHistory.add(nextIntersectionId);
+        this.trip.recordArrivalAt(nextIntersectionId);
         this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.MOVING;
     }
 
@@ -643,46 +639,35 @@ public abstract class Vehicle {
      * delay. Each event delays this vehicle at most once.
      */
     public boolean waitForTrafficLight(String eventId, long delayTicks) {
-        if (eventId == null || eventId.isBlank() || delayTicks <= 0 || completedTrafficLightEvents.contains(eventId)) {
+        if (!trafficLightWait.hold(eventId, delayTicks)) {
             return false;
         }
-        if (!eventId.equals(activeTrafficLightEventId)) {
-            activeTrafficLightEventId = eventId;
-            waitTicksRemaining = delayTicks;
-        }
-        if (waitTicksRemaining > 0) {
-            waitTicksRemaining--;
-            waitingTicks++;
-            status = VehicleStatus.WAITING;
-            if (waitTicksRemaining == 0) {
-                completedTrafficLightEvents.add(eventId);
-                activeTrafficLightEventId = null;
-            }
-            return true;
-        }
-        return false;
+        trip.recordWaitingTick();
+        status = VehicleStatus.WAITING;
+        return true;
     }
 
     public void clearTrafficLightWait() {
-        activeTrafficLightEventId = null;
-        waitTicksRemaining = 0;
+        trafficLightWait.clear();
     }
 
     public long getWaitTicksRemaining() {
-        return waitTicksRemaining;
+        return trafficLightWait.getTicksRemaining();
     }
 
     public void addTravelTime(double simulationSeconds) {
-        if (!Double.isFinite(simulationSeconds) || simulationSeconds < 0) {
-            throw new IllegalArgumentException("Simulation seconds must not be negative.");
-        }
-        travelTimeSeconds += simulationSeconds;
+        trip.addTravelTime(simulationSeconds);
     }
 
-    public double getDistanceTravelledKm() { return distanceTravelledKm; }
-    public double getTravelTimeSeconds() { return travelTimeSeconds; }
-    public long getWaitingTicks() { return waitingTicks; }
-    public int getRouteRecalculationCount() { return routeRecalculationCount; }
+    /** Everything this vehicle accumulated over its journey. */
+    public TripRecord getTrip() {
+        return trip;
+    }
+
+    public double getDistanceTravelledKm() { return trip.getDistanceTravelledKm(); }
+    public double getTravelTimeSeconds() { return trip.getTravelTimeSeconds(); }
+    public long getWaitingTicks() { return trip.getWaitingTicks(); }
+    public int getRouteRecalculationCount() { return trip.getRouteRecalculationCount(); }
 
     /**
      * Returns the legacy simulation-speed value. New code should use
@@ -846,7 +831,7 @@ public abstract class Vehicle {
     }
 
     public List<String> getTravelHistory() {
-        return Collections.unmodifiableList(travelHistory);
+        return trip.getVisitedIntersections();
     }
 
     private static void validatePositive(String name, double value) {

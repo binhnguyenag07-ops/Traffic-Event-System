@@ -1,7 +1,7 @@
 package team.traffic.domain.vehicle.dynamics;
 
 import team.traffic.domain.network.Road;
-import team.traffic.domain.vehicle.Vehicle;
+
 
 /**
  * One vehicle asking to cross one junction, together with everything the
@@ -19,7 +19,7 @@ import team.traffic.domain.vehicle.Vehicle;
  *                                 a vehicle on a minor road is not starved
  */
 public record JunctionApproach(
-        Vehicle vehicle,
+        TrafficParticipant vehicle,
         String junctionId,
         Road fromRoad,
         Road toRoad,
@@ -29,7 +29,7 @@ public record JunctionApproach(
 
     public JunctionApproach {
         if (vehicle == null) {
-            throw new IllegalArgumentException("Vehicle is required.");
+            throw new IllegalArgumentException("TrafficParticipant is required.");
         }
         if (junctionId == null || junctionId.isBlank()) {
             throw new IllegalArgumentException("Junction id is required.");

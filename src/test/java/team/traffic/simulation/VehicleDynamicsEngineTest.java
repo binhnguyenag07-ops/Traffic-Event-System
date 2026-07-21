@@ -117,12 +117,11 @@ class VehicleDynamicsEngineTest {
         java.util.Collections.reverse(descending.vehicles);
         descending.run(30);
 
-        // Planning every vehicle before moving any means a vehicle's leader is
-        // seen unmoved whether it sits earlier or later in the list. What is
-        // left is floating-point accumulation, worth well under a micrometre.
-        Map<String, Double> expected = progressById(ascending);
-        assertThat(progressById(descending)).allSatisfy((vehicleId, progress) ->
-                assertThat(progress).isCloseTo(expected.get(vehicleId), within(1e-9)));
+        // Planning every vehicle before moving any, and holding the chosen
+        // speed in the plan rather than writing it straight back, means a
+        // vehicle reads its leader unmoved and at its old speed however the
+        // list is ordered. The result is identical to the last bit.
+        assertThat(progressById(descending)).isEqualTo(progressById(ascending));
     }
 
     @Test
