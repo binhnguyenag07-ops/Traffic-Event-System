@@ -12,6 +12,10 @@ public class TrafficStatistics {
     private int blockedRoadCount;
     private int closedRoadCount;
     private int activeEventCount;
+    private double totalTravelTimeSeconds;
+    private double averageTravelTimeSeconds;
+    private double averageRouteLengthKm;
+    private double averageVehicleDensity;
 
     public TrafficStatistics() {}
 
@@ -47,4 +51,12 @@ public class TrafficStatistics {
 
     public int getActiveEventCount() { return activeEventCount; }
     public void setActiveEventCount(int activeEventCount) { this.activeEventCount = activeEventCount; }
+    public double getTotalTravelTimeSeconds() { return totalTravelTimeSeconds; }
+    public void setTotalTravelTimeSeconds(double totalTravelTimeSeconds) { this.totalTravelTimeSeconds = totalTravelTimeSeconds; }
+    public double getAverageTravelTimeSeconds() { return averageTravelTimeSeconds; }
+    public void setAverageTravelTimeSeconds(double averageTravelTimeSeconds) { this.averageTravelTimeSeconds = averageTravelTimeSeconds; }
+    public double getAverageRouteLengthKm() { return averageRouteLengthKm; }
+    public void setAverageRouteLengthKm(double averageRouteLengthKm) { this.averageRouteLengthKm = averageRouteLengthKm; }
+    public double getAverageVehicleDensity() { return averageVehicleDensity; }
+    public void setAverageVehicleDensity(double averageVehicleDensity) { this.averageVehicleDensity = averageVehicleDensity; }
 }

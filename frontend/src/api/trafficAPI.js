@@ -39,6 +39,14 @@ export const networkApi = {
 export const scenarioApi = {
   list: () => get('/scenarios'),
   activate: (id) => post(`/scenarios/${encodeURIComponent(id)}/activate`),
+  importMap: async (file) => {
+    const form = new FormData()
+    form.append('map', file)
+    const response = await fetch(`${API_BASE}/scenarios/import`, { method: 'POST', body: form })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(body.error || `Map import failed (${response.status})`)
+    return body
+  },
 }
 
 export const simulationApi = {
@@ -79,6 +87,11 @@ export const trafficEventApi = {
 
 export const statisticsApi = {
   all: () => get('/statistics'),
+}
+
+export const experimentApi = {
+  latest: () => get('/experiments/latest'),
+  run: () => post('/experiments/run'),
 }
 
 export { request }

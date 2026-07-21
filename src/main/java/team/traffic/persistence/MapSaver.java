@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
+import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
@@ -104,6 +105,7 @@ public class MapSaver {
         public double congestionLevel;
         public double vehicleDensity;
         public RoadStatus roadStatus;
+        public RoadClass roadClass;
         public List<List<Double>> geometry;
 
         static RoadData from(Road road) {
@@ -119,6 +121,7 @@ public class MapSaver {
             data.congestionLevel = condition.getCongestionLevel();
             data.vehicleDensity = condition.getVehicleDensity();
             data.roadStatus = condition.getRoadStatus();
+            data.roadClass = road.getRoadClass();
             data.geometry = road.getGeometry().stream()
                     .map(point -> List.of(point.latitude(), point.longitude()))
                     .toList();

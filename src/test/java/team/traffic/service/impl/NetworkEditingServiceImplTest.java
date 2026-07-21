@@ -12,6 +12,7 @@ import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
+import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.vehicle.Car;
@@ -50,9 +51,11 @@ class NetworkEditingServiceImplTest {
     @Test
     void addsTwoWayRoadsAndFindsThemByIntersection() {
         var outcome = editingService.addRoads(new RoadCreationRequest(
-                "BC", "CB", "B", "C", 40, 25, true));
+                "BC", "CB", "B", "C", 40, 25, true, RoadClass.RESIDENTIAL));
 
         assertThat(outcome.roads()).extracting(Road::getId).containsExactly("BC", "CB");
+        assertThat(outcome.roads()).extracting(Road::getRoadClass)
+                .containsOnly(RoadClass.RESIDENTIAL);
         assertThat(outcome.geometrySources()).containsExactly("test", "test");
         assertThat(editingService.findConnectedRoads("B").outgoing())
                 .extracting(Road::getId).contains("BC");

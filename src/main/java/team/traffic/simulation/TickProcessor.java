@@ -2,6 +2,7 @@ package team.traffic.simulation;
 
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.event.TrafficEventStatus;
+import team.traffic.domain.event.TrafficLightDelayEvent;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
@@ -43,6 +44,14 @@ public class TickProcessor {
 
         for (Vehicle vehicle : vehicles) {
             if (!vehicle.hasReachedDestination()) {
+                vehicle.addTravelTime(simulationSecondsPerTick);
+                TrafficLightDelayEvent lightDelay = findLightDelay(vehicle, events);
+                if (lightDelay != null && vehicle.waitForTrafficLight(lightDelay.getId(), lightDelay.getDelayTicks())) {
+                    continue;
+                }
+                if (lightDelay == null) {
+                    vehicle.clearTrafficLightWait();
+                }
                 vehicle.advance(network, simulationSecondsPerTick);
                 if (vehicle.getStatus() == VehicleStatus.BLOCKED) {
                     vehicle.recomputeRoute(network, routingService);
@@ -56,6 +65,19 @@ public class TickProcessor {
                 publish(event);
             }
         }
+    }
+
+    private TrafficLightDelayEvent findLightDelay(Vehicle vehicle, List<TrafficEvent> events) {
+        if (vehicle.getOccupiedRoadId() != null || vehicle.getNextRoadId() == null) {
+            return null;
+        }
+        return events.stream()
+                .filter(TrafficLightDelayEvent.class::isInstance)
+                .map(TrafficLightDelayEvent.class::cast)
+                .filter(event -> event.getStatus() == TrafficEventStatus.ACTIVE)
+                .filter(event -> event.getAffectedRoadId().equals(vehicle.getNextRoadId()))
+                .findFirst()
+                .orElse(null);
     }
 
     private void publish(TrafficEvent event) {

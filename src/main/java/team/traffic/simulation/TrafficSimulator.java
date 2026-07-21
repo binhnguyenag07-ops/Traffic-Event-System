@@ -9,6 +9,7 @@ import team.traffic.domain.event.TrafficEventStatus;
 import team.traffic.domain.event.TrafficEventType;
 import team.traffic.domain.event.TrafficLightDelayEvent;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleFactory;
 import team.traffic.domain.vehicle.VehicleType;
@@ -30,6 +31,7 @@ public class TrafficSimulator {
     private SimulationStatus status;
     private List<Vehicle> vehicles;
     private List<TrafficEvent> events;
+    private final List<CompletedTrip> completedTrips;
     private List<VehicleConfig> vehicleConfigs;
     private List<EventConfig> eventConfigs;
     private double simulationSecondsPerTick;
@@ -47,6 +49,7 @@ public class TrafficSimulator {
         this.status = SimulationStatus.READY;
         this.vehicles = new ArrayList<>();
         this.events = new ArrayList<>();
+        this.completedTrips = new ArrayList<>();
         this.vehicleConfigs = new ArrayList<>();
         this.eventConfigs = new ArrayList<>();
         this.simulationSecondsPerTick = TickProcessor.DEFAULT_SIMULATION_SECONDS_PER_TICK;
@@ -59,6 +62,7 @@ public class TrafficSimulator {
         this.eventConfigs = new ArrayList<>(eventConfigs);
         this.vehicles = buildVehicles(this.vehicleConfigs);
         this.events = buildEvents(this.eventConfigs);
+        this.completedTrips.clear();
         this.clock.reset();
         this.status = SimulationStatus.READY;
     }
@@ -89,6 +93,7 @@ public class TrafficSimulator {
         releaseVehicleOccupancy();
         this.vehicles = buildVehicles(this.vehicleConfigs);
         this.events = buildEvents(this.eventConfigs);
+        this.completedTrips.clear();
         this.clock.reset();
         this.status = SimulationStatus.READY;
     }
@@ -123,6 +128,10 @@ public class TrafficSimulator {
 
     public synchronized List<TrafficEvent> getEvents() {
         return Collections.unmodifiableList(events);
+    }
+
+    public synchronized List<CompletedTrip> getCompletedTrips() {
+        return List.copyOf(completedTrips);
     }
 
     public synchronized SimulationSnapshot getSnapshot() {
@@ -165,6 +174,14 @@ public class TrafficSimulator {
             return false;
         }
         vehicle.releaseRoad(network);
+        if (vehicle.hasReachedDestination()) {
+            completedTrips.add(new CompletedTrip(
+                    vehicle.getId(),
+                    vehicle.getType(),
+                    vehicle.getTravelTimeSeconds(),
+                    vehicle.getDistanceTravelledKm(),
+                    vehicle.getRouteRecalculationCount()));
+        }
         return vehicles.remove(vehicle);
     }
 
@@ -181,6 +198,7 @@ public class TrafficSimulator {
         network = replacement;
         vehicles = new ArrayList<>();
         events = new ArrayList<>();
+        completedTrips.clear();
         vehicleConfigs = new ArrayList<>();
         eventConfigs = new ArrayList<>();
         clock.reset();

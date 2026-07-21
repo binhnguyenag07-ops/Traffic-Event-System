@@ -10,6 +10,7 @@ public class Road {
     private final double speedLimit;
     private final int capacity;
     private final List<GeoPoint> geometry;
+    private final RoadClass roadClass;
     private int currentVehicleCount;
     private RoadCondition condition;
 
@@ -17,12 +18,20 @@ public class Road {
             double distance, double speedLimit, int capacity,
             int currentVehicleCount, RoadCondition condition) {
         this(id, startIntersectionId, endIntersectionId, distance, speedLimit, capacity,
-                currentVehicleCount, condition, List.of());
+                currentVehicleCount, condition, List.of(), RoadClass.UNCLASSIFIED);
     }
 
     public Road(String id, String startIntersectionId, String endIntersectionId,
             double distance, double speedLimit, int capacity,
             int currentVehicleCount, RoadCondition condition, List<GeoPoint> geometry) {
+        this(id, startIntersectionId, endIntersectionId, distance, speedLimit, capacity,
+                currentVehicleCount, condition, geometry, RoadClass.UNCLASSIFIED);
+    }
+
+    public Road(String id, String startIntersectionId, String endIntersectionId,
+            double distance, double speedLimit, int capacity,
+            int currentVehicleCount, RoadCondition condition, List<GeoPoint> geometry,
+            RoadClass roadClass) {
         // Basic validation keeps impossible roads out of the network.
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Road id is required");
@@ -52,6 +61,7 @@ public class Road {
         this.speedLimit = speedLimit;
         this.capacity = capacity;
         this.geometry = geometry == null ? List.of() : List.copyOf(geometry);
+        this.roadClass = roadClass == null ? RoadClass.UNCLASSIFIED : roadClass;
         this.currentVehicleCount = currentVehicleCount;
         this.condition = condition == null ? new RoadCondition(0, 0, RoadStatus.OPEN) : condition;
     }
@@ -155,6 +165,10 @@ public class Road {
 
     public List<GeoPoint> getGeometry() {
         return geometry;
+    }
+
+    public RoadClass getRoadClass() {
+        return roadClass;
     }
 
     public void setCurrentVehicleCount(int currentVehicleCount) {

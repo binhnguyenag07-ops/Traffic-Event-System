@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import TrafficMap from './components/TrafficMap'
 import NetworkEditor from './components/NetworkEditor'
+import ExperimentPanel from './components/ExperimentPanel'
 import { useTrafficDashboard } from './hooks/useTrafficDashboard'
 
 const PREFERENCES = [
@@ -30,6 +31,12 @@ function Field({ label, children }) {
   return <label className="field"><span>{label}</span>{children}</label>
 }
 
+function formatDuration(seconds) {
+  const value = Number(seconds || 0)
+  if (value < 60) return `${value.toFixed(0)} s`
+  return `${(value / 60).toFixed(1)} min`
+}
+
 function Inspector({ selected }) {
   if (!selected) {
     return <p className="empty-copy">Select a road, junction, vehicle, or event on the map to inspect it.</p>
@@ -51,7 +58,7 @@ export default function App() {
   const dashboard = useTrafficDashboard()
   const {
     intersections, roads, scenarios, activeScenario, snapshot, statistics, algorithms,
-    route, comparison, selected, loading, error, tickDelay, streamConnected,
+    route, comparison, selected, loading, error, tickDelay, streamConnected, importSummary,
   } = dashboard
   const [routeStart, setRouteStart] = useState('')
   const [routeEnd, setRouteEnd] = useState('')
@@ -63,9 +70,11 @@ export default function App() {
   const [eventType, setEventType] = useState('CONGESTION')
   const [eventRoad, setEventRoad] = useState('')
   const [eventDuration, setEventDuration] = useState(8)
+  const [signalDelay, setSignalDelay] = useState(3)
   const [captureIntersection, setCaptureIntersection] = useState(false)
   const [draftPoint, setDraftPoint] = useState(null)
   const [highlightedRoadIds, setHighlightedRoadIds] = useState([])
+  const mapFileRef = useRef(null)
 
   const traffic = statistics.traffic || {}
   const activeEvents = snapshot.trafficEvents?.filter((event) => event.status === 'ACTIVE') || []
@@ -73,7 +82,7 @@ export default function App() {
   const canPause = snapshot.status === 'RUNNING'
   const canResume = snapshot.status === 'PAUSED'
   const pressure = Math.round(Number(traffic.averageCongestionLevel || 0) * 100)
-  const scenarioName = scenarios.find((scenario) => scenario.id === activeScenario)?.name || 'Small City'
+  const scenarioName = scenarios.find((scenario) => scenario.id === activeScenario)?.name || 'District 1 Live'
 
   const algorithmOptions = useMemo(
     () => algorithms.map((item) => item.algorithmName || item.name).filter(Boolean),
@@ -106,7 +115,8 @@ export default function App() {
 
   const addEvent = () => {
     if (!eventRoad) return
-    const value = eventType === 'TRAFFIC_LIGHT_DELAY' ? 3 : eventType === 'ROAD_CLOSURE' ? undefined : 0.55
+    const value = eventType === 'TRAFFIC_LIGHT_DELAY' ? Number(signalDelay)
+      : eventType === 'ROAD_CLOSURE' ? undefined : 0.55
     safely(async () => {
       await dashboard.createEvent({
         type: eventType,
@@ -133,16 +143,33 @@ export default function App() {
           <b>T+{String(snapshot.tick).padStart(4, '0')}</b>
         </div>
         <div className="scenario-switcher">
-          <span>Scenario</span>
-          <select value={activeScenario} disabled={loading}
-            onChange={(event) => dashboard.activateScenario(event.target.value)}>
-            {scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
-          </select>
+          <label><span>Scenario</span>
+            <select value={activeScenario} disabled={loading}
+              onChange={(event) => dashboard.activateScenario(event.target.value)}>
+              {scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
+            </select>
+          </label>
+          <input ref={mapFileRef} className="visually-hidden" type="file" accept="application/json,.json"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) safely(() => dashboard.importMap(file))
+              event.target.value = ''
+            }} />
+          <button className="import-map-button" disabled={loading} onClick={() => mapFileRef.current?.click()}>
+            {loading ? 'Working…' : 'Import JSON'}
+          </button>
         </div>
       </header>
 
-      {error ? <div className="global-error" role="alert"><strong>Connection issue</strong><span>{error}</span>
-        <button onClick={dashboard.refreshAll}>Retry</button></div> : null}
+      {error || importSummary ? <div className="status-stack">
+        {error ? <div className="global-error" role="alert"><strong>Connection issue</strong><span>{error}</span>
+          <button onClick={dashboard.refreshAll}>Retry</button></div> : null}
+        {importSummary ? <div className="import-notice" role="status">
+          <strong>{importSummary.filename}</strong>
+          <span>{importSummary.intersectionCount} junctions · {importSummary.roadCount} roads</span>
+          <span>{importSummary.geometrySources?.OSRM || 0} routed · {importSummary.geometrySources?.STRAIGHT || 0} fallback</span>
+        </div> : null}
+      </div> : null}
 
       <section className="workspace">
         <div className="map-stage">
@@ -158,6 +185,7 @@ export default function App() {
             captureIntersection={captureIntersection}
             draftIntersection={draftPoint}
             highlightedRoadIds={highlightedRoadIds}
+            vehicleAnimationDuration={tickDelay}
             onMapCoordinate={(point) => {
               setDraftPoint(point)
               setCaptureIntersection(false)
@@ -165,6 +193,7 @@ export default function App() {
           />
           <div className="map-metrics" aria-label="Live traffic summary">
             <Metric label="Fleet" value={snapshot.vehicles?.length || 0} />
+            <Metric label="Average trip" value={formatDuration(traffic.averageTravelTimeSeconds)} />
             <Metric label="Network pressure" value={`${pressure}%`} tone={pressure > 65 ? 'danger' : ''} />
             <Metric label="Active incidents" value={activeEvents.length} tone={activeEvents.length ? 'warning' : ''} />
             <Metric label="Arrived" value={traffic.arrivedVehicles || 0} />
@@ -184,7 +213,7 @@ export default function App() {
             </div>
             <div className="setup-row">
               <button onClick={() => safely(dashboard.initializeDemo)} disabled={loading || snapshot.status === 'RUNNING'}>
-                Load demo fleet
+                Reload live traffic
               </button>
               <Field label="Playback">
                 <select value={tickDelay} onChange={(event) => safely(() => dashboard.setPlaybackInterval(Number(event.target.value)))}>
@@ -247,6 +276,10 @@ export default function App() {
                 <Field label="Road"><select value={eventRoad} onChange={(e) => setEventRoad(e.target.value)}><option value="">Choose</option>{roads.map((road) => <option key={road.id}>{road.id}</option>)}</select></Field>
                 <Field label="Ticks"><input type="number" min="1" max="50" value={eventDuration} onChange={(e) => setEventDuration(e.target.value)} /></Field>
               </div>
+              {eventType === 'TRAFFIC_LIGHT_DELAY' ? <Field label="Wait ticks">
+                <input type="number" min="1" max="50" value={signalDelay}
+                  onChange={(event) => setSignalDelay(event.target.value)} />
+              </Field> : null}
               <button className="primary wide" onClick={addEvent} disabled={!eventRoad}>Schedule incident</button>
             </div>
           </details>
@@ -255,6 +288,28 @@ export default function App() {
             <summary><span>Inspector</span><b>{selected ? selected.kind : 'Nothing selected'}</b></summary>
             <div className="section-body"><Inspector selected={selected} /></div>
           </details>
+
+          <details className="rail-section performance-panel">
+            <summary><span>Performance</span><b>{formatDuration(traffic.averageTravelTimeSeconds)} avg trip</b></summary>
+            <div className="section-body">
+              <div className="performance-grid">
+                <Metric label="Total travel" value={formatDuration(traffic.totalTravelTimeSeconds)} />
+                <Metric label="Route length" value={`${Number(traffic.averageRouteLengthKm || 0).toFixed(2)} km`} />
+                <Metric label="Vehicle density" value={`${Math.round(Number(traffic.averageVehicleDensity || 0) * 100)}%`} />
+                <Metric label="Waiting" value={traffic.waitingVehicles || 0} />
+              </div>
+              <div className="algorithm-stat-list">{(statistics.algorithms || []).map((item) => (
+                <div key={item.algorithmName}>
+                  <strong>{item.algorithmName}</strong>
+                  <span>{Number(item.averageComputationTime || 0).toFixed(3)} ms</span>
+                  <span>{Number(item.averagePathOptimality || 0).toFixed(1)}% optimal</span>
+                  <span>{item.routeRecalculationCount || 0} reroutes</span>
+                </div>
+              ))}</div>
+            </div>
+          </details>
+
+          <ExperimentPanel />
         </aside>
       </section>
 

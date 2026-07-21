@@ -157,7 +157,8 @@ public class NetworkEditingServiceImpl implements NetworkEditingService {
     private Road createRoad(String id, Intersection start, Intersection end, RoadCreationRequest request,
             RoadGeometryProvider.RoadGeometryResult geometry) {
         return new Road(id, start.getId(), end.getId(), geometry.distanceKilometres(), request.speedLimit(),
-                request.capacity(), 0, new RoadCondition(0, 0, RoadStatus.OPEN), geometry.geometry());
+                request.capacity(), 0, new RoadCondition(0, 0, RoadStatus.OPEN), geometry.geometry(),
+                request.roadClass());
     }
 
     private void validateRoadRequest(RoadCreationRequest request) {

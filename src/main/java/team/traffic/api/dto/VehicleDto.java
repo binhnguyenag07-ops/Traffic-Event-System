@@ -28,6 +28,11 @@ public class VehicleDto {
     private String roadStartIntersectionId;
     private String roadEndIntersectionId;
     private double roadProgress;
+    private long waitTicksRemaining;
+    private double distanceTravelledKm;
+    private double travelTimeSeconds;
+    private long waitingTicks;
+    private int routeRecalculationCount;
     private List<String> travelHistory;
 
     public VehicleDto() {}
@@ -54,6 +59,11 @@ public class VehicleDto {
         this.roadStartIntersectionId = vehicle.getRoadStartIntersectionId();
         this.roadEndIntersectionId = vehicle.getRoadEndIntersectionId();
         this.roadProgress = vehicle.getRoadProgress();
+        this.waitTicksRemaining = vehicle.getWaitTicksRemaining();
+        this.distanceTravelledKm = vehicle.getDistanceTravelledKm();
+        this.travelTimeSeconds = vehicle.getTravelTimeSeconds();
+        this.waitingTicks = vehicle.getWaitingTicks();
+        this.routeRecalculationCount = vehicle.getRouteRecalculationCount();
         this.travelHistory = vehicle.getTravelHistory();
     }
 
@@ -99,6 +109,16 @@ public class VehicleDto {
     public void setRoadEndIntersectionId(String roadEndIntersectionId) { this.roadEndIntersectionId = roadEndIntersectionId; }
     public double getRoadProgress() { return roadProgress; }
     public void setRoadProgress(double roadProgress) { this.roadProgress = roadProgress; }
+    public long getWaitTicksRemaining() { return waitTicksRemaining; }
+    public void setWaitTicksRemaining(long waitTicksRemaining) { this.waitTicksRemaining = waitTicksRemaining; }
+    public double getDistanceTravelledKm() { return distanceTravelledKm; }
+    public void setDistanceTravelledKm(double distanceTravelledKm) { this.distanceTravelledKm = distanceTravelledKm; }
+    public double getTravelTimeSeconds() { return travelTimeSeconds; }
+    public void setTravelTimeSeconds(double travelTimeSeconds) { this.travelTimeSeconds = travelTimeSeconds; }
+    public long getWaitingTicks() { return waitingTicks; }
+    public void setWaitingTicks(long waitingTicks) { this.waitingTicks = waitingTicks; }
+    public int getRouteRecalculationCount() { return routeRecalculationCount; }
+    public void setRouteRecalculationCount(int routeRecalculationCount) { this.routeRecalculationCount = routeRecalculationCount; }
     public List<String> getTravelHistory() { return travelHistory; }
     public void setTravelHistory(List<String> travelHistory) { this.travelHistory = travelHistory; }
 }

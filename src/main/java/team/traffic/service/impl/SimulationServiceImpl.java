@@ -1,6 +1,7 @@
 package team.traffic.service.impl;
 
 import team.traffic.domain.event.TrafficEvent;
+import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.EventConfig;
@@ -100,6 +101,11 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     @Override
     public List<TrafficEvent> getEvents() {
         return simulator.getEvents();
+    }
+
+    @Override
+    public List<CompletedTrip> getCompletedTrips() {
+        return simulator.getCompletedTrips();
     }
 
     @Override

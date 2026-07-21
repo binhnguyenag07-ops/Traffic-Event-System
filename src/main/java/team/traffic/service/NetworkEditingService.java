@@ -5,6 +5,7 @@ import java.util.List;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
+import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadStatus;
 
 public interface NetworkEditingService {
@@ -17,7 +18,18 @@ public interface NetworkEditingService {
     String exportJson() throws IOException;
 
     record RoadCreationRequest(String id, String reverseRoadId, String startIntersectionId,
-            String endIntersectionId, double speedLimit, int capacity, boolean bidirectional) {}
+            String endIntersectionId, double speedLimit, int capacity, boolean bidirectional,
+            RoadClass roadClass) {
+        public RoadCreationRequest(String id, String reverseRoadId, String startIntersectionId,
+                String endIntersectionId, double speedLimit, int capacity, boolean bidirectional) {
+            this(id, reverseRoadId, startIntersectionId, endIntersectionId,
+                    speedLimit, capacity, bidirectional, RoadClass.UNCLASSIFIED);
+        }
+
+        public RoadCreationRequest {
+            roadClass = roadClass == null ? RoadClass.UNCLASSIFIED : roadClass;
+        }
+    }
     record RoadCreationOutcome(List<Road> roads, List<String> geometrySources) {}
     record ConnectedRoads(List<Road> incoming, List<Road> outgoing) {}
 }

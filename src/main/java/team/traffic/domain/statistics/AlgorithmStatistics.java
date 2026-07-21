@@ -12,6 +12,7 @@ public class AlgorithmStatistics {
     private double averageVisitedNodes;
     private double averageRouteCost;
     private int routeRecalculationCount;
+    private double averagePathOptimality;
 
     public AlgorithmStatistics() {}
 
@@ -39,4 +40,6 @@ public class AlgorithmStatistics {
     public void setAverageRouteCost(double averageRouteCost) { this.averageRouteCost = averageRouteCost; }
     public int getRouteRecalculationCount() { return routeRecalculationCount; }
     public void setRouteRecalculationCount(int routeRecalculationCount) { this.routeRecalculationCount = routeRecalculationCount; }
+    public double getAveragePathOptimality() { return averagePathOptimality; }
+    public void setAveragePathOptimality(double averagePathOptimality) { this.averagePathOptimality = averagePathOptimality; }
 }

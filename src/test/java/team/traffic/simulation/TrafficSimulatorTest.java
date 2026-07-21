@@ -19,6 +19,7 @@ import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.vehicle.Car;
 import team.traffic.service.RoutingService;
 
 class TrafficSimulatorTest {
@@ -190,6 +191,60 @@ class TrafficSimulatorTest {
         assertThat(event.getStatus()).isEqualTo(TrafficEventStatus.ACTIVE);
     }
 
+    @Test
+    void removingArrivedVehicleArchivesCompletedTrip() {
+        Car vehicle = new Car("car-1", "A", "B");
+        simulator.addVehicle(vehicle);
+        vehicle.addTravelTime(30);
+        vehicle.moveTo("B");
+
+        assertThat(simulator.removeVehicle("car-1")).isTrue();
+
+        assertThat(simulator.getCompletedTrips()).singleElement().satisfies(trip -> {
+            assertThat(trip.vehicleId()).isEqualTo("car-1");
+            assertThat(trip.vehicleType()).isEqualTo(vehicle.getType());
+            assertThat(trip.travelTimeSeconds()).isEqualTo(30);
+        });
+        assertThatThrownBy(() -> simulator.getCompletedTrips().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void removingVehicleBeforeArrivalDoesNotArchiveTrip() {
+        simulator.addVehicle(new Car("car-1", "A", "B"));
+
+        assertThat(simulator.removeVehicle("car-1")).isTrue();
+
+        assertThat(simulator.getCompletedTrips()).isEmpty();
+    }
+
+    @Test
+    void resetClearsCompletedTrips() {
+        archiveCompletedTrip();
+
+        simulator.reset();
+
+        assertThat(simulator.getCompletedTrips()).isEmpty();
+    }
+
+    @Test
+    void initializeClearsCompletedTrips() {
+        archiveCompletedTrip();
+
+        simulator.initialize(List.of(), List.of());
+
+        assertThat(simulator.getCompletedTrips()).isEmpty();
+    }
+
+    @Test
+    void replacingNetworkClearsCompletedTrips() {
+        archiveCompletedTrip();
+
+        simulator.replaceNetwork(createNetwork());
+
+        assertThat(simulator.getCompletedTrips()).isEmpty();
+    }
+
     // --- validation ---
 
     @Test
@@ -223,5 +278,12 @@ class TrafficSimulatorTest {
         net.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
         net.addRoad(new Road("AB", "A", "B", 1, 50, 10, 0, new RoadCondition(0, 0, RoadStatus.OPEN)));
         return net;
+    }
+
+    private void archiveCompletedTrip() {
+        Car vehicle = new Car("car-1", "A", "B");
+        simulator.addVehicle(vehicle);
+        vehicle.moveTo("B");
+        simulator.removeVehicle("car-1");
     }
 }

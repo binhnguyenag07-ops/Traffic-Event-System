@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from 'react'
 
 const LOCATION_TYPES = ['NORMAL', 'COMMERCIAL', 'RESIDENTIAL', 'SCHOOL', 'HOSPITAL', 'BAR']
 const ROAD_STATUSES = ['OPEN', 'CONGESTED', 'BLOCKED', 'CLOSED']
+const ROAD_CLASSES = ['PRIMARY', 'SECONDARY', 'TERTIARY', 'UNCLASSIFIED', 'RESIDENTIAL', 'LIVING_STREET']
 
 function Field({ label, children }) {
   return <label className="field"><span>{label}</span>{children}</label>
@@ -18,6 +19,7 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
   const [roadEnd, setRoadEnd] = useState('')
   const [speedLimit, setSpeedLimit] = useState(40)
   const [capacity, setCapacity] = useState(60)
+  const [roadClass, setRoadClass] = useState('RESIDENTIAL')
   const [bidirectional, setBidirectional] = useState(true)
   const [connectionId, setConnectionId] = useState('')
   const [connections, setConnections] = useState({ incoming: [], outgoing: [] })
@@ -68,7 +70,7 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
     const result = await perform(() => dashboard.addRoad({
       id: roadId.trim(), reverseRoadId: reverseRoadId.trim(),
       startIntersectionId: roadStart, endIntersectionId: roadEnd,
-      speedLimit: Number(speedLimit), capacity: Number(capacity), bidirectional,
+      speedLimit: Number(speedLimit), capacity: Number(capacity), bidirectional, roadClass,
     }), `Road ${roadId.trim()} added`)
     if (result) {
       const sources = result.geometrySources?.join(' / ')
@@ -146,6 +148,9 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
             <Field label="Speed km/h"><input type="number" min="1" value={speedLimit} onChange={(event) => setSpeedLimit(event.target.value)} /></Field>
             <Field label="Capacity"><input type="number" min="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
           </div>
+          <Field label="Street class"><select value={roadClass} onChange={(event) => setRoadClass(event.target.value)}>
+            {ROAD_CLASSES.map((item) => <option key={item} value={item}>{item.replaceAll('_', ' ')}</option>)}
+          </select></Field>
           <label className="check-field"><input type="checkbox" checked={bidirectional}
             onChange={(event) => setBidirectional(event.target.checked)} /><span>Create both directions</span></label>
           <button className="primary wide" disabled={!editable || busy || !roadId.trim() || !roadStart || !roadEnd

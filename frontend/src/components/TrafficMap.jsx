@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import {
   CircleMarker,
@@ -16,10 +16,13 @@ import 'leaflet/dist/leaflet.css'
 import {
   HCMC_CENTER,
   HCMC_DISTRICT_BOUNDS,
+  bearingAlongPath,
+  interpolatePosition,
   positionAlongPath,
   positionFor,
   positionsForRoad,
   roadColor,
+  roadClassStyle,
 } from './mapUtils'
 
 const TILE_URL = import.meta.env.VITE_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -43,6 +46,12 @@ function MapCoordinatePicker({ active, onPick }) {
   return null
 }
 
+function MapZoomTracker({ onZoom }) {
+  const map = useMapEvents({ zoomend: () => onZoom(map.getZoom()) })
+  useEffect(() => onZoom(map.getZoom()), [map, onZoom])
+  return null
+}
+
 function divIcon(className, label, size = 32) {
   return L.divIcon({
     className: '',
@@ -52,7 +61,69 @@ function divIcon(className, label, size = 32) {
   })
 }
 
-const vehicleGlyph = { CAR: 'C', BUS: 'B', EMERGENCY: '+' }
+const vehicleIconCache = new Map()
+
+const vehicleArtwork = {
+  BUS: '/vehicles/bus-top.svg',
+  CAR: '/vehicles/car-top.svg',
+  EMERGENCY: '/vehicles/emergency-top.svg',
+}
+
+function vehicleIcon(type, status, bearing, size) {
+  const vehicleType = vehicleArtwork[type] ? type : 'CAR'
+  const statusClass = ['ARRIVED', 'BLOCKED', 'WAITING'].includes(status) ? status.toLowerCase() : 'moving'
+  const direction = Math.round(Number(bearing) || 0)
+  const key = `${vehicleType}-${statusClass}-${direction}-${size}`
+  if (!vehicleIconCache.has(key)) {
+    vehicleIconCache.set(key, divIcon(
+      `vehicle-pin ${vehicleType.toLowerCase()} ${statusClass}`,
+      `<img src="${vehicleArtwork[vehicleType]}" alt="" style="transform:rotate(${direction}deg)">`,
+      size,
+    ))
+  }
+  return vehicleIconCache.get(key)
+}
+
+function AnimatedVehicleMarker({ position, icon, animationDuration, eventHandlers, children }) {
+  const markerRef = useRef(null)
+  const [initialPosition] = useState(position)
+  const animationRef = useRef(null)
+
+  useEffect(() => {
+    const marker = markerRef.current
+    if (!marker) return undefined
+
+    window.cancelAnimationFrame(animationRef.current)
+    const fromLatLng = marker.getLatLng()
+    const from = [fromLatLng.lat, fromLatLng.lng]
+    const unchanged = Math.abs(from[0] - position[0]) < 1e-9 && Math.abs(from[1] - position[1]) < 1e-9
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const largeJump = marker._map?.distance(from, position) > 120
+
+    if (unchanged || reducedMotion || largeJump) {
+      marker.setLatLng(position)
+      return undefined
+    }
+
+    const startedAt = performance.now()
+    const duration = Math.max(100, Number(animationDuration) || 500) * 1.05
+    const animate = (now) => {
+      const progress = Math.min(1, (now - startedAt) / duration)
+      marker.setLatLng(interpolatePosition(from, position, progress))
+      if (progress < 1) animationRef.current = window.requestAnimationFrame(animate)
+    }
+    animationRef.current = window.requestAnimationFrame(animate)
+
+    return () => window.cancelAnimationFrame(animationRef.current)
+  }, [animationDuration, position])
+
+  return (
+    <Marker ref={markerRef} position={initialPosition} icon={icon} eventHandlers={eventHandlers}>
+      {children}
+    </Marker>
+  )
+}
+
 const eventGlyph = { CONGESTION: '≋', ACCIDENT: '!', ROAD_CLOSURE: '×', TRAFFIC_LIGHT_DELAY: '◉' }
 
 function MapLegend() {
@@ -67,8 +138,10 @@ function MapLegend() {
 }
 
 function TrafficMap({ intersections, roads, vehicles, events, route, selected, onSelect, onPickIntersection,
-  captureIntersection = false, draftIntersection = null, highlightedRoadIds = [], onMapCoordinate = () => {} }) {
+  captureIntersection = false, draftIntersection = null, highlightedRoadIds = [], onMapCoordinate = () => {},
+  vehicleAnimationDuration = 500 }) {
   const [layers, setLayers] = useState({ traffic: true, vehicles: true, events: true, labels: true })
+  const [zoom, setZoom] = useState(16)
   const intersectionById = useMemo(
     () => new Map(intersections.map((intersection) => [intersection.id, intersection])),
     [intersections],
@@ -77,6 +150,7 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
   const roadById = useMemo(() => new Map(roads.map((road) => [road.id, road])), [roads])
   const routeRoadIds = useMemo(() => new Set((route?.steps || []).map((step) => step.roadId)), [route])
   const highlightedRoadSet = useMemo(() => new Set(highlightedRoadIds), [highlightedRoadIds])
+  const denseNetwork = intersections.length > 80
 
   const toggleLayer = (name) => setLayers((current) => ({ ...current, [name]: !current[name] }))
 
@@ -101,6 +175,7 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
         center={HCMC_CENTER}
         zoom={16}
         minZoom={16}
+        maxZoom={19}
         maxBounds={HCMC_DISTRICT_BOUNDS}
         maxBoundsViscosity={1}
         preferCanvas
@@ -108,6 +183,7 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
       >
         <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
         <FitNetwork positions={positions} />
+        <MapZoomTracker onZoom={setZoom} />
         <MapCoordinatePicker active={captureIntersection} onPick={onMapCoordinate} />
 
         <Pane name="roads" style={{ zIndex: 410 }}>
@@ -117,14 +193,16 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
             if (!start || !end) return null
             const isRoute = routeRoadIds.has(road.id)
             const isHighlighted = highlightedRoadSet.has(road.id)
+            const classStyle = roadClassStyle(road.roadClass, zoom)
             return (
               <Polyline
                 key={road.id}
                 positions={positionsForRoad(road, start, end)}
                 pathOptions={{
                   color: isHighlighted ? '#00a9c7' : layers.traffic ? roadColor(road) : '#77838f',
-                  weight: isHighlighted ? 9 : isRoute ? 10 : 4 + Math.max(0, Number(road.vehicleDensity || 0)) * 3,
-                  opacity: isHighlighted ? 1 : isRoute ? 0.35 : 0.86,
+                  weight: isHighlighted ? 9 : isRoute ? 10
+                    : classStyle.weight + Math.max(0, Number(road.vehicleDensity || 0)) * 1.25,
+                  opacity: isHighlighted ? 1 : isRoute ? 0.35 : classStyle.opacity,
                   dashArray: road.status === 'BLOCKED' || road.status === 'CLOSED' ? '8 7' : undefined,
                   lineCap: 'round',
                 }}
@@ -156,12 +234,15 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
         ) : null}
 
         <Pane name="intersections" style={{ zIndex: 440 }}>
-          {intersections.map((intersection) => (
+          {intersections.map((intersection) => {
+            const isSelected = selected?.kind === 'intersection' && selected.data.id === intersection.id
+            if (denseNetwork && zoom < 17 && !isSelected) return null
+            return (
             <CircleMarker
               key={intersection.id}
               center={positionFor(intersection)}
-              radius={selected?.kind === 'intersection' && selected.data.id === intersection.id ? 10 : 7}
-              pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#172631', fillOpacity: 1 }}
+              radius={isSelected ? 9 : denseNetwork ? Math.min(4, zoom - 15) : 7}
+              pathOptions={{ color: '#ffffff', weight: denseNetwork ? 1 : 3, fillColor: '#172631', fillOpacity: 1 }}
               eventHandlers={{
                 click: () => {
                   onSelect({ kind: 'intersection', data: intersection })
@@ -169,10 +250,12 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
                 },
               }}
             >
-              {layers.labels ? <Tooltip permanent direction="top" offset={[0, -8]}>{intersection.id}</Tooltip> : null}
+              {layers.labels && (!denseNetwork || zoom >= 19)
+                ? <Tooltip permanent direction="top" offset={[0, -8]}>{intersection.id}</Tooltip> : null}
               <Popup><strong>{intersection.name}</strong><br />{intersection.locationType}</Popup>
             </CircleMarker>
-          ))}
+            )
+          })}
         </Pane>
 
         {draftIntersection?.latitude != null ? (
@@ -205,13 +288,15 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
           const path = end ? positionsForRoad(road, start, end) : [positionFor(start)]
           const progress = Math.max(0, Math.min(1, Number(vehicle.roadProgress || 0)))
           const position = positionAlongPath(path, progress)
+          const bearing = bearingAlongPath(path, progress)
+          const markerSize = vehicle.type === 'BUS' ? 36 : vehicle.type === 'EMERGENCY' ? 34 : 30
           return (
-            <Marker key={vehicle.id} position={position}
-              icon={divIcon(`vehicle-pin ${vehicle.type.toLowerCase()} ${vehicle.status.toLowerCase()}`,
-                vehicleGlyph[vehicle.type] || 'V', 34)}
+            <AnimatedVehicleMarker key={vehicle.id} position={position}
+              animationDuration={vehicleAnimationDuration}
+              icon={vehicleIcon(vehicle.type, vehicle.status, bearing, markerSize)}
               eventHandlers={{ click: () => onSelect({ kind: 'vehicle', data: vehicle }) }}>
               <Tooltip>{vehicle.id} · {vehicle.status}</Tooltip>
-            </Marker>
+            </AnimatedVehicleMarker>
           )
         }) : null}
       </MapContainer>

@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
+  bearingAlongPath,
   HCMC_CENTER,
   HCMC_DISTRICT_BOUNDS,
+  interpolatePosition,
   positionAlongPath,
   positionFor,
   positionsForRoad,
   roadColor,
+  roadClassStyle,
 } from './mapUtils'
 
 describe('map utilities', () => {
+  it('interpolates marker positions and clamps animation progress', () => {
+    expect(interpolatePosition([10, 106], [12, 110], 0.25)).toEqual([10.5, 107])
+    expect(interpolatePosition([10, 106], [12, 110], 2)).toEqual([12, 110])
+  })
+
   it('uses geographic coordinates when supplied', () => {
     expect(positionFor({ latitude: 10.77, longitude: 106.7 })).toEqual([10.77, 106.7])
   })
@@ -30,6 +38,16 @@ describe('map utilities', () => {
     expect(roadColor({ status: 'OPEN', vehicleDensity: 0.8 })).toBe('#e24a34')
   })
 
+  it('keeps local streets visible and strengthens them as the map zooms in', () => {
+    const overview = roadClassStyle('RESIDENTIAL', 16)
+    const detail = roadClassStyle('RESIDENTIAL', 18)
+
+    expect(overview.weight).toBeGreaterThan(0)
+    expect(detail.weight).toBeGreaterThan(overview.weight)
+    expect(detail.opacity).toBeGreaterThan(overview.opacity)
+    expect(roadClassStyle('PRIMARY', 16).weight).toBeGreaterThan(overview.weight)
+  })
+
   it('uses real road geometry when available', () => {
     const geometry = [
       { latitude: 10.77, longitude: 106.69 },
@@ -47,5 +65,11 @@ describe('map utilities', () => {
     const path = [[0, 0], [0, 1], [0, 3]]
     expect(positionAlongPath(path, 0.5)).toEqual([0, 1.5])
     expect(positionAlongPath(path, 1)).toEqual([0, 3])
+  })
+
+  it('points vehicle artwork in the direction of travel', () => {
+    expect(bearingAlongPath([[0, 0], [1, 0]], 0.5)).toBeCloseTo(0)
+    expect(bearingAlongPath([[0, 0], [0, 1]], 0.5)).toBeCloseTo(90)
+    expect(bearingAlongPath([[0, 0], [-1, 0]], 0.5)).toBeCloseTo(180)
   })
 })

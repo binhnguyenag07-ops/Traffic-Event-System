@@ -16,6 +16,7 @@ import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
+import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 
@@ -44,6 +45,7 @@ class MapSaverTest {
         assertThat(restored.getRoad("R1").getDistance()).isEqualTo(10);
         assertThat(restored.getRoad("R1").getGeometry())
                 .containsExactly(new GeoPoint(10.77, 106.69), new GeoPoint(10.78, 106.70));
+        assertThat(restored.getRoad("R1").getRoadClass()).isEqualTo(RoadClass.PRIMARY);
         assertThat(restored.getRoad("R2").getCondition().getRoadStatus())
                 .isEqualTo(RoadStatus.CONGESTED);
     }
@@ -70,7 +72,8 @@ class MapSaverTest {
         network.addRoad(new Road(
                 "R1", "I1", "I2", 10, 50, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN),
-                List.of(new GeoPoint(10.77, 106.69), new GeoPoint(10.78, 106.70))));
+                List.of(new GeoPoint(10.77, 106.69), new GeoPoint(10.78, 106.70)),
+                RoadClass.PRIMARY));
         return network;
     }
 }

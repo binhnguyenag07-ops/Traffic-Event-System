@@ -105,6 +105,7 @@ class VehicleTest {
         assertThat(network.getRoad("BC").getCurrentVehicleCount()).isZero();
     }
 
+
     @Test
     void becomesBlockedWhenRoutingCannotFindAPath() {
         RoadNetwork network = createNetwork();

@@ -10,6 +10,8 @@ import team.traffic.api.controller.StatisticsController;
 import team.traffic.api.controller.TrafficEventController;
 import team.traffic.api.controller.VehicleController;
 import team.traffic.api.controller.ScenarioController;
+import team.traffic.api.controller.ExperimentController;
+import team.traffic.experiment.ExperimentService;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.observer.TrafficEventBus;
 import team.traffic.persistence.JsonMapLoader;
@@ -30,7 +32,7 @@ import team.traffic.service.impl.VehicleServiceImpl;
 
 public class App {
     private static final int PORT = Integer.parseInt(System.getenv().getOrDefault("PORT", "7070"));
-    private static final String MAP_FILE = System.getenv().getOrDefault("MAP_FILE", "data/small_city.json");
+    private static final String MAP_FILE = System.getenv().getOrDefault("MAP_FILE", "data/district1_network.json");
 
     public static void main(String[] args) throws Exception {
         // Load road network from JSON
@@ -78,11 +80,13 @@ public class App {
                 simulationService, networkService, registry, routingService);
         StatisticsController statisticsController = new StatisticsController(statisticsService);
         ScenarioController scenarioController = new ScenarioController(networkService, simulationService);
+        ExperimentController experimentController = new ExperimentController(new ExperimentService());
 
         // Wire API routes
         ApiRouteRegistry routeRegistry = new ApiRouteRegistry(
                 healthController, networkController, routingController, simulationController,
-                vehicleController, trafficEventController, statisticsController, scenarioController);
+                vehicleController, trafficEventController, statisticsController, scenarioController,
+                experimentController);
 
         // Start Javalin server
         TrafficApiServer server = new TrafficApiServer(routeRegistry, PORT);

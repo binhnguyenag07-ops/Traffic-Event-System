@@ -178,4 +178,18 @@ class RoutingServiceImplTest {
                     .isInstanceOf(NullPointerException.class);
         }
     }
+
+    @Test
+    void recordsOptimalityAndDynamicRecalculations() {
+        service.findRoute(network, new RouteRequest("A", "D", RoutePreference.SHORTEST_TIME), "A*");
+        service.recordRouteRecalculation("A*");
+
+        var statistics = service.getAlgorithmStatistics().stream()
+                .filter(item -> item.getAlgorithmName().equals("A*"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(statistics.getAveragePathOptimality()).isEqualTo(100.0);
+        assertThat(statistics.getRouteRecalculationCount()).isEqualTo(1);
+    }
 }

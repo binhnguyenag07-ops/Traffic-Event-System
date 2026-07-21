@@ -9,6 +9,7 @@ import team.traffic.api.controller.StatisticsController;
 import team.traffic.api.controller.TrafficEventController;
 import team.traffic.api.controller.VehicleController;
 import team.traffic.api.controller.ScenarioController;
+import team.traffic.api.controller.ExperimentController;
 
 public class ApiRouteRegistry {
     private final HealthController healthController;
@@ -19,6 +20,7 @@ public class ApiRouteRegistry {
     private final TrafficEventController trafficEventController;
     private final StatisticsController statisticsController;
     private final ScenarioController scenarioController;
+    private final ExperimentController experimentController;
 
     public ApiRouteRegistry(
             HealthController healthController,
@@ -29,7 +31,7 @@ public class ApiRouteRegistry {
             TrafficEventController trafficEventController,
             StatisticsController statisticsController) {
         this(healthController, networkController, routingController, simulationController,
-                vehicleController, trafficEventController, statisticsController, null);
+                vehicleController, trafficEventController, statisticsController, null, null);
     }
 
     public ApiRouteRegistry(
@@ -41,6 +43,20 @@ public class ApiRouteRegistry {
             TrafficEventController trafficEventController,
             StatisticsController statisticsController,
             ScenarioController scenarioController) {
+        this(healthController, networkController, routingController, simulationController,
+                vehicleController, trafficEventController, statisticsController, scenarioController, null);
+    }
+
+    public ApiRouteRegistry(
+            HealthController healthController,
+            NetworkController networkController,
+            RoutingController routingController,
+            SimulationController simulationController,
+            VehicleController vehicleController,
+            TrafficEventController trafficEventController,
+            StatisticsController statisticsController,
+            ScenarioController scenarioController,
+            ExperimentController experimentController) {
         this.healthController = healthController;
         this.networkController = networkController;
         this.routingController = routingController;
@@ -49,6 +65,7 @@ public class ApiRouteRegistry {
         this.trafficEventController = trafficEventController;
         this.statisticsController = statisticsController;
         this.scenarioController = scenarioController;
+        this.experimentController = experimentController;
     }
 
     public void register(Javalin app) {
@@ -61,6 +78,9 @@ public class ApiRouteRegistry {
         statisticsController.registerRoutes(app);
         if (scenarioController != null) {
             scenarioController.registerRoutes(app);
+        }
+        if (experimentController != null) {
+            experimentController.registerRoutes(app);
         }
     }
 }

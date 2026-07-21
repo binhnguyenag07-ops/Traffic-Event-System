@@ -21,4 +21,6 @@ public interface RoutingService {
     default List<AlgorithmStatistics> getAlgorithmStatistics() {
         return List.of();
     }
+
+    default void recordRouteRecalculation(String algorithmName) {}
 }

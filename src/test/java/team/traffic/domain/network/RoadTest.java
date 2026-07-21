@@ -5,8 +5,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.data.Offset.offset;
 
 import org.junit.jupiter.api.Test;
+import java.util.List;
 
 class RoadTest {
+
+    @Test
+    void storesExplicitRoadClassAndDefaultsLegacyConstructors() {
+        Road classified = new Road("R2", "I1", "I2", 1, 30, 40, 0,
+                new RoadCondition(0, 0, RoadStatus.OPEN), List.of(), RoadClass.RESIDENTIAL);
+
+        assertThat(classified.getRoadClass()).isEqualTo(RoadClass.RESIDENTIAL);
+        assertThat(createRoad(1, 30).getRoadClass()).isEqualTo(RoadClass.UNCLASSIFIED);
+    }
 
     @Test
     void rejectsNonFiniteDistance() {

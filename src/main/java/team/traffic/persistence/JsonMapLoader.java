@@ -2,6 +2,7 @@ package team.traffic.persistence;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
 
@@ -12,6 +13,7 @@ import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
+import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
@@ -35,6 +37,23 @@ public class JsonMapLoader implements MapLoader {
             throw new InvalidMapException("Invalid JSON map: " + exception.getOriginalMessage(), exception);
         }
 
+        return buildNetwork(mapData);
+    }
+
+    public RoadNetwork load(InputStream input) throws IOException {
+        if (input == null) {
+            throw new InvalidMapException("JSON map input is required");
+        }
+        MapData mapData;
+        try {
+            mapData = objectMapper.readValue(input, MapData.class);
+        } catch (JsonProcessingException exception) {
+            throw new InvalidMapException("Invalid JSON map: " + exception.getOriginalMessage(), exception);
+        }
+        return buildNetwork(mapData);
+    }
+
+    private RoadNetwork buildNetwork(MapData mapData) throws InvalidMapException {
         if (mapData == null) {
             throw new InvalidMapException("JSON map root must be an object");
         }
@@ -130,6 +149,7 @@ public class JsonMapLoader implements MapLoader {
         public Double congestionLevel;
         public Double vehicleDensity;
         public RoadStatus roadStatus;
+        public RoadClass roadClass;
         public List<List<Double>> geometry;
 
         // Converts JSON data into the domain model.
@@ -152,7 +172,8 @@ public class JsonMapLoader implements MapLoader {
                     requiredCapacity,
                     requiredVehicleCount,
                     condition,
-                    toGeometry(geometry));
+                    toGeometry(geometry),
+                    roadClass == null ? RoadClass.UNCLASSIFIED : roadClass);
         }
 
         private List<GeoPoint> toGeometry(List<List<Double>> coordinates) {

@@ -11,6 +11,7 @@ import team.traffic.routing.PathFindingStrategy;
 import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.RoutingService;
 import team.traffic.domain.statistics.AlgorithmStatistics;
+import team.traffic.routing.DijkstraPathFindingStrategy;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -78,15 +79,26 @@ public class RoutingServiceImpl implements RoutingService {
             result.setAverageComputationTime(current.successes == 0 ? 0 : current.totalNanos / 1_000_000.0 / current.successes);
             result.setAverageVisitedNodes(current.successes == 0 ? 0 : (double) current.totalVisited / current.successes);
             result.setAverageRouteCost(current.successes == 0 ? 0 : current.totalCost / current.successes);
+            result.setAveragePathOptimality(current.successes == 0 ? 0 : current.totalOptimality / current.successes);
+            result.setRouteRecalculationCount(current.recalculations);
             return result;
         }).toList();
+    }
+
+    @Override
+    public synchronized void recordRouteRecalculation(String algorithmName) {
+        if (algorithmName == null || algorithmName.isBlank()) {
+            return;
+        }
+        metrics.computeIfAbsent(algorithmName, ignored -> new Metrics()).recalculations++;
     }
 
     private RouteResult execute(PathFindingStrategy strategy, RoadNetwork network, RouteRequest request) {
         long started = System.nanoTime();
         try {
             RouteResult result = strategy.findRoute(network, request);
-            recordSuccess(strategy.getName(), System.nanoTime() - started, result);
+            long elapsedNanos = System.nanoTime() - started;
+            recordSuccess(strategy.getName(), elapsedNanos, result, calculateOptimality(strategy, network, request, result));
             return result;
         } catch (RuntimeException exception) {
             recordFailure(strategy.getName());
@@ -94,13 +106,35 @@ public class RoutingServiceImpl implements RoutingService {
         }
     }
 
-    private synchronized void recordSuccess(String name, long nanos, RouteResult result) {
+    private synchronized void recordSuccess(String name, long nanos, RouteResult result, double optimality) {
         Metrics current = metrics.computeIfAbsent(name, ignored -> new Metrics());
         current.attempts++;
         current.successes++;
         current.totalNanos += nanos;
         current.totalVisited += result.getVisitedNodes();
         current.totalCost += result.getRoute().getTotalCost();
+        current.totalOptimality += optimality;
+    }
+
+    private double calculateOptimality(
+            PathFindingStrategy strategy,
+            RoadNetwork network,
+            RouteRequest request,
+            RouteResult result) {
+        if (!"A*".equals(strategy.getName())) {
+            return 100.0;
+        }
+        try {
+            RouteResult optimal = new DijkstraPathFindingStrategy().findRoute(network, request);
+            double optimalCost = optimal.getRoute().getTotalCost();
+            double actualCost = result.getRoute().getTotalCost();
+            if (actualCost == 0) {
+                return optimalCost == 0 ? 100.0 : 0.0;
+            }
+            return Math.max(0.0, Math.min(100.0, optimalCost / actualCost * 100.0));
+        } catch (RuntimeException exception) {
+            return 0.0;
+        }
     }
 
     private synchronized void recordFailure(String name) {
@@ -116,5 +150,7 @@ public class RoutingServiceImpl implements RoutingService {
         long totalNanos;
         long totalVisited;
         double totalCost;
+        double totalOptimality;
+        int recalculations;
     }
 }

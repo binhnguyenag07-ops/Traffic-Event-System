@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.HashSet;
+import java.util.Set;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.routing.Route;
@@ -35,6 +37,14 @@ public abstract class Vehicle {
     private String roadEndIntersectionId;
     private double roadProgress;
     private final List<String> travelHistory;
+    private String activeTrafficLightEventId;
+    private long waitTicksRemaining;
+    private final Set<String> completedTrafficLightEvents;
+    private double distanceTravelledKm;
+    private double travelTimeSeconds;
+    private long waitingTicks;
+    private int routeRecalculationCount;
+    private String lastRoutingAlgorithm;
 
     protected Vehicle(String id, String currentIntersectionId, String destinationIntersectionId, double movementSpeed) {
         this(
@@ -98,6 +108,7 @@ public abstract class Vehicle {
         this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
         this.travelHistory = new ArrayList<>();
         this.travelHistory.add(currentIntersectionId);
+        this.completedTrafficLightEvents = new HashSet<>();
     }
 
     public abstract VehicleType getType();
@@ -138,6 +149,7 @@ public abstract class Vehicle {
         try {
             RouteResult result = routingService.findRoute(roadNetwork, request);
             currentRoute = result == null ? null : result.getRoute();
+            lastRoutingAlgorithm = result == null ? null : result.getAlgorithmName();
             status = isUsableRoute(currentRoute) ? VehicleStatus.WAITING : VehicleStatus.BLOCKED;
         } catch (NoSuchElementException exception) {
             currentRoute = null;
@@ -228,7 +240,9 @@ public abstract class Vehicle {
                 + road.getCondition().getVehicleDensity();
         double effectiveSpeedKph = Math.min(currentSpeed, road.getSpeedLimit()) / trafficFactor;
         double distanceThisTick = effectiveSpeedKph * simulationSeconds / 3600.0;
+        double previousProgress = roadProgress;
         roadProgress = Math.min(1.0, roadProgress + distanceThisTick / road.getDistance());
+        distanceTravelledKm += (roadProgress - previousProgress) * road.getDistance();
         status = VehicleStatus.MOVING;
 
         if (roadProgress >= 1.0) {
@@ -248,14 +262,18 @@ public abstract class Vehicle {
     }
 
     public void recomputeRoute(RoadNetwork roadNetwork, RoutingService routingService) {
-        requestRoute(roadNetwork, routingService, routePreference);
+        recomputeRoute(roadNetwork, routingService, routePreference);
     }
 
     public void recomputeRoute(
             RoadNetwork roadNetwork,
             RoutingService routingService,
             RoutePreference preference) {
+        routeRecalculationCount++;
         requestRoute(roadNetwork, routingService, preference);
+        if (lastRoutingAlgorithm != null) {
+            routingService.recordRouteRecalculation(lastRoutingAlgorithm);
+        }
     }
 
     public void moveTo(String nextIntersectionId) {
@@ -325,6 +343,57 @@ public abstract class Vehicle {
     public double getRoadProgress() {
         return roadProgress;
     }
+
+    public String getNextRoadId() {
+        RouteStep step = getNextRouteStep();
+        return step == null ? null : step.getRoadId();
+    }
+
+    /**
+     * Holds the vehicle before it enters a road affected by a traffic-light
+     * delay. Each event delays this vehicle at most once.
+     */
+    public boolean waitForTrafficLight(String eventId, long delayTicks) {
+        if (eventId == null || eventId.isBlank() || delayTicks <= 0 || completedTrafficLightEvents.contains(eventId)) {
+            return false;
+        }
+        if (!eventId.equals(activeTrafficLightEventId)) {
+            activeTrafficLightEventId = eventId;
+            waitTicksRemaining = delayTicks;
+        }
+        if (waitTicksRemaining > 0) {
+            waitTicksRemaining--;
+            waitingTicks++;
+            status = VehicleStatus.WAITING;
+            if (waitTicksRemaining == 0) {
+                completedTrafficLightEvents.add(eventId);
+                activeTrafficLightEventId = null;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    public void clearTrafficLightWait() {
+        activeTrafficLightEventId = null;
+        waitTicksRemaining = 0;
+    }
+
+    public long getWaitTicksRemaining() {
+        return waitTicksRemaining;
+    }
+
+    public void addTravelTime(double simulationSeconds) {
+        if (!Double.isFinite(simulationSeconds) || simulationSeconds < 0) {
+            throw new IllegalArgumentException("Simulation seconds must not be negative.");
+        }
+        travelTimeSeconds += simulationSeconds;
+    }
+
+    public double getDistanceTravelledKm() { return distanceTravelledKm; }
+    public double getTravelTimeSeconds() { return travelTimeSeconds; }
+    public long getWaitingTicks() { return waitingTicks; }
+    public int getRouteRecalculationCount() { return routeRecalculationCount; }
 
     /**
      * Returns the legacy simulation-speed value. New code should use

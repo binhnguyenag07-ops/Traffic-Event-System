@@ -49,6 +49,26 @@ export function positionAlongPath(positions, progress) {
   return positions.at(-1)
 }
 
+export function bearingAlongPath(positions, progress) {
+  if (!positions || positions.length < 2) return 0
+  const amount = Math.max(0, Math.min(1, Number(progress) || 0))
+  const before = positionAlongPath(positions, Math.max(0, amount - 0.002))
+  const after = positionAlongPath(positions, Math.min(1, amount + 0.002))
+  const latitudeScale = Math.cos(((before[0] + after[0]) / 2) * Math.PI / 180)
+  const east = (after[1] - before[1]) * latitudeScale
+  const north = after[0] - before[0]
+  if (east === 0 && north === 0) return 0
+  return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360
+}
+
+export function interpolatePosition(from, to, progress) {
+  const amount = Math.max(0, Math.min(1, Number(progress) || 0))
+  return [
+    from[0] + (to[0] - from[0]) * amount,
+    from[1] + (to[1] - from[1]) * amount,
+  ]
+}
+
 export function roadColor(road) {
   if (road.status === 'BLOCKED' || road.status === 'CLOSED') return '#b4232f'
   const pressure = Math.max(Number(road.congestionLevel || 0), Number(road.vehicleDensity || 0))
@@ -56,4 +76,23 @@ export function roadColor(road) {
   if (pressure >= 0.45) return '#e89b2c'
   if (pressure >= 0.2) return '#d2b33c'
   return '#288b67'
+}
+
+export function roadClassStyle(roadClass, zoom) {
+  const level = Number(zoom) || 16
+  const roadType = roadClass || 'UNCLASSIFIED'
+  const base = {
+    PRIMARY: [3.2, 0.9],
+    SECONDARY: [2.7, 0.86],
+    TERTIARY: [2.2, 0.8],
+    UNCLASSIFIED: [1.5, 0.62],
+    RESIDENTIAL: [1.05, 0.48],
+    LIVING_STREET: [0.8, 0.4],
+  }[roadType] || [1.5, 0.62]
+  const localBoost = level >= 18 ? 0.9 : level >= 17 ? 0.45 : 0
+  const isLocal = roadType === 'RESIDENTIAL' || roadType === 'LIVING_STREET'
+  return {
+    weight: base[0] + (isLocal ? localBoost : Math.max(0, level - 16) * 0.12),
+    opacity: Math.min(0.92, base[1] + (isLocal ? localBoost * 0.22 : 0)),
+  }
 }

@@ -3,6 +3,7 @@ package team.traffic.api.controller;
 import io.javalin.Javalin;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
+import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.RoadStatus;
@@ -97,7 +98,10 @@ public class NetworkController {
             NetworkEditingService.RoadCreationOutcome outcome = requireEditor().addRoads(
                     new NetworkEditingService.RoadCreationRequest(request.id, request.reverseRoadId,
                             request.startIntersectionId, request.endIntersectionId,
-                            request.speedLimit, request.capacity, request.bidirectional));
+                            request.speedLimit, request.capacity, request.bidirectional,
+                            request.roadClass == null || request.roadClass.isBlank()
+                                    ? RoadClass.UNCLASSIFIED
+                                    : RoadClass.valueOf(request.roadClass.toUpperCase())));
             ctx.status(201).json(Map.of(
                     "roads", outcome.roads().stream().map(this::roadToMap).toList(),
                     "geometrySources", outcome.geometrySources()));
@@ -169,6 +173,7 @@ public class NetworkController {
         result.put("distance", r.getDistance());
         result.put("speedLimit", r.getSpeedLimit());
         result.put("capacity", r.getCapacity());
+        result.put("roadClass", r.getRoadClass().name());
         result.put("currentVehicleCount", r.getCurrentVehicleCount());
         result.put("vehicleDensity", r.getCondition().getVehicleDensity());
         result.put("status", r.getCondition().getRoadStatus().name());
@@ -195,6 +200,7 @@ public class NetworkController {
         public double speedLimit;
         public int capacity;
         public boolean bidirectional;
+        public String roadClass = "UNCLASSIFIED";
     }
 
     public static class RoadConditionRequest {

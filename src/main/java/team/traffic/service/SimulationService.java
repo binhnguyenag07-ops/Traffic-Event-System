@@ -1,6 +1,7 @@
 package team.traffic.service;
 
 import team.traffic.domain.event.TrafficEvent;
+import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.simulation.EventConfig;
@@ -24,6 +25,9 @@ public interface SimulationService {
     SimulationSnapshot getSnapshot();
     List<Vehicle> getVehicles();
     List<TrafficEvent> getEvents();
+    default List<CompletedTrip> getCompletedTrips() {
+        return List.of();
+    }
     default void setParameters(double simulationSecondsPerTick, long playbackIntervalMillis) {
         throw new UnsupportedOperationException("Simulation parameters are not supported.");
     }
