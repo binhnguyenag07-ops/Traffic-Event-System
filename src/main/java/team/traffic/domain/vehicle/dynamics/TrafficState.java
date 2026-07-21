@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
-import team.traffic.domain.vehicle.Vehicle;
+
 
 /**
  * The working state of one simulation step: where every vehicle physically is,
@@ -31,18 +31,18 @@ public final class TrafficState implements JunctionEnvironment {
 
     private final long tick;
     private final RoadNetwork network;
-    private final List<Vehicle> vehicles;
+    private final List<TrafficParticipant> vehicles;
     private final RightOfWayPolicy rightOfWayPolicy;
     private final GapAcceptanceModel gapAcceptanceModel;
     private final Map<String, LaneOccupancy> occupancyCache = new HashMap<>();
     private final Map<String, JunctionController> controllers = new LinkedHashMap<>();
     private final Set<String> clearedVehicleIds = new HashSet<>();
-    private Map<String, List<Vehicle>> vehiclesByRoadId;
+    private Map<String, List<TrafficParticipant>> vehiclesByRoadId;
 
     private TrafficState(
             long tick,
             RoadNetwork network,
-            List<Vehicle> vehicles,
+            List<TrafficParticipant> vehicles,
             RightOfWayPolicy rightOfWayPolicy,
             GapAcceptanceModel gapAcceptanceModel) {
         this.tick = tick;
@@ -52,14 +52,14 @@ public final class TrafficState implements JunctionEnvironment {
         this.gapAcceptanceModel = gapAcceptanceModel;
     }
 
-    public static TrafficState capture(long tick, RoadNetwork network, List<Vehicle> vehicles) {
+    public static TrafficState capture(long tick, RoadNetwork network, List<? extends TrafficParticipant> vehicles) {
         return capture(tick, network, vehicles, new PriorityRightOfWayPolicy(), new GapAcceptanceModel());
     }
 
     public static TrafficState capture(
             long tick,
             RoadNetwork network,
-            List<Vehicle> vehicles,
+            List<? extends TrafficParticipant> vehicles,
             RightOfWayPolicy rightOfWayPolicy,
             GapAcceptanceModel gapAcceptanceModel) {
         if (tick < 0) {
@@ -77,7 +77,7 @@ public final class TrafficState implements JunctionEnvironment {
         return new TrafficState(
                 tick,
                 network,
-                vehicles == null ? List.of() : new ArrayList<>(vehicles),
+                vehicles == null ? List.of() : List.copyOf(vehicles),
                 rightOfWayPolicy,
                 gapAcceptanceModel);
     }
@@ -114,7 +114,7 @@ public final class TrafficState implements JunctionEnvironment {
         return Set.copyOf(vehiclesByRoadId().keySet());
     }
 
-    private List<Vehicle> vehiclesOn(String roadId) {
+    private List<TrafficParticipant> vehiclesOn(String roadId) {
         return vehiclesByRoadId().getOrDefault(roadId, List.of());
     }
 
@@ -123,10 +123,10 @@ public final class TrafficState implements JunctionEnvironment {
      * Rebuilt from scratch whenever a vehicle enters or leaves a road, which
      * happens far less often than occupancy is read.
      */
-    private Map<String, List<Vehicle>> vehiclesByRoadId() {
+    private Map<String, List<TrafficParticipant>> vehiclesByRoadId() {
         if (vehiclesByRoadId == null) {
-            Map<String, List<Vehicle>> index = new HashMap<>();
-            for (Vehicle vehicle : vehicles) {
+            Map<String, List<TrafficParticipant>> index = new HashMap<>();
+            for (TrafficParticipant vehicle : vehicles) {
                 String roadId = vehicle.getOccupiedRoadId();
                 if (roadId != null) {
                     index.computeIfAbsent(roadId, id -> new ArrayList<>()).add(vehicle);
@@ -202,7 +202,7 @@ public final class TrafficState implements JunctionEnvironment {
             if (occupancy == null) {
                 continue;
             }
-            for (Vehicle vehicle : occupancy.getVehicles()) {
+            for (TrafficParticipant vehicle : occupancy.getVehicles()) {
                 double speedMps = vehicle.getInstantaneousSpeedMps();
                 if (speedMps < MOVING_THRESHOLD_MPS) {
                     // Standing traffic is not about to cross the junction.
