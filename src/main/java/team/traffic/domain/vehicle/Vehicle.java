@@ -23,11 +23,12 @@ import team.traffic.domain.vehicle.dynamics.JunctionApproach;
 import team.traffic.domain.vehicle.dynamics.KraussCarFollowingModel;
 import team.traffic.domain.vehicle.dynamics.LaneOccupancy;
 import team.traffic.domain.vehicle.dynamics.LeaderGap;
+import team.traffic.domain.vehicle.dynamics.TrafficParticipant;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.domain.vehicle.dynamics.TurnDirection;
 import team.traffic.service.RoutingService;
 
-public abstract class Vehicle {
+public abstract class Vehicle implements TrafficParticipant {
     /** Conversion factor between kilometres per hour and metres per second. */
     private static final double KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND = 3.6;
     /** Below this speed a vehicle is reported as queueing rather than moving. */
