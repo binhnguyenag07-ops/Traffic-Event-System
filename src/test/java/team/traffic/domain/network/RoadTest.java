@@ -19,6 +19,20 @@ class RoadTest {
     }
 
     @Test
+    void storesRestoredIdentityAndLaneGeometryWithoutChangingLegacyDefaults() {
+        Road explicit = new Road("R", "Main road", "P", "I1", "I2", 1, 50, 100, 0,
+                4, 3.25, new RoadCondition(0, 0, RoadStatus.OPEN), List.of(), RoadClass.PRIMARY);
+        Road legacy = createRoad(1, 30);
+
+        assertThat(explicit.getName()).isEqualTo("Main road");
+        assertThat(explicit.getPhysicalRoadId()).isEqualTo("P");
+        assertThat(explicit.getLaneCount()).isEqualTo(4);
+        assertThat(explicit.getRoadWidthMetres()).isEqualTo(13.0);
+        assertThat(explicit.getFreeFlowTravelTimeSeconds()).isEqualTo(72.0);
+        assertThat(legacy.getLaneCount()).isEqualTo(RoadClass.UNCLASSIFIED.getDefaultLaneCount());
+    }
+
+    @Test
     void rejectsNonFiniteDistance() {
         assertThatThrownBy(() -> createRoad(Double.NaN, 50))
                 .isInstanceOf(IllegalArgumentException.class)
