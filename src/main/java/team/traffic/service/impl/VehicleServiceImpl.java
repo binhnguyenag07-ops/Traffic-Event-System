@@ -9,6 +9,8 @@ import team.traffic.domain.vehicle.VehicleFactory;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.service.RoutingService;
+import team.traffic.domain.routing.BuildingRoutePlan;
+import team.traffic.domain.routing.RoutePreference;
 import team.traffic.service.VehicleService;
 import team.traffic.simulation.TrafficSimulator;
 
@@ -17,17 +19,24 @@ public class VehicleServiceImpl implements VehicleService {
     private final List<Vehicle> vehicles;
     private final VehicleFactory vehicleFactory;
     private final TrafficSimulator runtime;
+    private final RoutingService routingService;
 
     public VehicleServiceImpl() {
         this.vehicles = new ArrayList<>();
         this.vehicleFactory = new VehicleFactory();
         this.runtime = null;
+        this.routingService = null;
     }
 
     public VehicleServiceImpl(TrafficSimulator runtime) {
+        this(runtime, null);
+    }
+
+    public VehicleServiceImpl(TrafficSimulator runtime, RoutingService routingService) {
         this.vehicles = new ArrayList<>();
         this.vehicleFactory = new VehicleFactory();
         this.runtime = runtime;
+        this.routingService = routingService;
     }
 
     @Override
@@ -63,6 +72,34 @@ public class VehicleServiceImpl implements VehicleService {
             return runtime.removeVehicle(id);
         }
         return vehicles.removeIf(vehicle -> vehicle.getId().equals(id));
+    }
+
+    @Override
+    public Vehicle createVehicleBetweenBuildings(VehicleType type, String originBuildingId,
+            String destinationBuildingId, RoadNetwork network) {
+        if (type == null) throw new IllegalArgumentException("Vehicle type is required");
+        if (network == null) throw new IllegalArgumentException("Road network is required");
+        if (routingService == null) {
+            throw new IllegalStateException("Routing service is required for building trips");
+        }
+
+        BuildingRoutePlan plan = routingService.findRouteBetweenBuildings(
+                network, originBuildingId, destinationBuildingId, RoutePreference.CONGESTION_AWARE);
+        String id = "V-" + UUID.randomUUID().toString().substring(0, 8);
+        Vehicle vehicle = vehicleFactory.createVehicle(
+                type,
+                id,
+                plan.originAccess().intersectionId(),
+                plan.destinationAccess().intersectionId());
+        vehicle.assignBuildingTrip(originBuildingId, destinationBuildingId);
+        vehicle.setCurrentRoute(plan.routeResult().getRoute());
+
+        if (runtime == null) {
+            vehicles.add(vehicle);
+        } else {
+            runtime.addVehicle(vehicle);
+        }
+        return vehicle;
     }
 
     private void validateVehicleRequest(

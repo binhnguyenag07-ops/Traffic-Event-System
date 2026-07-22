@@ -12,6 +12,8 @@ public class VehicleDto {
     private VehicleType type;
     private String currentIntersectionId;
     private String destinationIntersectionId;
+    private String originBuildingId;
+    private String destinationBuildingId;
     private VehicleStatus status;
     private double movementSpeed;
     private double length;
@@ -65,6 +67,8 @@ public class VehicleDto {
         this.type = vehicle.getType();
         this.currentIntersectionId = vehicle.getCurrentIntersectionId();
         this.destinationIntersectionId = vehicle.getDestinationIntersectionId();
+        this.originBuildingId = vehicle.getOriginBuildingId();
+        this.destinationBuildingId = vehicle.getDestinationBuildingId();
         this.status = vehicle.getStatus();
         this.movementSpeed = vehicle.getMovementSpeed();
         this.length = vehicle.getLength();
@@ -99,6 +103,10 @@ public class VehicleDto {
     public void setCurrentIntersectionId(String currentIntersectionId) { this.currentIntersectionId = currentIntersectionId; }
     public String getDestinationIntersectionId() { return destinationIntersectionId; }
     public void setDestinationIntersectionId(String destinationIntersectionId) { this.destinationIntersectionId = destinationIntersectionId; }
+    public String getOriginBuildingId() { return originBuildingId; }
+    public void setOriginBuildingId(String originBuildingId) { this.originBuildingId = originBuildingId; }
+    public String getDestinationBuildingId() { return destinationBuildingId; }
+    public void setDestinationBuildingId(String destinationBuildingId) { this.destinationBuildingId = destinationBuildingId; }
     public VehicleStatus getStatus() { return status; }
     public void setStatus(VehicleStatus status) { this.status = status; }
     public double getMovementSpeed() { return movementSpeed; }
