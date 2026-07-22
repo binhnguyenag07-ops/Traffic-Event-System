@@ -7,7 +7,12 @@ async function request(path, options = {}) {
   })
   if (response.status === 204) return null
   const body = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(body.error || body.message || `Request failed (${response.status})`)
+  if (!response.ok) {
+    const error = new Error(body.error || body.message || `Request failed (${response.status})`)
+    error.status = response.status
+    error.body = body
+    throw error
+  }
   return body
 }
 
@@ -60,6 +65,10 @@ export const simulationApi = {
   status: () => get('/simulation/status'),
   signals: () => get('/simulation/signals'),
   flowTrace: () => get('/simulation/trace/flow'),
+  frameTimeline: () => get('/simulation/trace/frames'),
+  frameAt: (elapsedSeconds) => get(
+    `/simulation/trace/frames/at?elapsedSeconds=${encodeURIComponent(elapsedSeconds)}`,
+  ),
   fundamentalDiagram: () => get('/simulation/trace/fundamental'),
   timeSpaceDiagram: (roadId) => get(`/simulation/trace/roads/${encodeURIComponent(roadId)}/time-space`),
   setParameters: (simulationSecondsPerTick, playbackIntervalMs) =>
