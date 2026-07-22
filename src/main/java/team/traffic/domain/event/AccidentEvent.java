@@ -2,19 +2,49 @@ package team.traffic.domain.event;
 
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
+import java.util.Set;
 
 public class AccidentEvent extends TrafficEvent {
     private final double capacityReduction;
     private final String causingVehicleId;
+    private final Set<String> involvedVehicleIds;
 
     public AccidentEvent(
             String id,
             String affectedRoadId,
-            long startTick,
-            long durationTicks,
+            double startTimeSeconds,
+            double durationSeconds,
             double capacityReduction,
             String causingVehicleId) {
-        super(id, affectedRoadId, startTick, durationTicks);
+        this(id, affectedRoadId, startTimeSeconds, durationSeconds, capacityReduction,
+                causingVehicleId, 0.5, Set.of(), Set.of());
+    }
+
+    public AccidentEvent(
+            String id,
+            String affectedRoadId,
+            double startTimeSeconds,
+            double durationSeconds,
+            double capacityReduction,
+            String causingVehicleId,
+            double positionAlongRoad,
+            Set<Integer> blockedLaneIndexes) {
+        this(id, affectedRoadId, startTimeSeconds, durationSeconds, capacityReduction,
+                causingVehicleId, positionAlongRoad, blockedLaneIndexes, Set.of());
+    }
+
+    public AccidentEvent(
+            String id,
+            String affectedRoadId,
+            double startTimeSeconds,
+            double durationSeconds,
+            double capacityReduction,
+            String causingVehicleId,
+            double positionAlongRoad,
+            Set<Integer> blockedLaneIndexes,
+            Set<String> involvedVehicleIds) {
+        super(id, affectedRoadId, startTimeSeconds, durationSeconds,
+                positionAlongRoad, blockedLaneIndexes);
         if (capacityReduction < 0 || capacityReduction > 1) {
             throw new IllegalArgumentException("Capacity reduction must be between 0 and 1.");
         }
@@ -23,6 +53,15 @@ public class AccidentEvent extends TrafficEvent {
         }
         this.capacityReduction = capacityReduction;
         this.causingVehicleId = causingVehicleId;
+        java.util.LinkedHashSet<String> involved = new java.util.LinkedHashSet<>();
+        if (involvedVehicleIds != null) {
+            involvedVehicleIds.stream()
+                    .filter(java.util.Objects::nonNull)
+                    .filter(vehicleId -> !vehicleId.isBlank())
+                    .forEach(involved::add);
+        }
+        involved.add(causingVehicleId);
+        this.involvedVehicleIds = Set.copyOf(involved);
     }
 
     @Override
@@ -35,7 +74,11 @@ public class AccidentEvent extends TrafficEvent {
         rememberCurrentRoadCondition(roadNetwork);
         RoadCondition accidentCondition = copyCurrentRoadCondition(roadNetwork);
         accidentCondition.setVehicleDensity(Math.max(accidentCondition.getVehicleDensity(), capacityReduction));
-        accidentCondition.markBlocked();
+        if (getBlockedLaneIndexes().isEmpty()) {
+            accidentCondition.markBlocked();
+        } else {
+            accidentCondition.increaseCongestion(capacityReduction);
+        }
         roadNetwork.updateRoadCondition(getAffectedRoadId(), accidentCondition);
         super.apply(roadNetwork);
     }
@@ -52,5 +95,9 @@ public class AccidentEvent extends TrafficEvent {
 
     public String getCausingVehicleId() {
         return causingVehicleId;
+    }
+
+    public Set<String> getInvolvedVehicleIds() {
+        return involvedVehicleIds;
     }
 }

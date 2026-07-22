@@ -9,6 +9,8 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.routing.Route;
 import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Vehicle;
+import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
+import team.traffic.domain.vehicle.dynamics.RoadLayout;
 
 /**
  * Works out where a vehicle is on the map and which way it faces.
@@ -27,6 +29,16 @@ import team.traffic.domain.vehicle.Vehicle;
  * started yet faces the road it is about to take instead.</p>
  */
 public final class VehiclePoseResolver {
+    private final RoadLayout roadLayout;
+
+    public VehiclePoseResolver() {
+        this(new RoadDataRoadLayout());
+    }
+
+    public VehiclePoseResolver(RoadLayout roadLayout) {
+        if (roadLayout == null) throw new IllegalArgumentException("Road layout is required.");
+        this.roadLayout = roadLayout;
+    }
 
     /**
      * Resolves the pose of one vehicle, or an empty result when the map carries
@@ -52,12 +64,18 @@ public final class VehiclePoseResolver {
         if (position == null) {
             return Optional.empty();
         }
+        double heading = PolylineGeometry.bearingAt(shape, vehicle.getRoadProgress());
+        double lateralOffset = (vehicle.getLaneIndex() - (roadLayout.laneCountOf(road) - 1) / 2.0)
+                * roadLayout.laneWidthMetresOf(road);
+        position = PolylineGeometry.offsetMetres(position, heading, lateralOffset);
         return Optional.of(new VehiclePose(
                 position,
-                PolylineGeometry.bearingAt(shape, vehicle.getRoadProgress()),
+                heading,
                 vehicle.getLength(),
                 vehicle.getWidth(),
                 road.getId(),
+                vehicle.getLaneIndex(),
+                lateralOffset,
                 false));
     }
 
@@ -73,6 +91,8 @@ public final class VehiclePoseResolver {
                 vehicle.getLength(),
                 vehicle.getWidth(),
                 null,
+                0,
+                0.0,
                 true));
     }
 

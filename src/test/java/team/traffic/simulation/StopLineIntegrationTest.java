@@ -1,0 +1,112 @@
+package team.traffic.simulation;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.LocationType;
+import team.traffic.domain.network.Road;
+import team.traffic.domain.network.RoadClass;
+import team.traffic.domain.network.RoadCondition;
+import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.routing.Route;
+import team.traffic.domain.routing.RouteStep;
+import team.traffic.domain.signal.SignalPhase;
+import team.traffic.domain.signal.TrafficSignal;
+import team.traffic.domain.vehicle.Bus;
+import team.traffic.domain.vehicle.BusStop;
+import team.traffic.domain.vehicle.Car;
+import team.traffic.domain.vehicle.Vehicle;
+
+class StopLineIntegrationTest {
+
+    @Test
+    void redSignalKeepsApproachingVehicleOnItsIncomingRoadUntilGreen() {
+        RoadNetwork network = twoRoadNetwork();
+        Car car = new Car("car", "A", "B");
+        car.setCurrentRoute(route());
+        TrafficSignal signal = new TrafficSignal("J", List.of(
+                new SignalPhase(Set.of("OTHER"), 20.0),
+                new SignalPhase(Set.of("IN"), 20.0)));
+        VehicleDynamicsEngine engine = new VehicleDynamicsEngine();
+
+        for (int second = 0; second < 18; second++) {
+            engine.step(second, second, network, List.of(car), List.of(), List.of(signal), 1.0);
+        }
+
+        assertThat(car.getOccupiedRoadId()).isEqualTo("IN");
+        assertThat(car.getCurrentIntersectionId()).isEqualTo("A");
+        assertThat(car.getRoadProgress()).isGreaterThan(0.9);
+        assertThat(car.getInstantaneousSpeedMps()).isLessThan(0.5);
+
+        for (int second = 20; second < 36 && !car.hasReachedDestination(); second++) {
+            engine.step(second, second, network, List.of(car), List.of(), List.of(signal), 1.0);
+        }
+
+        assertThat(car.hasReachedDestination()).isTrue();
+    }
+
+    @Test
+    void busDwellsInItsLaneWhileFollowingCarCanUseTheOtherLane() {
+        RoadNetwork network = twoRoadNetwork();
+        Bus bus = new Bus("bus", "A", "B", 40);
+        bus.setCurrentRoute(route());
+        bus.setStops(List.of(new BusStop("J", 12.0)));
+        Car car = new Car("car", "A", "B");
+        car.setCurrentRoute(route());
+        List<Vehicle> vehicles = new ArrayList<>();
+        vehicles.add(bus);
+        VehicleDynamicsEngine engine = new VehicleDynamicsEngine();
+
+        for (int second = 0; second < 4; second++) {
+            engine.step(second, second, network, vehicles, List.of(), 1.0);
+        }
+        vehicles.add(car);
+
+        boolean observedPhysicalDwell = false;
+        boolean carPassedDwellingBus = false;
+        for (int second = 4; second < 60; second++) {
+            engine.step(second, second, network, vehicles, List.of(), 1.0);
+            boolean busDwelling = "IN".equals(bus.getOccupiedRoadId())
+                    && bus.getRoadProgress() > 0.98
+                    && !bus.getServedStopJunctionIds().contains("J")
+                    && bus.getInstantaneousSpeedMps() < 0.5;
+            if (busDwelling) {
+                observedPhysicalDwell = true;
+                carPassedDwellingBus |= !"IN".equals(car.getOccupiedRoadId())
+                        || car.getLaneIndex() != bus.getLaneIndex()
+                        || car.getRoadProgress() > bus.getRoadProgress();
+            }
+        }
+
+        assertThat(observedPhysicalDwell).isTrue();
+        assertThat(carPassedDwellingBus).isTrue();
+        assertThat(bus.getServedStopJunctionIds()).contains("J");
+    }
+
+    private static RoadNetwork twoRoadNetwork() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("J", "J", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("B", "B", 2, 0, LocationType.NORMAL));
+        network.addRoad(road("IN", "A", "J"));
+        network.addRoad(road("OUT", "J", "B"));
+        return network;
+    }
+
+    private static Road road(String id, String from, String to) {
+        return new Road(id, id, id, from, to, 0.05, 40, 100, 0,
+                2, 3.5, new RoadCondition(0, 0, RoadStatus.OPEN), List.of(), RoadClass.SECONDARY);
+    }
+
+    private static Route route() {
+        return new Route(List.of(
+                new RouteStep("A", "J", "IN", 1.0),
+                new RouteStep("J", "B", "OUT", 1.0)),
+                0.1, 1.0, 1.0);
+    }
+}

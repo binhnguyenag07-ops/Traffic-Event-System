@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.event.TrafficEventStatus;
+import team.traffic.domain.event.TrafficEventCoordinator;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.observer.TrafficEventBus;
 import team.traffic.service.RoadNetworkService;
@@ -17,6 +18,7 @@ public class TrafficEventServiceImpl implements TrafficEventService {
     private final TrafficEventBus eventBus;
     private final RoadNetworkService roadNetworkService;
     private final TrafficSimulator runtime;
+    private final TrafficEventCoordinator eventCoordinator = new TrafficEventCoordinator();
 
     public TrafficEventServiceImpl(TrafficEventBus eventBus, RoadNetworkService roadNetworkService) {
         this.events = new ArrayList<>();
@@ -83,13 +85,20 @@ public class TrafficEventServiceImpl implements TrafficEventService {
         if (event == null) {
             return false;
         }
+        if (runtime != null) {
+            boolean removed = runtime.removeEvent(id);
+            if (removed && eventBus != null && event.getStatus() == TrafficEventStatus.RESOLVED) {
+                eventBus.publish(event);
+            }
+            return removed;
+        }
         if (event.getStatus() == TrafficEventStatus.ACTIVE) {
-            event.resolve(roadNetworkService.getNetwork());
+            eventCoordinator.resolve(event, roadNetworkService.getNetwork(), events);
             if (eventBus != null) {
                 eventBus.publish(event);
             }
         }
-        return runtime == null ? events.remove(event) : runtime.removeEvent(id);
+        return events.remove(event);
     }
 
     @Override
@@ -105,19 +114,25 @@ public class TrafficEventServiceImpl implements TrafficEventService {
             return event;
         }
 
+        if (runtime != null) {
+            TrafficEvent updated = runtime.updateEventStatus(id, newStatus);
+            if (eventBus != null) eventBus.publish(updated);
+            return updated;
+        }
+
         RoadNetwork network = roadNetworkService.getNetwork();
         switch (newStatus) {
             case ACTIVE:
                 if (event.getStatus() != TrafficEventStatus.SCHEDULED) {
                     throw new IllegalStateException("Only a SCHEDULED event can be activated.");
                 }
-                event.apply(network);
+                eventCoordinator.activate(event, network);
                 break;
             case RESOLVED:
                 if (event.getStatus() == TrafficEventStatus.SCHEDULED) {
-                    event.resolve(network);
+                    eventCoordinator.resolve(event, network, events);
                 } else if (event.getStatus() == TrafficEventStatus.ACTIVE) {
-                    event.resolve(network);
+                    eventCoordinator.resolve(event, network, events);
                 }
                 break;
             case SCHEDULED:
@@ -133,22 +148,27 @@ public class TrafficEventServiceImpl implements TrafficEventService {
     }
 
     @Override
-    public void processEventsForTick(long currentTick, RoadNetwork network) {
+    public void processEventsAt(double elapsedSeconds, RoadNetwork network) {
         if (network == null) {
             return;
         }
 
         for (TrafficEvent event : currentEvents()) {
             if (event.getStatus() == TrafficEventStatus.SCHEDULED) {
-                if (currentTick >= event.getStartTick()) {
-                    event.apply(network);
+                if (elapsedSeconds >= event.getStartTimeSeconds() + event.getDurationSeconds()) {
+                    eventCoordinator.resolve(event, network, currentEvents());
+                    if (eventBus != null) {
+                        eventBus.publish(event);
+                    }
+                } else if (elapsedSeconds >= event.getStartTimeSeconds()) {
+                    eventCoordinator.activate(event, network);
                     if (eventBus != null) {
                         eventBus.publish(event);
                     }
                 }
             } else if (event.getStatus() == TrafficEventStatus.ACTIVE) {
-                if (currentTick >= event.getStartTick() + event.getDurationTicks()) {
-                    event.resolve(network);
+                if (elapsedSeconds >= event.getStartTimeSeconds() + event.getDurationSeconds()) {
+                    eventCoordinator.resolve(event, network, currentEvents());
                     if (eventBus != null) {
                         eventBus.publish(event);
                     }

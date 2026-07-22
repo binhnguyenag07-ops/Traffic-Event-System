@@ -84,6 +84,12 @@ public class VehicleTraceStore {
         return List.copyOf(result);
     }
 
+    public List<VehicleTracePoint> getAllStates() {
+        return statesByTick.values().stream()
+                .flatMap(states -> states.values().stream())
+                .toList();
+    }
+
     private void validateVehicleId(String vehicleId) {
         if (vehicleId == null || vehicleId.isBlank()) {
             throw new IllegalArgumentException("Trace vehicle id must not be blank.");

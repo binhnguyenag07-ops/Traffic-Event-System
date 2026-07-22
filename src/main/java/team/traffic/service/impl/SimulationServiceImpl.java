@@ -11,6 +11,9 @@ import team.traffic.simulation.TrafficSimulator;
 import team.traffic.simulation.VehicleConfig;
 import team.traffic.simulation.trace.VehicleTracePoint;
 import team.traffic.simulation.trace.VehicleTraceSummary;
+import team.traffic.simulation.trace.FundamentalDiagramPoint;
+import team.traffic.simulation.trace.RoadFlowSample;
+import team.traffic.simulation.trace.TimeSpaceDiagram;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,6 +24,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.signal.TrafficSignal;
 
 public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     private final TrafficSimulator simulator;
@@ -92,6 +96,11 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     }
 
     @Override
+    public double getElapsedSeconds() {
+        return simulator.getElapsedSeconds();
+    }
+
+    @Override
     public SimulationSnapshot getSnapshot() {
         return simulator.getSnapshot();
     }
@@ -105,6 +114,9 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     public List<TrafficEvent> getEvents() {
         return simulator.getEvents();
     }
+
+    @Override
+    public List<TrafficSignal> getSignals() { return simulator.getSignals(); }
 
     @Override
     public List<CompletedTrip> getCompletedTrips() {
@@ -229,6 +241,15 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     public List<VehicleTracePoint> getVehicleTrace(String vehicleId, long fromTick, long toTick) {
         return simulator.getVehicleTrace(vehicleId, fromTick, toTick);
     }
+
+    @Override
+    public List<RoadFlowSample> getRoadFlowSamples() { return simulator.getRoadFlowSamples(); }
+
+    @Override
+    public List<FundamentalDiagramPoint> getFundamentalDiagram() { return simulator.getFundamentalDiagram(); }
+
+    @Override
+    public TimeSpaceDiagram getTimeSpaceDiagram(String roadId) { return simulator.getTimeSpaceDiagram(roadId); }
 
     @Override
     public void close() {

@@ -15,12 +15,18 @@ package team.traffic.domain.vehicle.dynamics;
  * @param travelMetres  distance to cover, already capped at the road's exit
  * @param mayLeaveRoad  whether running off the end is permitted, which it is
  *                      not when the road beyond has no room
+ * @param targetLaneIndex lane occupied during this movement
  */
 public record MovementPlan(
         String roadId,
         double speedMps,
         double travelMetres,
-        boolean mayLeaveRoad) {
+        boolean mayLeaveRoad,
+        int targetLaneIndex) {
+
+    public MovementPlan(String roadId, double speedMps, double travelMetres, boolean mayLeaveRoad) {
+        this(roadId, speedMps, travelMetres, mayLeaveRoad, 0);
+    }
 
     public MovementPlan {
         if (roadId == null || roadId.isBlank()) {
@@ -31,6 +37,9 @@ public record MovementPlan(
         }
         if (!Double.isFinite(travelMetres) || travelMetres < 0) {
             throw new IllegalArgumentException("Planned travel distance must not be negative.");
+        }
+        if (targetLaneIndex < 0) {
+            throw new IllegalArgumentException("Target lane index must not be negative.");
         }
     }
 }

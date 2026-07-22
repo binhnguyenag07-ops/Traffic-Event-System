@@ -41,6 +41,13 @@ public class SimulationController {
         app.get("/api/simulation/trace/ticks/{tick}", this::getStatesAtTick);
         app.get("/api/simulation/trace/vehicles/{vehicleId}", this::getVehicleTrace);
         app.get("/api/simulation/trace/vehicles/{vehicleId}/ticks/{tick}", this::getVehicleStateAtTick);
+        app.get("/api/simulation/trace/flow", ctx -> ctx.json(simulationService.getRoadFlowSamples()));
+        app.get("/api/simulation/trace/fundamental", ctx -> ctx.json(simulationService.getFundamentalDiagram()));
+        app.get("/api/simulation/trace/roads/{roadId}/time-space", this::getTimeSpaceDiagram);
+        app.get("/api/simulation/signals", ctx -> ctx.json(
+                simulationService.getSignals().stream()
+                        .map(team.traffic.api.dto.TrafficSignalDto::new)
+                        .toList()));
         app.put("/api/simulation/parameters", this::setParameters);
         app.sse("/api/simulation/stream", client -> {
             Consumer<SimulationSnapshot> listener = snapshot -> client.sendEvent(
@@ -138,6 +145,7 @@ public class SimulationController {
         Map<String, Object> response = new HashMap<>();
         response.put("status", simulationService.getStatus().name());
         response.put("currentTick", simulationService.getCurrentTick());
+        response.put("elapsedSeconds", simulationService.getElapsedSeconds());
         response.put("simulationSecondsPerTick", simulationService.getSimulationSecondsPerTick());
         response.put("playbackIntervalMs", simulationService.getPlaybackIntervalMillis());
         return response;
@@ -165,17 +173,34 @@ public class SimulationController {
             String id = textOrDefault(node, "id", "event-" + configs.size());
             String type = textOrDefault(node, "type", "CONGESTION");
             String roadId = firstNonNull(node, "affectedRoadId", "roadId");
-            long startTick = node.has("startTick") ? node.get("startTick").asLong(0) : 0;
-            long durationTicks = node.has("durationTicks") ? node.get("durationTicks").asLong(10) : 10;
+            double startTimeSeconds = numberWithLegacyAlias(node,
+                    "startTimeSeconds", "startTick", 0.0);
+            double durationSeconds = numberWithLegacyAlias(node,
+                    "durationSeconds", "durationTicks", 10.0);
             Double value = node.has("value") && !node.get("value").isNull()
                     ? node.get("value").asDouble()
                     : null;
-            String causingVehicleId = firstNonNull(node, "causingVehicleId");
+            String causingVehicleId = firstNonNull(node, "causingVehicleId", "affectedVehicleId");
+            Double positionAlongRoad = node.has("positionAlongRoad")
+                    ? node.get("positionAlongRoad").asDouble()
+                    : null;
+            List<Integer> blockedLaneIndexes = new ArrayList<>();
+            JsonNode blockedLanes = node.get("blockedLaneIndexes");
+            if (blockedLanes != null && blockedLanes.isArray()) {
+                blockedLanes.forEach(valueNode -> blockedLaneIndexes.add(valueNode.asInt()));
+            }
             if (roadId != null) {
-                configs.add(new EventConfig(id, type, roadId, startTick, durationTicks, value, causingVehicleId));
+                configs.add(new EventConfig(id, type, roadId, startTimeSeconds,
+                        durationSeconds, value, causingVehicleId,
+                        positionAlongRoad, blockedLaneIndexes));
             }
         }
         return configs;
+    }
+
+    private double numberWithLegacyAlias(JsonNode node, String field, String legacyField, double defaultValue) {
+        if (node.has(field)) return node.get(field).asDouble(defaultValue);
+        return node.has(legacyField) ? node.get(legacyField).asDouble(defaultValue) : defaultValue;
     }
 
     private String textOrDefault(JsonNode node, String field, String defaultValue) {
@@ -260,5 +285,13 @@ public class SimulationController {
 
     private Map<String, String> error(String message) {
         return Map.of("error", message);
+    }
+
+    private void getTimeSpaceDiagram(Context ctx) {
+        try {
+            ctx.json(simulationService.getTimeSpaceDiagram(ctx.pathParam("roadId")));
+        } catch (IllegalArgumentException exception) {
+            ctx.status(404).json(error(exception.getMessage()));
+        }
     }
 }
