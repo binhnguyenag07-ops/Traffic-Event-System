@@ -13,6 +13,8 @@ import team.traffic.simulation.trace.VehicleTraceSummary;
 import team.traffic.simulation.trace.FundamentalDiagramPoint;
 import team.traffic.simulation.trace.RoadFlowSample;
 import team.traffic.simulation.trace.TimeSpaceDiagram;
+import team.traffic.simulation.history.SimulationFrame;
+import team.traffic.simulation.history.SimulationTimeline;
 import team.traffic.domain.signal.TrafficSignal;
 
 import java.util.List;
@@ -54,6 +56,8 @@ public interface SimulationService {
     default void removeSnapshotListener(Consumer<SimulationSnapshot> listener) {}
 
     default void publishCurrentSnapshot() {}
+
+    default void resetFrameTimeline() {}
 
     default void addVehicle(Vehicle vehicle) {
         throw new UnsupportedOperationException("Adding vehicles is not supported.");
@@ -105,5 +109,19 @@ public interface SimulationService {
 
     default TimeSpaceDiagram getTimeSpaceDiagram(String roadId) {
         return new TimeSpaceDiagram(roadId, List.of());
+    }
+
+    // --- authoritative renderer-frame history ---
+
+    default SimulationTimeline getFrameTimeline() {
+        return new SimulationTimeline("unavailable", 0, 0, 0, 0, List.of());
+    }
+
+    default Optional<SimulationFrame> getFrameAtOrBefore(double elapsedSeconds) {
+        return Optional.empty();
+    }
+
+    default Optional<SimulationFrame> getCurrentFrame() {
+        return Optional.empty();
     }
 }

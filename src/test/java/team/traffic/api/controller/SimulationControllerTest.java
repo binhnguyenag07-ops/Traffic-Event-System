@@ -27,6 +27,8 @@ import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.VehicleConfig;
 import team.traffic.simulation.trace.VehicleTracePoint;
 import team.traffic.simulation.trace.VehicleTraceSummary;
+import team.traffic.simulation.history.SimulationFrame;
+import team.traffic.simulation.history.SimulationTimeline;
 
 class SimulationControllerTest {
     private Javalin app;
@@ -139,6 +141,20 @@ class SimulationControllerTest {
     }
 
     @Test
+    void rendererFrameEndpointsExposeTimelineAndFloorLookupByElapsedSecond() throws Exception {
+        HttpResponse<String> timeline = get("/api/simulation/trace/frames");
+        HttpResponse<String> frame = get("/api/simulation/trace/frames/at?elapsedSeconds=2.5");
+        HttpResponse<String> missingQuery = get("/api/simulation/trace/frames/at");
+
+        assertThat(timeline.statusCode()).isEqualTo(200);
+        assertThat(timeline.body()).contains("\"timelineId\":\"timeline-1\"");
+        assertThat(timeline.body()).contains("\"recordedSeconds\":[0.0,1.0,2.0,3.0]");
+        assertThat(frame.statusCode()).isEqualTo(200);
+        assertThat(frame.body()).contains("\"frameId\":2", "\"elapsedSeconds\":2.0");
+        assertThat(missingQuery.statusCode()).isEqualTo(400);
+    }
+
+    @Test
     void signalAndFlowDiagnosticEndpointsAreAvailable() throws Exception {
         HttpResponse<String> signals = get("/api/simulation/signals");
         HttpResponse<String> flow = get("/api/simulation/trace/flow");
@@ -176,6 +192,9 @@ class SimulationControllerTest {
         private List<TrafficEvent> trafficEvents = List.of();
         private long capturedFromTick;
         private long capturedToTick;
+        private final SimulationFrame historicalFrame = new SimulationFrame(
+                "timeline-1", 2, 2, 2.0, SimulationStatus.RUNNING,
+                List.of(), List.of(), List.of(), List.of());
 
         private final VehicleTracePoint tracePoint = new VehicleTracePoint(
                 3,
@@ -246,6 +265,17 @@ class SimulationControllerTest {
             return "car-1".equals(vehicleId) && fromTick <= 3 && toTick >= 3
                     ? List.of(tracePoint)
                     : List.of();
+        }
+
+        @Override
+        public SimulationTimeline getFrameTimeline() {
+            return new SimulationTimeline(
+                    "timeline-1", 0, 3, 4, 900, List.of(0.0, 1.0, 2.0, 3.0));
+        }
+
+        @Override
+        public Optional<SimulationFrame> getFrameAtOrBefore(double elapsedSeconds) {
+            return elapsedSeconds >= 2.0 ? Optional.of(historicalFrame) : Optional.empty();
         }
     }
 }
