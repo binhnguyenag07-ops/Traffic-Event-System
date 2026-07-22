@@ -4,5 +4,7 @@ public enum VehicleStatus {
     WAITING,
     MOVING,
     ARRIVED,
-    BLOCKED
+    BLOCKED,
+    /** Immobile but still physically occupying its lane. */
+    STOPPED
 }

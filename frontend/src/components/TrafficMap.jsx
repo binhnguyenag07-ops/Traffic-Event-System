@@ -71,7 +71,7 @@ const vehicleArtwork = {
 
 function vehicleIcon(type, status, bearing, size) {
   const vehicleType = vehicleArtwork[type] ? type : 'CAR'
-  const statusClass = ['ARRIVED', 'BLOCKED', 'WAITING'].includes(status) ? status.toLowerCase() : 'moving'
+  const statusClass = ['ARRIVED', 'BLOCKED', 'WAITING', 'STOPPED'].includes(status) ? status.toLowerCase() : 'moving'
   const direction = Math.round(Number(bearing) || 0)
   const key = `${vehicleType}-${statusClass}-${direction}-${size}`
   if (!vehicleIconCache.has(key)) {
@@ -124,7 +124,7 @@ function AnimatedVehicleMarker({ position, icon, animationDuration, eventHandler
   )
 }
 
-const eventGlyph = { CONGESTION: '≋', ACCIDENT: '!', ROAD_CLOSURE: '×', TRAFFIC_LIGHT_DELAY: '◉' }
+const eventGlyph = { CONGESTION: '≋', ACCIDENT: '!', BREAKDOWN: '⚒', ROAD_CLOSURE: '×' }
 
 function MapLegend() {
   return (
@@ -194,6 +194,8 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
             const isRoute = routeRoadIds.has(road.id)
             const isHighlighted = highlightedRoadSet.has(road.id)
             const classStyle = roadClassStyle(road.roadClass, zoom)
+            const physicalWidthMetres = Number(road.roadWidthMetres
+              || Number(road.laneCount || 1) * Number(road.laneWidthMetres || 3))
             return (
               <Polyline
                 key={road.id}
@@ -201,14 +203,15 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
                 pathOptions={{
                   color: isHighlighted ? '#00a9c7' : layers.traffic ? roadColor(road) : '#77838f',
                   weight: isHighlighted ? 9 : isRoute ? 10
-                    : classStyle.weight + Math.max(0, Number(road.vehicleDensity || 0)) * 1.25,
+                    : classStyle.weight + Math.max(0, physicalWidthMetres - 3) * 0.35
+                      + Math.max(0, Number(road.vehicleDensity || 0)) * 1.25,
                   opacity: isHighlighted ? 1 : isRoute ? 0.35 : classStyle.opacity,
                   dashArray: road.status === 'BLOCKED' || road.status === 'CLOSED' ? '8 7' : undefined,
                   lineCap: 'round',
                 }}
                 eventHandlers={{ click: () => onSelect({ kind: 'road', data: road }) }}
               >
-                <Tooltip sticky>{road.id} · {road.status} · {(Number(road.congestionLevel || 0) * 100).toFixed(0)}%</Tooltip>
+                <Tooltip sticky>{road.id} · {road.laneCount || 1} lanes · {physicalWidthMetres.toFixed(1)} m wide · {road.status} · {(Number(road.congestionLevel || 0) * 100).toFixed(0)}%</Tooltip>
               </Polyline>
             )
           })}
@@ -272,7 +275,7 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
           if (!start || !end) return null
           const path = positionsForRoad(road, start, end)
           return (
-            <Marker key={event.id} position={positionAlongPath(path, 0.5)}
+            <Marker key={event.id} position={positionAlongPath(path, Number(event.positionAlongRoad ?? 0.5))}
               icon={divIcon(`event-pin ${event.status.toLowerCase()}`, eventGlyph[event.type] || '!', 30)}
               eventHandlers={{ click: () => onSelect({ kind: 'event', data: event }) }}>
               <Tooltip>{event.type.replaceAll('_', ' ')} · {event.status}</Tooltip>
@@ -287,15 +290,20 @@ function TrafficMap({ intersections, roads, vehicles, events, route, selected, o
           const road = roadById.get(vehicle.occupiedRoadId)
           const path = end ? positionsForRoad(road, start, end) : [positionFor(start)]
           const progress = Math.max(0, Math.min(1, Number(vehicle.roadProgress || 0)))
-          const position = positionAlongPath(path, progress)
-          const bearing = bearingAlongPath(path, progress)
+          const hasResolvedPose = Number.isFinite(Number(vehicle.latitude)) && Number.isFinite(Number(vehicle.longitude))
+          const position = hasResolvedPose
+            ? [Number(vehicle.latitude), Number(vehicle.longitude)]
+            : positionAlongPath(path, progress)
+          const bearing = Number.isFinite(Number(vehicle.headingDegrees))
+            ? Number(vehicle.headingDegrees)
+            : bearingAlongPath(path, progress)
           const markerSize = vehicle.type === 'BUS' ? 36 : vehicle.type === 'EMERGENCY' ? 34 : 30
           return (
             <AnimatedVehicleMarker key={vehicle.id} position={position}
               animationDuration={vehicleAnimationDuration}
               icon={vehicleIcon(vehicle.type, vehicle.status, bearing, markerSize)}
               eventHandlers={{ click: () => onSelect({ kind: 'vehicle', data: vehicle }) }}>
-              <Tooltip>{vehicle.id} · {vehicle.status}</Tooltip>
+              <Tooltip>{vehicle.id} · {vehicle.status} · lane {Number(vehicle.laneIndex || 0) + 1}</Tooltip>
             </AnimatedVehicleMarker>
           )
         }) : null}

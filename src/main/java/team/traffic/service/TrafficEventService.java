@@ -13,5 +13,11 @@ public interface TrafficEventService {
     void addEvent(TrafficEvent event);
     boolean removeEvent(String id);
     TrafficEvent updateEventStatus(String id, TrafficEventStatus newStatus);
-    void processEventsForTick(long currentTick, RoadNetwork network);
+    void processEventsAt(double elapsedSeconds, RoadNetwork network);
+
+    /** @deprecated event scheduling now uses elapsed seconds. */
+    @Deprecated
+    default void processEventsForTick(long currentTick, RoadNetwork network) {
+        processEventsAt(currentTick, network);
+    }
 }

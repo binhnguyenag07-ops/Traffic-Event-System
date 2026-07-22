@@ -5,8 +5,8 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 
 public class RoadClosureEvent extends TrafficEvent {
-    public RoadClosureEvent(String id, String affectedRoadId, long startTick, long durationTicks) {
-        super(id, affectedRoadId, startTick, durationTicks);
+    public RoadClosureEvent(String id, String affectedRoadId, double startTimeSeconds, double durationSeconds) {
+        super(id, affectedRoadId, startTimeSeconds, durationSeconds);
     }
 
     @Override

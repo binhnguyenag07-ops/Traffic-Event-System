@@ -10,6 +10,10 @@ import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.VehicleConfig;
 import team.traffic.simulation.trace.VehicleTracePoint;
 import team.traffic.simulation.trace.VehicleTraceSummary;
+import team.traffic.simulation.trace.FundamentalDiagramPoint;
+import team.traffic.simulation.trace.RoadFlowSample;
+import team.traffic.simulation.trace.TimeSpaceDiagram;
+import team.traffic.domain.signal.TrafficSignal;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,9 +29,11 @@ public interface SimulationService {
     void addEvent(TrafficEvent event);
     SimulationStatus getStatus();
     long getCurrentTick();
+    default double getElapsedSeconds() { return getCurrentTick(); }
     SimulationSnapshot getSnapshot();
     List<Vehicle> getVehicles();
     List<TrafficEvent> getEvents();
+    default List<TrafficSignal> getSignals() { return List.of(); }
     default List<CompletedTrip> getCompletedTrips() {
         return List.of();
     }
@@ -91,5 +97,13 @@ public interface SimulationService {
 
     default List<VehicleTracePoint> getVehicleTrace(String vehicleId, long fromTick, long toTick) {
         return List.of();
+    }
+
+    default List<RoadFlowSample> getRoadFlowSamples() { return List.of(); }
+
+    default List<FundamentalDiagramPoint> getFundamentalDiagram() { return List.of(); }
+
+    default TimeSpaceDiagram getTimeSpaceDiagram(String roadId) {
+        return new TimeSpaceDiagram(roadId, List.of());
     }
 }

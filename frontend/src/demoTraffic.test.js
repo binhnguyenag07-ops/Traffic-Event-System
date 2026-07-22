@@ -77,6 +77,6 @@ describe('boundary traffic', () => {
 
     expect(events).toHaveLength(2)
     expect(events.map((item) => item.affectedRoadId)).not.toContain('AD-BLOCKED')
-    expect(events.map((item) => item.type)).toEqual(['TRAFFIC_LIGHT_DELAY', 'CONGESTION'])
+    expect(events.map((item) => item.type)).toEqual(['ACCIDENT', 'CONGESTION'])
   })
 })

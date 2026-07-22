@@ -20,7 +20,18 @@ public record VehicleTracePoint(
         double currentSpeed,
         double instantaneousSpeed,
         int nextRouteStepIndex,
-        List<String> routeRoadIds) {
+        List<String> routeRoadIds,
+        int laneIndex) {
+
+    public VehicleTracePoint(long tick, String vehicleId, VehicleType type, VehicleStatus status,
+            String currentIntersectionId, String destinationIntersectionId, String currentRoadId,
+            String segmentStartIntersectionId, String segmentEndIntersectionId, double roadProgress,
+            double currentSpeed, double instantaneousSpeed, int nextRouteStepIndex,
+            List<String> routeRoadIds) {
+        this(tick, vehicleId, type, status, currentIntersectionId, destinationIntersectionId,
+                currentRoadId, segmentStartIntersectionId, segmentEndIntersectionId, roadProgress,
+                currentSpeed, instantaneousSpeed, nextRouteStepIndex, routeRoadIds, 0);
+    }
 
     public VehicleTracePoint {
         if (tick < 0) {
@@ -44,6 +55,7 @@ public record VehicleTracePoint(
         if (nextRouteStepIndex < 0) {
             throw new IllegalArgumentException("Trace route step index must not be negative.");
         }
+        if (laneIndex < 0) throw new IllegalArgumentException("Trace lane index must not be negative.");
         routeRoadIds = routeRoadIds == null ? List.of() : List.copyOf(routeRoadIds);
     }
 
@@ -72,6 +84,7 @@ public record VehicleTracePoint(
                 vehicle.getCurrentSpeed(),
                 vehicle.getInstantaneousSpeedKph(),
                 vehicle.getNextRouteStepIndex(),
-                routeRoadIds);
+                routeRoadIds,
+                vehicle.getLaneIndex());
     }
 }

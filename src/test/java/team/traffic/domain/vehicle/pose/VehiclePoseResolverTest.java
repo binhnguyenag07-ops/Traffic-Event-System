@@ -11,6 +11,7 @@ import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
+import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.routing.Route;
@@ -108,6 +109,30 @@ class VehiclePoseResolverTest {
 
         assertThat(pose.roadId()).isEqualTo("BC");
         assertThat(pose.headingDegrees()).isCloseTo(90.0, within(1.0));
+    }
+
+    @Test
+    void outerLanePoseIsOffsetFromTheRoadCentreline() {
+        RoadNetwork multilane = new RoadNetwork();
+        multilane.addIntersection(junction("A", 10.770, 106.700));
+        multilane.addIntersection(junction("B", 10.780, 106.700));
+        multilane.addRoad(new Road("AB", "Broad road", "AB", "A", "B", 1.1, 50, 100, 0,
+                3, 3.5, new RoadCondition(0, 0, RoadStatus.OPEN),
+                List.of(new GeoPoint(10.770, 106.700), new GeoPoint(10.780, 106.700)),
+                RoadClass.PRIMARY));
+        Car outerLaneCar = new Car("outer", "A", "B");
+        outerLaneCar.setCurrentRoute(new Route(
+                List.of(new RouteStep("A", "B", "AB", 1.0)), 1.1, 1.0, 1.0));
+        TrafficState state = TrafficState.capture(0, multilane, List.of(outerLaneCar));
+        outerLaneCar.planJunctionApproach(multilane, state).ifPresent(state::requestCrossing);
+        state.resolveJunctions();
+        outerLaneCar.planMovement(multilane, state, 1.0).orElseThrow();
+
+        VehiclePose pose = resolver.resolve(outerLaneCar, multilane).orElseThrow();
+
+        assertThat(pose.laneIndex()).isZero();
+        assertThat(pose.lateralOffsetMetres()).isCloseTo(-3.5, within(1e-12));
+        assertThat(pose.longitude()).isNotEqualTo(106.700);
     }
 
     @Test

@@ -3,22 +3,24 @@
 An object-oriented urban traffic simulator built with Java 17, Maven, Javalin,
 and a React frontend. The system models a directed road network, loads scenario
 maps, computes routes with BFS/Dijkstra/A*, runs multi-vehicle simulations, and
-processes traffic events such as congestion, accidents, road closures, and
-traffic-light delays.
+processes positioned traffic events, lane-level incidents, and phased traffic
+signals.
 
 ## Current Status
 
 The repository currently includes:
 
-- road-network graph operations and density tracking;
+- road-network graph operations, physical-road identity, lane count/width, and density tracking;
 - JSON/CSV map loading, map saving, and synthetic grid-map generation;
 - route search with BFS, Dijkstra, A*, and congestion-aware route costs;
-- vehicle models, route requests, route recomputation, and movement;
-- traffic-event models for congestion, accident, road closure, and light delay;
+- microscopic Krauss car-following with deterministic per-driver variation,
+  curve-speed limits, lane occupancy, and MOBIL lane changes;
+- traffic-event models for congestion, positioned accidents, breakdowns, and road closures;
 - event service, event API, and dynamic rerouting support;
 - simulation clock, tick processing, pause/resume/reset, and snapshots;
 - server-owned live playback with configurable tick timing and SSE snapshots;
-- progress-based vehicle movement along roads with congestion-aware speed;
+- lane-offset vehicle pose (latitude, longitude, heading), collision detection,
+  emergency priority, real stop-line control, and bus dwell stops;
 - open-boundary demo traffic where completed vehicles exit and different
   same-type vehicles enter from reachable boundary roads;
 - traffic and algorithm statistics services;
@@ -28,7 +30,8 @@ The repository currently includes:
   conditions, connected-road searches, and JSON export;
 - atomic browser JSON import for geographic HCMC networks, with stored/OSRM/
   straight-fallback road geometry;
-- event-based traffic-light waiting with remaining-delay snapshots;
+- cyclic `TrafficSignal` phases derived for real junctions (degree at least 3);
+- per-road flow samples, fundamental-diagram bins, and time-space trajectories;
 - total and average trip time, actual route length, density, rerouting, and
   path-optimality statistics;
 - reproducible normal, congestion, random-event, and 20×20-grid experiments
@@ -138,6 +141,10 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `PUT /api/simulation/parameters` | set logical seconds per tick and playback interval |
 | `GET /api/simulation/snapshot` | current simulation snapshot |
 | `GET /api/simulation/stream` | live snapshot stream using Server-Sent Events |
+| `GET /api/simulation/signals` | generated traffic-signal plans |
+| `GET /api/simulation/trace/flow` | density, speed, and flow samples |
+| `GET /api/simulation/trace/fundamental` | fundamental-diagram density bins |
+| `GET /api/simulation/trace/roads/{roadId}/time-space` | vehicle trajectories on one road |
 | `GET /api/statistics` | combined statistics |
 | `GET /api/statistics/traffic` | traffic statistics |
 | `GET /api/statistics/algorithm/{name}` | algorithm statistics |
@@ -167,7 +174,10 @@ Available map files:
 | `distance` | kilometres |
 | `speedLimit` | kilometres per hour |
 | `roadClass` | street hierarchy used for zoom-aware rendering |
+| `laneCount` | directed lanes on this road (positive integer) |
+| `laneWidthMetres` / `roadWidthMetres` | metres |
 | travel time and routing cost | hours |
+| simulation and event time | seconds |
 | `congestionLevel` | `0.0` to `1.0` |
 | `vehicleDensity` | `0.0` to `1.0` |
 
@@ -193,7 +203,8 @@ Open **Network editor** in the right rail to edit the in-memory scenario. New
 junctions are placed by clicking the map. New roads request real street
 geometry from OSRM and fall back to a straight geographic segment if OSRM is
 unavailable. Two-way streets are represented by two directed `Road` objects
-with distinct IDs.
+with distinct IDs and one shared `physicalRoadId`. Lane count and lane width can
+be entered explicitly; imports without them derive defaults from `roadClass`.
 
 Pause the simulation before editing. Occupied roads, intersections used as a
 vehicle endpoint, and roads referenced by unresolved events cannot be deleted.
@@ -210,10 +221,10 @@ geometry is preserved; missing geometry uses OSRM with a straight fallback.
 
 The Performance panel reports completed-trip time and distance, network
 density, waiting vehicles, routing computation time, dynamic recalculations,
-and path optimality. Completed trips remain in the run statistics after their
-vehicles leave the map; initialize, reset, scenario activation, and map import
-start a new statistical run. Signal-delay events hold a vehicle before road
-entry for the configured number of ticks.
+and path optimality. Completed trips remain in the run statistics after an
+arrived marker's short display-retention window ends. Initialize, reset,
+scenario activation, and map import start a new statistical run. Signals are
+junction-owned cyclic phase plans; they are not traffic events.
 
 Run the four required algorithm experiments:
 
@@ -238,14 +249,20 @@ Use `-Dexec.args=--write` to refresh the baseline JSON and Markdown report.
   "events": [
     {
       "id": "event-1",
-      "type": "ROAD_CLOSURE",
+      "type": "ACCIDENT",
       "affectedRoadId": "R11",
-      "startTick": 2,
-      "durationTicks": 5
+      "startTimeSeconds": 20,
+      "durationSeconds": 50,
+      "positionAlongRoad": 0.65,
+      "blockedLaneIndexes": [0],
+      "causingVehicleId": "car-1"
     }
   ]
 }
 ```
+
+`startTick` and `durationTicks` remain accepted as input-only migration aliases;
+all responses and frontend controls use seconds.
 
 Send it to:
 

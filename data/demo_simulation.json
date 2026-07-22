@@ -5,7 +5,7 @@
     {"id":"DEMO-EMS","type":"EMERGENCY","startIntersectionId":"I1","destinationIntersectionId":"I4"}
   ],
   "events": [
-    {"id":"DEMO-LIGHT","type":"TRAFFIC_LIGHT_DELAY","affectedRoadId":"R11","startTick":2,"durationTicks":8,"value":3},
-    {"id":"DEMO-CONGESTION","type":"CONGESTION","affectedRoadId":"R13","startTick":5,"durationTicks":10,"value":0.65}
+    {"id":"DEMO-ACCIDENT","type":"ACCIDENT","affectedRoadId":"R11","startTimeSeconds":20,"durationSeconds":80,"value":0.65,"causingVehicleId":"system","positionAlongRoad":0.6,"blockedLaneIndexes":[0]},
+    {"id":"DEMO-CONGESTION","type":"CONGESTION","affectedRoadId":"R13","startTimeSeconds":50,"durationSeconds":100,"value":0.65}
   ]
 }

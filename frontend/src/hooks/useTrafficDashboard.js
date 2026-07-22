@@ -10,7 +10,9 @@ import {
 } from '../api/trafficAPI'
 import { buildDemoTraffic, createBoundaryTripPlanner, replacementDelayMs } from '../demoTraffic'
 
-const EMPTY_SNAPSHOT = { tick: 0, status: 'READY', vehicles: [], trafficEvents: [], roadStates: [] }
+const EMPTY_SNAPSHOT = {
+  tick: 0, elapsedSeconds: 0, status: 'READY', vehicles: [], trafficEvents: [], roadStates: [], trafficSignals: [],
+}
 const DEMO_VEHICLE_IDS_KEY = 'traffic-demo-vehicle-ids-v1'
 
 function readDemoVehicleIds() {

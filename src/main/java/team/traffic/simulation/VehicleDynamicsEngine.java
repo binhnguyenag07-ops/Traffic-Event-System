@@ -11,6 +11,9 @@ import team.traffic.domain.vehicle.dynamics.MovementPlan;
 import team.traffic.domain.vehicle.dynamics.PriorityRightOfWayPolicy;
 import team.traffic.domain.vehicle.dynamics.RightOfWayPolicy;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
+import team.traffic.domain.event.TrafficEvent;
+import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
+import team.traffic.domain.signal.TrafficSignal;
 
 /**
  * Drives one simulation step of the microscopic vehicle model.
@@ -67,6 +70,27 @@ public class VehicleDynamicsEngine {
             RoadNetwork network,
             List<Vehicle> vehicles,
             double simulationSeconds) {
+        return step(tick, tick, network, vehicles, List.of(), simulationSeconds);
+    }
+
+    public TrafficState step(
+            long tick,
+            double elapsedSeconds,
+            RoadNetwork network,
+            List<Vehicle> vehicles,
+            List<TrafficEvent> events,
+            double simulationSeconds) {
+        return step(tick, elapsedSeconds, network, vehicles, events, List.of(), simulationSeconds);
+    }
+
+    public TrafficState step(
+            long tick,
+            double elapsedSeconds,
+            RoadNetwork network,
+            List<Vehicle> vehicles,
+            List<TrafficEvent> events,
+            List<TrafficSignal> signals,
+            double simulationSeconds) {
         if (network == null) {
             throw new IllegalArgumentException("Road network is required.");
         }
@@ -79,7 +103,16 @@ public class VehicleDynamicsEngine {
 
         TrafficState state = null;
         for (int index = 0; index < subSteps; index++) {
-            state = TrafficState.capture(tick, network, vehicles, rightOfWayPolicy, gapAcceptanceModel);
+            state = TrafficState.capture(
+                    tick,
+                    elapsedSeconds + index * subStepSeconds,
+                    network,
+                    vehicles,
+                    events,
+                    signals,
+                    rightOfWayPolicy,
+                    gapAcceptanceModel,
+                    new RoadDataRoadLayout());
             arbitrateJunctions(network, vehicles, state);
             moveVehicles(network, vehicles, state, subStepSeconds);
         }
@@ -119,6 +152,8 @@ public class VehicleDynamicsEngine {
 
     /** A vehicle that has finished its trip takes no further part in the step. */
     private static boolean isDormant(Vehicle vehicle) {
-        return vehicle.hasReachedDestination() || vehicle.getStatus() == VehicleStatus.ARRIVED;
+        return vehicle.hasReachedDestination()
+                || vehicle.getStatus() == VehicleStatus.ARRIVED
+                || vehicle.getStatus() == VehicleStatus.STOPPED;
     }
 }

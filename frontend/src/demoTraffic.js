@@ -160,27 +160,29 @@ export function buildDemoTraffic(intersections, roads) {
   })
 
   const usableRoads = roads.filter(isUsableRoad)
-  const signalRoad = usableRoads[0]
+  const accidentRoad = usableRoads[0]
   const congestionRoad = usableRoads[Math.floor(usableRoads.length * 0.65)]
   const events = []
 
-  if (signalRoad) {
+  if (accidentRoad) {
     events.push({
-      id: 'LIVE-SIGNAL',
-      type: 'TRAFFIC_LIGHT_DELAY',
-      affectedRoadId: signalRoad.id,
-      startTick: 0,
-      durationTicks: 120,
-      value: 2,
+      id: 'LIVE-ACCIDENT',
+      type: 'ACCIDENT',
+      affectedRoadId: accidentRoad.id,
+      startTimeSeconds: 0,
+      durationSeconds: 120,
+      positionAlongRoad: 0.45,
+      blockedLaneIndexes: [0],
+      value: 0.65,
     })
   }
-  if (congestionRoad && congestionRoad.id !== signalRoad?.id) {
+  if (congestionRoad && congestionRoad.id !== accidentRoad?.id) {
     events.push({
       id: 'LIVE-CONGESTION',
       type: 'CONGESTION',
       affectedRoadId: congestionRoad.id,
-      startTick: 0,
-      durationTicks: 120,
+      startTimeSeconds: 0,
+      durationSeconds: 120,
       value: 0.25,
     })
   }

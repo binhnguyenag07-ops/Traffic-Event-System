@@ -18,4 +18,9 @@ public interface JunctionEnvironment {
      * {@link Double#POSITIVE_INFINITY} when nothing is coming.
      */
     double secondsUntilNextArrival(String junctionId, String excludedIncomingRoadId);
+
+    /** True when no signal exists or this incoming movement currently has green. */
+    default boolean isSignalGreen(JunctionApproach approach) {
+        return true;
+    }
 }
