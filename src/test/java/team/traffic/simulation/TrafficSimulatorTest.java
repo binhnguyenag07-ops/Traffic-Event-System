@@ -162,6 +162,38 @@ class TrafficSimulatorTest {
     }
 
     @Test
+    void frameHistoryReconstructsEventBoundariesAndEveryPhysicalSecond() {
+        simulator.setSimulationSecondsPerTick(3.0);
+        simulator.initialize(
+                List.of(new VehicleConfig("car-1", "CAR", "A", "B")),
+                List.of(new EventConfig("closure", "ROAD_CLOSURE", "AB", 1.0, 1.0)));
+
+        simulator.advanceTick();
+
+        assertThat(simulator.getFrameTimeline().recordedSeconds())
+                .containsExactly(0.0, 1.0, 2.0, 3.0);
+        assertThat(simulator.getFrameAtOrBefore(1.5)).hasValueSatisfying(frame -> {
+            assertThat(frame.elapsedSeconds()).isEqualTo(1.0);
+            assertThat(frame.trafficEvents()).singleElement()
+                    .extracting(state -> state.status())
+                    .isEqualTo(TrafficEventStatus.ACTIVE);
+            assertThat(frame.roadStates()).filteredOn(state -> state.id().equals("AB"))
+                    .singleElement()
+                    .extracting(state -> state.status())
+                    .isEqualTo(RoadStatus.CLOSED.name());
+        });
+        assertThat(simulator.getFrameAtOrBefore(2.0)).hasValueSatisfying(frame -> {
+            assertThat(frame.trafficEvents()).singleElement()
+                    .extracting(state -> state.status())
+                    .isEqualTo(TrafficEventStatus.RESOLVED);
+            assertThat(frame.roadStates()).filteredOn(state -> state.id().equals("AB"))
+                    .singleElement()
+                    .extracting(state -> state.status())
+                    .isEqualTo(RoadStatus.OPEN.name());
+        });
+    }
+
+    @Test
     void advanceTickActivatesScheduledEventWhenStartTimeHasAlreadyPassedButWindowIsOpen() {
         RoadClosureEvent event = new RoadClosureEvent("late-event", "AB", 0, 50);
 

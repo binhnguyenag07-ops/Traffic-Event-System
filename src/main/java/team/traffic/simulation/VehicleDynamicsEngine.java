@@ -3,6 +3,7 @@ package team.traffic.simulation;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
@@ -91,11 +92,43 @@ public class VehicleDynamicsEngine {
             List<TrafficEvent> events,
             List<TrafficSignal> signals,
             double simulationSeconds) {
+        return step(tick, elapsedSeconds, network, vehicles, events, signals,
+                simulationSeconds, (ignoredSeconds, ignoredState) -> {});
+    }
+
+    /**
+     * Advances the microscopic model and exposes an immutable observation point
+     * after every physical sub-step. The callback receives the exact simulated
+     * second and a freshly captured post-movement state, so replay does not need
+     * to interpolate vehicle positions later.
+     */
+    public TrafficState step(
+            long tick,
+            double elapsedSeconds,
+            RoadNetwork network,
+            List<Vehicle> vehicles,
+            List<TrafficEvent> events,
+            List<TrafficSignal> signals,
+            double simulationSeconds,
+            BiConsumer<Double, TrafficState> subStepObserver) {
         if (network == null) {
             throw new IllegalArgumentException("Road network is required.");
         }
         if (!Double.isFinite(simulationSeconds) || simulationSeconds <= 0) {
             throw new IllegalArgumentException("Simulation seconds must be positive.");
+        }
+        if (subStepObserver == null) {
+            throw new IllegalArgumentException("Sub-step observer is required.");
+        }
+
+        // Preserve the original extension point. A custom engine written before
+        // frame replay may only override the seven-argument method; it cannot
+        // expose internal sub-steps, but its final state is still a valid frame.
+        if (overridesLegacyStep()) {
+            TrafficState finalState = step(tick, elapsedSeconds, network, vehicles,
+                    events, signals, simulationSeconds);
+            subStepObserver.accept(elapsedSeconds + simulationSeconds, finalState);
+            return finalState;
         }
 
         int subSteps = subStepCount(simulationSeconds);
@@ -115,8 +148,36 @@ public class VehicleDynamicsEngine {
                     new RoadDataRoadLayout());
             arbitrateJunctions(network, vehicles, state);
             moveVehicles(network, vehicles, state, subStepSeconds);
+            double stepEndSeconds = elapsedSeconds + (index + 1) * subStepSeconds;
+            state = TrafficState.capture(
+                    tick,
+                    stepEndSeconds,
+                    network,
+                    vehicles,
+                    events,
+                    signals,
+                    rightOfWayPolicy,
+                    gapAcceptanceModel,
+                    new RoadDataRoadLayout());
+            subStepObserver.accept(stepEndSeconds, state);
         }
         return state;
+    }
+
+    private boolean overridesLegacyStep() {
+        try {
+            return getClass().getMethod(
+                    "step",
+                    long.class,
+                    double.class,
+                    RoadNetwork.class,
+                    List.class,
+                    List.class,
+                    List.class,
+                    double.class).getDeclaringClass() != VehicleDynamicsEngine.class;
+        } catch (NoSuchMethodException impossible) {
+            throw new IllegalStateException("Vehicle dynamics step contract is unavailable.", impossible);
+        }
     }
 
     static int subStepCount(double simulationSeconds) {
