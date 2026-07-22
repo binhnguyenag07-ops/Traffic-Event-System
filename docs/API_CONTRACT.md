@@ -33,7 +33,7 @@ import atomically replaces the network only after validation.
 | Method | Endpoint | Result |
 |---|---|---|
 | GET | `/api/vehicles` | Current vehicles |
-| POST | `/api/vehicles` | Create CAR, BUS, or EMERGENCY |
+| POST | `/api/vehicles` | Create CAR, MOTORCYCLE, BUS, or EMERGENCY |
 | DELETE | `/api/vehicles/{id}` | Remove a vehicle |
 | GET | `/api/events` | All scheduled, active, and resolved events |
 | POST | `/api/events` | Create an event |
@@ -71,6 +71,11 @@ Vehicle snapshots include `laneIndex`, `lateralOffsetMetres`, resolved
 `latitude`/`longitude`, `headingDegrees`, speed, trip metrics, and route state.
 `STOPPED` vehicles remain physical lane occupants.
 
+`MOTORCYCLE` uses a 2.1 m × 0.75 m physical profile, compact following gaps,
+and `MOTORCYCLE_FILTERING_MOBIL`. This is a safety-preserving adjacent-lane
+filtering approximation: it accepts useful compact gaps that do not fit a car,
+but it does not yet occupy a continuous position between two lane centre lines.
+
 ## Routing, simulation, and diagnostics
 
 | Method | Endpoint | Result |
@@ -85,7 +90,9 @@ Vehicle snapshots include `laneIndex`, `lateralOffsetMetres`, resolved
 | POST | `/api/simulation/tick` | One manual logical tick |
 | PUT | `/api/simulation/parameters` | Logical seconds per tick and playback interval |
 | GET | `/api/simulation/snapshot` | Current snapshot |
-| GET | `/api/simulation/stream` | Server-Sent Event snapshots |
+| GET | `/api/simulation/stream` | Server-Sent authoritative renderer frames |
+| GET | `/api/simulation/trace/frames` | Retained frame index for the current timeline |
+| GET | `/api/simulation/trace/frames/at?elapsedSeconds={s}` | Latest retained frame at or before `s` |
 | GET | `/api/simulation/trace/flow` | Per-road density/speed/flow samples |
 | GET | `/api/simulation/trace/fundamental` | Density-bin averages for a fundamental diagram |
 | GET | `/api/simulation/trace/roads/{roadId}/time-space` | Per-vehicle road trajectories |
@@ -93,8 +100,8 @@ Vehicle snapshots include `laneIndex`, `lateralOffsetMetres`, resolved
 | GET | `/api/experiments/latest` | Checked-in experiment baseline |
 | POST | `/api/experiments/run` | Fresh deterministic experiment run |
 
-A snapshot contains `tick`, `elapsedSeconds`, `vehicles`, `trafficEvents`,
-`roadStates`, and `trafficSignals`. Flow density is vehicles per kilometre per
+A current snapshot contains `timelineId`, `frameId`, `tick`, `elapsedSeconds`,
+`vehicles`, `trafficEvents`, `roadStates`, and `trafficSignals`. Flow density is vehicles per kilometre per
 lane (`densityVehPerKmPerLane`); speed is metres per second (`meanSpeedMps`);
 flow is vehicles per hour per lane (`flowVehPerHourPerLane`). Event boundaries
 inside a logical tick are applied at their exact simulated second.
@@ -102,3 +109,30 @@ inside a logical tick are applied at their exact simulated second.
 Arrived vehicles stay in snapshots for at least five simulated seconds, then
 move to completed-trip history. Initialize, reset, scenario activation, and map
 replacement clear traces and completed-trip history.
+
+### Authoritative renderer-frame replay
+
+The SSE stream and historical frame lookup use one immutable frame contract:
+
+```text
+timelineId, frameId, tick, elapsedSeconds, status,
+vehicles, trafficEvents, roadStates, trafficSignals
+```
+
+Vehicle frame entries contain the resolved latitude/longitude, heading, lane,
+road progress, dimensions, speed, and status needed by a renderer. Signal frame
+entries additionally contain the active phase, green incoming roads, and phase
+remaining seconds at that frame time.
+
+The backend captures a post-movement frame after every physical sub-step (at
+most one simulated second) and again after event transitions. When movement and
+an event transition share a timestamp, the post-transition frame replaces the
+earlier value, so a lookup never observes a half-applied boundary. The lookup
+uses floor semantics; the macro UI avoids ambiguity by scrubbing only across
+`recordedSeconds` returned by the timeline endpoint.
+
+History is in memory and bounded to 900 retained timestamps. A request older
+than the retained window returns `404`. Initialize, reset, scenario/map
+replacement, and any in-place network edit create a new `timelineId`. This is
+intentional: frames store dynamic road state but not a full historical copy of
+network geometry.
