@@ -24,6 +24,9 @@ import team.traffic.simulation.trace.FundamentalDiagramPoint;
 import team.traffic.simulation.trace.RoadFlowSample;
 import team.traffic.simulation.trace.FundamentalDiagram;
 import team.traffic.simulation.trace.TimeSpaceDiagram;
+import team.traffic.simulation.history.SimulationFrame;
+import team.traffic.simulation.history.SimulationFrameHistory;
+import team.traffic.simulation.history.SimulationTimeline;
 import team.traffic.observer.TrafficEventBus;
 import team.traffic.domain.signal.SignalPlan;
 import team.traffic.domain.signal.TrafficSignal;
@@ -44,6 +47,7 @@ public class TrafficSimulator {
     private final SimulationClock clock;
     private final VehicleTraceStore vehicleTraceStore;
     private final FlowRecorder flowRecorder;
+    private final SimulationFrameHistory frameHistory;
 
     private SimulationStatus status;
     private List<Vehicle> vehicles;
@@ -76,6 +80,8 @@ public class TrafficSimulator {
         this.vehicleConfigs = new ArrayList<>();
         this.eventConfigs = new ArrayList<>();
         this.simulationSecondsPerTick = TickProcessor.DEFAULT_SIMULATION_SECONDS_PER_TICK;
+        this.frameHistory = new SimulationFrameHistory();
+        resetFrameHistory();
     }
 
     public synchronized void initialize(List<VehicleConfig> vehicleConfigs, List<EventConfig> eventConfigs) {
@@ -92,6 +98,7 @@ public class TrafficSimulator {
         this.status = SimulationStatus.READY;
         this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
         this.flowRecorder.reset();
+        resetFrameHistory();
     }
 
     public synchronized void start() {
@@ -99,6 +106,7 @@ public class TrafficSimulator {
             throw new IllegalStateException("Cannot start: simulation is " + status);
         }
         status = SimulationStatus.RUNNING;
+        recordCurrentFrame();
     }
 
     public synchronized void pause() {
@@ -106,6 +114,7 @@ public class TrafficSimulator {
             throw new IllegalStateException("Cannot pause: simulation is " + status);
         }
         status = SimulationStatus.PAUSED;
+        recordCurrentFrame();
     }
 
     public synchronized void resume() {
@@ -113,6 +122,7 @@ public class TrafficSimulator {
             throw new IllegalStateException("Cannot resume: simulation is " + status);
         }
         status = SimulationStatus.RUNNING;
+        recordCurrentFrame();
     }
 
     public synchronized void reset() {
@@ -127,16 +137,21 @@ public class TrafficSimulator {
         this.status = SimulationStatus.READY;
         this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
         this.flowRecorder.reset();
+        resetFrameHistory();
     }
 
     public synchronized void advanceTick() {
         removeExpiredArrivals();
         tickProcessor.process(clock.getCurrentTick(), clock.getElapsedSeconds(),
-                network, vehicles, events, signals, simulationSecondsPerTick);
+                network, vehicles, events, signals, simulationSecondsPerTick,
+                elapsedSeconds -> frameHistory.record(
+                        clock.getCurrentTick(), elapsedSeconds, status,
+                        network, vehicles, events, signals));
         clock.tick(simulationSecondsPerTick);
         vehicleTraceStore.record(clock.getCurrentTick(), vehicles);
         flowRecorder.record(clock.getCurrentTick(), clock.getElapsedSeconds(), network, vehicles);
         rememberNewArrivals();
+        recordCurrentFrame();
     }
 
     public synchronized double getSimulationSecondsPerTick() {
@@ -176,6 +191,7 @@ public class TrafficSimulator {
 
     public synchronized void setSignals(List<TrafficSignal> signals) {
         this.signals = signals == null ? new ArrayList<>() : new ArrayList<>(signals);
+        recordCurrentFrame();
     }
 
     public synchronized List<CompletedTrip> getCompletedTrips() {
@@ -203,6 +219,24 @@ public class TrafficSimulator {
         return vehicleTraceStore.getVehicleStateAtTick(vehicleId, tick);
     }
 
+    public synchronized SimulationTimeline getFrameTimeline() {
+        return frameHistory.timeline();
+    }
+
+    public synchronized Optional<SimulationFrame> getFrameAtOrBefore(double elapsedSeconds) {
+        return frameHistory.frameAtOrBefore(elapsedSeconds);
+    }
+
+    public synchronized SimulationFrame getCurrentFrame() {
+        return frameHistory.currentFrame()
+                .orElseThrow(() -> new IllegalStateException("Simulation frame history is empty."));
+    }
+
+    /** Starts a new replay timeline after an in-place network edit. */
+    public synchronized void resetFrameTimeline() {
+        resetFrameHistory();
+    }
+
     public synchronized List<VehicleTracePoint> getVehicleTrace(
             String vehicleId,
             long fromTick,
@@ -227,6 +261,7 @@ public class TrafficSimulator {
     public synchronized void addEvent(TrafficEvent event) {
         if (event != null && events.stream().noneMatch(existing -> existing.getId().equals(event.getId()))) {
             events.add(event);
+            recordCurrentFrame();
         }
     }
 
@@ -241,7 +276,9 @@ public class TrafficSimulator {
         if (event.getStatus() == TrafficEventStatus.ACTIVE) {
             tickProcessor.resolveEvent(event, network, vehicles, events);
         }
-        return events.remove(event);
+        boolean removed = events.remove(event);
+        if (removed) recordCurrentFrame();
+        return removed;
     }
 
     public synchronized TrafficEvent updateEventStatus(String eventId, TrafficEventStatus newStatus) {
@@ -263,6 +300,7 @@ public class TrafficSimulator {
             }
             case SCHEDULED -> throw new IllegalStateException("An event cannot be moved back to SCHEDULED.");
         }
+        recordCurrentFrame();
         return event;
     }
 
@@ -273,6 +311,7 @@ public class TrafficSimulator {
                 configureDefaultBusStops(bus);
             }
             vehicles.add(vehicle);
+            recordCurrentFrame();
         }
     }
 
@@ -294,7 +333,9 @@ public class TrafficSimulator {
                     vehicle.getRouteRecalculationCount()));
         }
         arrivedAtSeconds.remove(vehicleId);
-        return vehicles.remove(vehicle);
+        boolean removed = vehicles.remove(vehicle);
+        if (removed) recordCurrentFrame();
+        return removed;
     }
 
     public synchronized RoadNetwork getNetwork() {
@@ -319,6 +360,7 @@ public class TrafficSimulator {
         status = SimulationStatus.READY;
         vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
         flowRecorder.reset();
+        resetFrameHistory();
     }
 
     private void rememberNewArrivals() {
@@ -336,6 +378,16 @@ public class TrafficSimulator {
                 .map(Map.Entry::getKey)
                 .toList();
         expired.forEach(this::removeVehicle);
+    }
+
+    private void resetFrameHistory() {
+        frameHistory.reset(clock.getCurrentTick(), clock.getElapsedSeconds(), status,
+                network, vehicles, events, signals);
+    }
+
+    private void recordCurrentFrame() {
+        frameHistory.record(clock.getCurrentTick(), clock.getElapsedSeconds(), status,
+                network, vehicles, events, signals);
     }
 
     /**
@@ -478,11 +530,11 @@ public class TrafficSimulator {
         } catch (IllegalArgumentException e) {
             type = VehicleType.CAR;
         }
-        return switch (type) {
-            case CAR -> vehicleFactory.createCar(config.id(), config.startIntersectionId(), config.destinationIntersectionId());
-            case BUS -> vehicleFactory.createBus(config.id(), config.startIntersectionId(), config.destinationIntersectionId());
-            case EMERGENCY -> vehicleFactory.createEmergencyVehicle(config.id(), config.startIntersectionId(), config.destinationIntersectionId());
-        };
+        return vehicleFactory.createVehicle(
+                type,
+                config.id(),
+                config.startIntersectionId(),
+                config.destinationIntersectionId());
     }
 
     private void configureDefaultBusStops(Bus bus) {

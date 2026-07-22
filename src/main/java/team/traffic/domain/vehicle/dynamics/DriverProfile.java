@@ -64,9 +64,10 @@ public record DriverProfile(
     /**
      * Returns the default behaviour for a vehicle type.
      *
-     * <p>Buses are more cautious and slower to react than cars. Emergency
-     * vehicles react faster, accept smaller gaps, and are permitted to exceed
-     * the posted limit.</p>
+     * <p>Motorcycles use shorter headways and lower politeness so they exploit
+     * safe compact gaps more readily. Buses are more cautious and slower to
+     * react than cars. Emergency vehicles react faster, accept smaller gaps,
+     * and are permitted to exceed the posted limit.</p>
      */
     public static DriverProfile forType(VehicleType type) {
         if (type == null) {
@@ -74,6 +75,7 @@ public record DriverProfile(
         }
         return switch (type) {
             case CAR -> new DriverProfile(2.5, 1.0, 0.5, 3.0, 1.0, 2.5, 0.35);
+            case MOTORCYCLE -> new DriverProfile(0.8, 0.65, 0.35, 1.4, 1.05, 3.4, 0.15);
             case BUS -> new DriverProfile(3.0, 1.4, 0.4, 4.5, 0.95, 2.0, 0.6);
             case EMERGENCY -> new DriverProfile(2.0, 0.7, 0.1, 1.5, 1.3, 3.2, 0.0);
         };

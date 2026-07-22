@@ -142,12 +142,13 @@ export function buildDemoTraffic(intersections, roads) {
     destinationIntersectionId: fallbackIds[(index + 1) % fallbackIds.length],
   }
   const vehicleTypes = [
-    ...Array.from({ length: 18 }, () => 'CAR'),
+    ...Array.from({ length: 10 }, () => 'CAR'),
+    ...Array.from({ length: 8 }, () => 'MOTORCYCLE'),
     ...Array.from({ length: 4 }, () => 'BUS'),
     ...Array.from({ length: 2 }, () => 'EMERGENCY'),
   ]
-  const typeCounts = { CAR: 0, BUS: 0, EMERGENCY: 0 }
-  const prefixes = { CAR: 'CAR', BUS: 'BUS', EMERGENCY: 'EMS' }
+  const typeCounts = { CAR: 0, MOTORCYCLE: 0, BUS: 0, EMERGENCY: 0 }
+  const prefixes = { CAR: 'CAR', MOTORCYCLE: 'MOTO', BUS: 'BUS', EMERGENCY: 'EMS' }
   const vehicles = vehicleTypes.map((type, index) => {
     typeCounts[type] += 1
     const trip = tripFor(index)

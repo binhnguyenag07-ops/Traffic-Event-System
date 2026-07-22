@@ -14,6 +14,8 @@ import team.traffic.simulation.trace.VehicleTraceSummary;
 import team.traffic.simulation.trace.FundamentalDiagramPoint;
 import team.traffic.simulation.trace.RoadFlowSample;
 import team.traffic.simulation.trace.TimeSpaceDiagram;
+import team.traffic.simulation.history.SimulationFrame;
+import team.traffic.simulation.history.SimulationTimeline;
 
 import java.util.List;
 import java.util.Optional;
@@ -52,6 +54,7 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     @Override
     public void start() {
         simulator.start();
+        publishSnapshot();
         scheduleTicks();
     }
 
@@ -59,11 +62,13 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     public void pause() {
         simulator.pause();
         cancelScheduledTicks();
+        publishSnapshot();
     }
 
     @Override
     public void resume() {
         simulator.resume();
+        publishSnapshot();
         scheduleTicks();
     }
 
@@ -188,6 +193,11 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
         publishSnapshot();
     }
 
+    @Override
+    public void resetFrameTimeline() {
+        simulator.resetFrameTimeline();
+    }
+
     private synchronized void scheduleTicks() {
         if (scheduledTicks != null && !scheduledTicks.isDone()) {
             return;
@@ -250,6 +260,19 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
 
     @Override
     public TimeSpaceDiagram getTimeSpaceDiagram(String roadId) { return simulator.getTimeSpaceDiagram(roadId); }
+
+    @Override
+    public SimulationTimeline getFrameTimeline() { return simulator.getFrameTimeline(); }
+
+    @Override
+    public Optional<SimulationFrame> getFrameAtOrBefore(double elapsedSeconds) {
+        return simulator.getFrameAtOrBefore(elapsedSeconds);
+    }
+
+    @Override
+    public Optional<SimulationFrame> getCurrentFrame() {
+        return Optional.of(simulator.getCurrentFrame());
+    }
 
     @Override
     public void close() {

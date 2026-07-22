@@ -213,6 +213,10 @@ public class NetworkEditingServiceImpl implements NetworkEditingService {
     }
 
     private void publish() {
+        // Historical frames only retain dynamic road state, not an entire copy
+        // of map geometry. An in-place map edit therefore begins a new timeline
+        // instead of letting an old frame render against a different network.
+        simulationService.resetFrameTimeline();
         simulationService.publishCurrentSnapshot();
     }
 }

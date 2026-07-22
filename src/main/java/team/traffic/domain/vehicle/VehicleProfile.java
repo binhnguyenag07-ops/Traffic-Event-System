@@ -44,6 +44,10 @@ public record VehicleProfile(
         return new VehicleProfile(4.5, 1.8, 120.0, 2.5, 6.5, 1_500.0, 0);
     }
 
+    public static VehicleProfile motorcycle() {
+        return new VehicleProfile(2.1, 0.75, 100.0, 3.2, 7.0, 150.0, 0);
+    }
+
     public static VehicleProfile bus() {
         return new VehicleProfile(12.0, 2.5, 90.0, 1.0, 5.0, 12_000.0, 0);
     }
