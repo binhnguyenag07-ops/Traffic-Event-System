@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.DoubleConsumer;
 
 public class TickProcessor {
     public static final double DEFAULT_SIMULATION_SECONDS_PER_TICK = 10.0;
@@ -88,6 +89,28 @@ public class TickProcessor {
             List<TrafficEvent> events,
             List<TrafficSignal> signals,
             double simulationSecondsPerTick) {
+        process(currentTick, elapsedSeconds, network, vehicles, events, signals,
+                simulationSecondsPerTick, ignoredSeconds -> {});
+    }
+
+    /**
+     * Processes one tick and reports every authoritative replay boundary.
+     * Boundaries include physical sub-steps plus event activation/resolution,
+     * allowing callers to replace a frame at the same timestamp with the final
+     * post-transition state.
+     */
+    public void process(
+            long currentTick,
+            double elapsedSeconds,
+            RoadNetwork network,
+            List<Vehicle> vehicles,
+            List<TrafficEvent> events,
+            List<TrafficSignal> signals,
+            double simulationSecondsPerTick,
+            DoubleConsumer frameObserver) {
+        if (frameObserver == null) {
+            throw new IllegalArgumentException("Frame observer is required.");
+        }
         List<Vehicle> movable = new ArrayList<>();
         for (Vehicle vehicle : vehicles) {
             if (vehicle.hasReachedDestination()) {
@@ -99,17 +122,24 @@ public class TickProcessor {
 
         double tickEndSeconds = elapsedSeconds + simulationSecondsPerTick;
         double cursorSeconds = elapsedSeconds;
-        transitionEventsAt(cursorSeconds, network, vehicles, events);
+        if (transitionEventsAt(cursorSeconds, network, vehicles, events)) {
+            frameObserver.accept(cursorSeconds);
+        }
 
         while (cursorSeconds < tickEndSeconds - TIME_EPSILON_SECONDS) {
-            detectCollisions(network, vehicles, events, cursorSeconds);
+            if (detectCollisions(network, vehicles, events, cursorSeconds)) {
+                frameObserver.accept(cursorSeconds);
+            }
             double boundarySeconds = nextEventBoundary(events, cursorSeconds, tickEndSeconds);
             double stepSeconds = boundarySeconds - cursorSeconds;
             if (stepSeconds > TIME_EPSILON_SECONDS) {
-                moveVehicles(currentTick, cursorSeconds, network, movable, events, signals, stepSeconds);
+                moveVehicles(currentTick, cursorSeconds, network, movable, events, signals,
+                        stepSeconds, frameObserver);
             }
             cursorSeconds = boundarySeconds;
-            transitionEventsAt(cursorSeconds, network, vehicles, events);
+            if (transitionEventsAt(cursorSeconds, network, vehicles, events)) {
+                frameObserver.accept(cursorSeconds);
+            }
         }
 
         for (Vehicle vehicle : movable) {
@@ -120,16 +150,18 @@ public class TickProcessor {
     }
 
     /** Applies and resolves event overlays at their exact simulated-second boundary. */
-    private void transitionEventsAt(
+    private boolean transitionEventsAt(
             double elapsedSeconds,
             RoadNetwork network,
             List<Vehicle> vehicles,
             List<TrafficEvent> events) {
+        boolean transitioned = false;
         for (TrafficEvent event : events) {
             if (event.getStatus() == TrafficEventStatus.ACTIVE
                     && eventEndSeconds(event) <= elapsedSeconds + TIME_EPSILON_SECONDS) {
                 resolveEvent(event, network, vehicles, events);
                 publish(event);
+                transitioned = true;
             }
         }
         for (TrafficEvent event : events) {
@@ -139,11 +171,14 @@ public class TickProcessor {
                 // receive a full-tick effect merely because the scheduler is late.
                 event.resolve(network);
                 publish(event);
+                transitioned = true;
             } else if (event.getStartTimeSeconds() <= elapsedSeconds + TIME_EPSILON_SECONDS) {
                 activateEvent(event, network, vehicles);
                 publish(event);
+                transitioned = true;
             }
         }
+        return transitioned;
     }
 
     private static double nextEventBoundary(
@@ -175,10 +210,14 @@ public class TickProcessor {
             List<Vehicle> movable,
             List<TrafficEvent> events,
             List<TrafficSignal> signals,
-            double simulationSecondsPerTick) {
-        TrafficState state = dynamicsEngine.step(currentTick, elapsedSeconds,
-                network, movable, events, signals, simulationSecondsPerTick);
-        publishPhysicalDensity(network, state);
+            double simulationSecondsPerTick,
+            DoubleConsumer frameObserver) {
+        dynamicsEngine.step(currentTick, elapsedSeconds,
+                network, movable, events, signals, simulationSecondsPerTick,
+                (stepEndSeconds, subStepState) -> {
+                    publishPhysicalDensity(network, subStepState);
+                    frameObserver.accept(stepEndSeconds);
+                });
     }
 
     /**
@@ -211,11 +250,12 @@ public class TickProcessor {
         }
     }
 
-    private void detectCollisions(
+    private boolean detectCollisions(
             RoadNetwork network,
             List<Vehicle> vehicles,
             List<TrafficEvent> events,
             double elapsedSeconds) {
+        boolean detected = false;
         for (Collision collision : collisionDetector.detect(network, vehicles)) {
             boolean alreadyReported = events.stream()
                     .filter(AccidentEvent.class::isInstance)
@@ -233,7 +273,9 @@ public class TickProcessor {
             events.add(event);
             activateEvent(event, network, vehicles);
             publish(event);
+            detected = true;
         }
+        return detected;
     }
 
     void onEventActivated(TrafficEvent event, List<Vehicle> vehicles) {

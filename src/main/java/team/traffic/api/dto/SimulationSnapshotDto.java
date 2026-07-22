@@ -8,6 +8,8 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.pose.VehiclePoseResolver;
 
 public class SimulationSnapshotDto {
+    private String timelineId;
+    private Long frameId;
     private long tick;
     private double elapsedSeconds;
     private SimulationStatus status;
@@ -53,6 +55,11 @@ public class SimulationSnapshotDto {
     public void setTick(long tick) {
         this.tick = tick;
     }
+
+    public String getTimelineId() { return timelineId; }
+    public void setTimelineId(String timelineId) { this.timelineId = timelineId; }
+    public Long getFrameId() { return frameId; }
+    public void setFrameId(Long frameId) { this.frameId = frameId; }
 
     public double getElapsedSeconds() { return elapsedSeconds; }
     public void setElapsedSeconds(double elapsedSeconds) { this.elapsedSeconds = elapsedSeconds; }

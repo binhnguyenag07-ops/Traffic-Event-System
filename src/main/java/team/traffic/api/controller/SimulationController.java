@@ -38,6 +38,8 @@ public class SimulationController {
         app.get("/api/simulation/snapshot", this::getSnapshot);
         app.get("/api/simulation/tick/current", this::getCurrentTick);
         app.get("/api/simulation/trace", this::getTraceSummary);
+        app.get("/api/simulation/trace/frames", ctx -> ctx.json(simulationService.getFrameTimeline()));
+        app.get("/api/simulation/trace/frames/at", this::getFrameAtElapsedSecond);
         app.get("/api/simulation/trace/ticks/{tick}", this::getStatesAtTick);
         app.get("/api/simulation/trace/vehicles/{vehicleId}", this::getVehicleTrace);
         app.get("/api/simulation/trace/vehicles/{vehicleId}/ticks/{tick}", this::getVehicleStateAtTick);
@@ -50,9 +52,12 @@ public class SimulationController {
                         .toList()));
         app.put("/api/simulation/parameters", this::setParameters);
         app.sse("/api/simulation/stream", client -> {
-            Consumer<SimulationSnapshot> listener = snapshot -> client.sendEvent(
-                    "snapshot",
-                    new SimulationSnapshotDto(snapshot, simulationService.getNetwork()));
+            Consumer<SimulationSnapshot> listener = snapshot -> {
+                Object payload = simulationService.getCurrentFrame()
+                        .map(frame -> (Object) frame)
+                        .orElseGet(() -> snapshotDto(snapshot));
+                client.sendEvent("snapshot", payload);
+            };
             simulationService.addSnapshotListener(listener);
             client.onClose(() -> simulationService.removeSnapshotListener(listener));
             listener.accept(simulationService.getSnapshot());
@@ -110,7 +115,7 @@ public class SimulationController {
             return;
         }
         simulationService.advanceTick();
-        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot(), simulationService.getNetwork()));
+        ctx.json(snapshotDto(simulationService.getSnapshot()));
     }
 
     private void setParameters(Context ctx) {
@@ -134,7 +139,7 @@ public class SimulationController {
     }
 
     private void getSnapshot(Context ctx) {
-        ctx.json(new SimulationSnapshotDto(simulationService.getSnapshot(), simulationService.getNetwork()));
+        ctx.json(snapshotDto(simulationService.getSnapshot()));
     }
 
     private void getCurrentTick(Context ctx) {
@@ -149,6 +154,18 @@ public class SimulationController {
         response.put("simulationSecondsPerTick", simulationService.getSimulationSecondsPerTick());
         response.put("playbackIntervalMs", simulationService.getPlaybackIntervalMillis());
         return response;
+    }
+
+    private SimulationSnapshotDto snapshotDto(SimulationSnapshot snapshot) {
+        SimulationSnapshotDto dto = new SimulationSnapshotDto(snapshot, simulationService.getNetwork());
+        simulationService.getCurrentFrame().ifPresent(frame -> {
+            if (frame.tick() == snapshot.tick()
+                    && Math.abs(frame.elapsedSeconds() - snapshot.elapsedSeconds()) < 1e-9) {
+                dto.setTimelineId(frame.timelineId());
+                dto.setFrameId(frame.frameId());
+            }
+        });
+        return dto;
     }
 
     private List<VehicleConfig> parseVehicleConfigs(JsonNode vehiclesNode) {
@@ -235,6 +252,21 @@ public class SimulationController {
         }
     }
 
+    private void getFrameAtElapsedSecond(Context ctx) {
+        try {
+            double elapsedSeconds = parseNonNegativeDouble(
+                    ctx.queryParam("elapsedSeconds"), "elapsedSeconds");
+            simulationService.getFrameAtOrBefore(elapsedSeconds)
+                    .ifPresentOrElse(
+                            ctx::json,
+                            () -> ctx.status(404).json(error(
+                                    "No retained simulation frame at or before "
+                                            + elapsedSeconds + " seconds.")));
+        } catch (IllegalArgumentException exception) {
+            ctx.status(400).json(error(exception.getMessage()));
+        }
+    }
+
     private void getVehicleTrace(Context ctx) {
         try {
             String vehicleId = ctx.pathParam("vehicleId");
@@ -280,6 +312,21 @@ public class SimulationController {
             return parsed;
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException(fieldName + " must be an integer.");
+        }
+    }
+
+    private double parseNonNegativeDouble(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " is required.");
+        }
+        try {
+            double parsed = Double.parseDouble(value);
+            if (!Double.isFinite(parsed) || parsed < 0) {
+                throw new IllegalArgumentException(fieldName + " must be finite and not negative.");
+            }
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(fieldName + " must be a number.");
         }
     }
 

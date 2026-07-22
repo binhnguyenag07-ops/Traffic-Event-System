@@ -24,6 +24,7 @@ class VehicleTest {
     @Test
     void providesTypeSpecificPhysicalProfiles() {
         Vehicle car = new Car("car-1", "A", "B");
+        Vehicle motorcycle = new Motorcycle("motorcycle-1", "A", "B");
         Vehicle bus = new Bus("bus-1", "A", "B", 40);
         Vehicle emergencyVehicle = new EmergencyVehicle("emergency-1", "A", "B", 2);
 
@@ -35,6 +36,13 @@ class VehicleTest {
         assertThat(car.getDeceleration()).isEqualTo(6.5);
         assertThat(car.getVehicleWeight()).isEqualTo(1_500.0);
         assertThat(car.getPriorityLevel()).isZero();
+
+        assertThat(motorcycle.getType()).isEqualTo(VehicleType.MOTORCYCLE);
+        assertThat(motorcycle.getLength()).isEqualTo(2.1);
+        assertThat(motorcycle.getWidth()).isEqualTo(0.75);
+        assertThat(motorcycle.getVehicleWeight()).isEqualTo(150.0);
+        assertThat(motorcycle.getLaneChangeModel().getName())
+                .isEqualTo("MOTORCYCLE_FILTERING_MOBIL");
 
         assertThat(bus.getLength()).isEqualTo(12.0);
         assertThat(bus.getVehicleWeight()).isEqualTo(12_000.0);

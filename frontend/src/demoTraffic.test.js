@@ -26,7 +26,8 @@ describe('boundary traffic', () => {
 
     expect(first).toEqual(second)
     expect(first.vehicles).toHaveLength(24)
-    expect(first.vehicles.filter((item) => item.type === 'CAR')).toHaveLength(18)
+    expect(first.vehicles.filter((item) => item.type === 'CAR')).toHaveLength(10)
+    expect(first.vehicles.filter((item) => item.type === 'MOTORCYCLE')).toHaveLength(8)
     expect(first.vehicles.filter((item) => item.type === 'BUS')).toHaveLength(4)
     expect(first.vehicles.filter((item) => item.type === 'EMERGENCY')).toHaveLength(2)
     expect(first.vehicles.every((item) => ['A', 'D'].includes(item.startIntersectionId))).toBe(true)

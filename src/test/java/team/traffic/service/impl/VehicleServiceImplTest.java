@@ -16,6 +16,7 @@ import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.vehicle.Motorcycle;
 import team.traffic.routing.DijkstraPathFindingStrategy;
 import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.RoutingService;
@@ -30,10 +31,12 @@ class VehicleServiceImplTest {
 
         Vehicle first = vehicleService.createVehicle(VehicleType.CAR, "A", "C", network);
         Vehicle second = vehicleService.createVehicle(VehicleType.CAR, "A", "C", network);
+        Vehicle motorcycle = vehicleService.createVehicle(VehicleType.MOTORCYCLE, "A", "C", network);
 
         assertThat(first.getId()).startsWith("V-");
         assertThat(second.getId()).startsWith("V-");
         assertThat(first.getId()).isNotEqualTo(second.getId());
+        assertThat(motorcycle).isInstanceOf(Motorcycle.class);
 
         assertThatThrownBy(() -> vehicleService.createVehicle(VehicleType.BUS, "UNKNOWN", "C", network))
                 .isInstanceOf(IllegalArgumentException.class)
