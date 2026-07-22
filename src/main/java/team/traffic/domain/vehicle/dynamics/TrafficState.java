@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Set;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.event.TrafficEvent;
+import team.traffic.domain.signal.TrafficSignal;
 
 
 /**
@@ -30,30 +32,45 @@ public final class TrafficState implements JunctionEnvironment {
     private static final double MOVING_THRESHOLD_MPS = 0.1;
 
     private final long tick;
+    private final double elapsedSeconds;
     private final RoadNetwork network;
     private final List<TrafficParticipant> vehicles;
     private final RightOfWayPolicy rightOfWayPolicy;
     private final GapAcceptanceModel gapAcceptanceModel;
-    private final Map<String, LaneOccupancy> occupancyCache = new HashMap<>();
+    private final RoadLayout roadLayout;
+    private final List<TrafficEvent> events;
+    private final Map<String, TrafficSignal> signalsByJunctionId;
+    private final Map<String, RoadOccupancy> occupancyCache = new HashMap<>();
     private final Map<String, JunctionController> controllers = new LinkedHashMap<>();
     private final Set<String> clearedVehicleIds = new HashSet<>();
     private Map<String, List<TrafficParticipant>> vehiclesByRoadId;
 
     private TrafficState(
             long tick,
+            double elapsedSeconds,
             RoadNetwork network,
             List<TrafficParticipant> vehicles,
             RightOfWayPolicy rightOfWayPolicy,
-            GapAcceptanceModel gapAcceptanceModel) {
+            GapAcceptanceModel gapAcceptanceModel,
+            RoadLayout roadLayout,
+            List<TrafficEvent> events,
+            List<TrafficSignal> signals) {
         this.tick = tick;
+        this.elapsedSeconds = elapsedSeconds;
         this.network = network;
         this.vehicles = vehicles;
         this.rightOfWayPolicy = rightOfWayPolicy;
         this.gapAcceptanceModel = gapAcceptanceModel;
+        this.roadLayout = roadLayout;
+        this.events = events;
+        Map<String, TrafficSignal> indexedSignals = new HashMap<>();
+        for (TrafficSignal signal : signals) indexedSignals.put(signal.getJunctionId(), signal);
+        this.signalsByJunctionId = Map.copyOf(indexedSignals);
     }
 
     public static TrafficState capture(long tick, RoadNetwork network, List<? extends TrafficParticipant> vehicles) {
-        return capture(tick, network, vehicles, new PriorityRightOfWayPolicy(), new GapAcceptanceModel());
+        return capture(tick, tick, network, vehicles, List.of(),
+                new PriorityRightOfWayPolicy(), new GapAcceptanceModel(), new RoadDataRoadLayout());
     }
 
     public static TrafficState capture(
@@ -62,8 +79,38 @@ public final class TrafficState implements JunctionEnvironment {
             List<? extends TrafficParticipant> vehicles,
             RightOfWayPolicy rightOfWayPolicy,
             GapAcceptanceModel gapAcceptanceModel) {
+        return capture(tick, tick, network, vehicles, List.of(),
+                rightOfWayPolicy, gapAcceptanceModel, new RoadDataRoadLayout());
+    }
+
+    public static TrafficState capture(
+            long tick,
+            double elapsedSeconds,
+            RoadNetwork network,
+            List<? extends TrafficParticipant> vehicles,
+            List<TrafficEvent> events,
+            RightOfWayPolicy rightOfWayPolicy,
+            GapAcceptanceModel gapAcceptanceModel,
+            RoadLayout roadLayout) {
+        return capture(tick, elapsedSeconds, network, vehicles, events, List.of(),
+                rightOfWayPolicy, gapAcceptanceModel, roadLayout);
+    }
+
+    public static TrafficState capture(
+            long tick,
+            double elapsedSeconds,
+            RoadNetwork network,
+            List<? extends TrafficParticipant> vehicles,
+            List<TrafficEvent> events,
+            List<TrafficSignal> signals,
+            RightOfWayPolicy rightOfWayPolicy,
+            GapAcceptanceModel gapAcceptanceModel,
+            RoadLayout roadLayout) {
         if (tick < 0) {
             throw new IllegalArgumentException("Tick must not be negative.");
+        }
+        if (!Double.isFinite(elapsedSeconds) || elapsedSeconds < 0) {
+            throw new IllegalArgumentException("Elapsed seconds must not be negative.");
         }
         if (network == null) {
             throw new IllegalArgumentException("Road network is required.");
@@ -74,16 +121,27 @@ public final class TrafficState implements JunctionEnvironment {
         if (gapAcceptanceModel == null) {
             throw new IllegalArgumentException("Gap-acceptance model is required.");
         }
+        if (roadLayout == null) {
+            throw new IllegalArgumentException("Road layout is required.");
+        }
         return new TrafficState(
                 tick,
+                elapsedSeconds,
                 network,
                 vehicles == null ? List.of() : List.copyOf(vehicles),
                 rightOfWayPolicy,
-                gapAcceptanceModel);
+                gapAcceptanceModel,
+                roadLayout,
+                events == null ? List.of() : List.copyOf(events),
+                signals == null ? List.of() : List.copyOf(signals));
     }
 
     public long getTick() {
         return tick;
+    }
+
+    public double getElapsedSeconds() {
+        return elapsedSeconds;
     }
 
     public RoadNetwork getNetwork() {
@@ -91,11 +149,11 @@ public final class TrafficState implements JunctionEnvironment {
     }
 
     /** Physical occupancy of one road, or {@code null} for an unknown road. */
-    public LaneOccupancy occupancyOf(String roadId) {
+    public RoadOccupancy occupancyOf(String roadId) {
         if (roadId == null) {
             return null;
         }
-        LaneOccupancy cached = occupancyCache.get(roadId);
+        RoadOccupancy cached = occupancyCache.get(roadId);
         if (cached != null) {
             return cached;
         }
@@ -103,8 +161,8 @@ public final class TrafficState implements JunctionEnvironment {
         if (road == null) {
             return null;
         }
-        LaneOccupancy occupancy =
-                LaneOccupancy.ofVehiclesAlreadyOnRoad(road, vehiclesOn(roadId));
+        RoadOccupancy occupancy = RoadOccupancy.of(
+                road, vehiclesOn(roadId), roadLayout, events);
         occupancyCache.put(roadId, occupancy);
         return occupancy;
     }
@@ -143,7 +201,7 @@ public final class TrafficState implements JunctionEnvironment {
      * road's own count-based capacity usage.
      */
     public double physicalJamRatioOf(String roadId) {
-        LaneOccupancy occupancy = occupancyOf(roadId);
+        RoadOccupancy occupancy = occupancyOf(roadId);
         return occupancy == null ? 0.0 : occupancy.getPhysicalJamRatio();
     }
 
@@ -187,7 +245,7 @@ public final class TrafficState implements JunctionEnvironment {
 
     @Override
     public boolean hasPhysicalSpaceFor(JunctionApproach approach) {
-        LaneOccupancy target = occupancyOf(approach.toRoad().getId());
+        RoadOccupancy target = occupancyOf(approach.toRoad().getId());
         return target != null && target.canAdmit(approach.vehicle());
     }
 
@@ -198,7 +256,7 @@ public final class TrafficState implements JunctionEnvironment {
             if (incoming.getId().equals(excludedIncomingRoadId)) {
                 continue;
             }
-            LaneOccupancy occupancy = occupancyOf(incoming.getId());
+            RoadOccupancy occupancy = occupancyOf(incoming.getId());
             if (occupancy == null) {
                 continue;
             }
@@ -208,9 +266,19 @@ public final class TrafficState implements JunctionEnvironment {
                     // Standing traffic is not about to cross the junction.
                     continue;
                 }
-                soonest = Math.min(soonest, occupancy.distanceToExitMetres(vehicle) / speedMps);
+                Lane lane = occupancy.laneOf(vehicle);
+                if (lane != null) {
+                    soonest = Math.min(soonest, lane.distanceToExitMetres(vehicle) / speedMps);
+                }
             }
         }
         return soonest;
+    }
+
+    @Override
+    public boolean isSignalGreen(JunctionApproach approach) {
+        TrafficSignal signal = signalsByJunctionId.get(approach.junctionId());
+        return signal == null || approach.fromRoad() == null
+                || signal.isGreenFor(approach.fromRoad().getId(), elapsedSeconds);
     }
 }

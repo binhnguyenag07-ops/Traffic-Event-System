@@ -9,7 +9,7 @@ import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.event.TrafficEventStatus;
 import team.traffic.domain.event.TrafficEventType;
-import team.traffic.domain.event.TrafficLightDelayEvent;
+import team.traffic.domain.event.BreakdownEvent;
 import team.traffic.service.SimulationService;
 import team.traffic.service.TrafficEventService;
 
@@ -143,18 +143,56 @@ public class TrafficEventController {
         TrafficEvent event;
 
         try {
+            team.traffic.domain.network.RoadNetwork network = simulationService.getNetwork();
+            if (network != null) {
+                team.traffic.domain.network.Road road = network.getRoad(request.affectedRoadId);
+                if (road == null) {
+                    throw new IllegalArgumentException("affected road does not exist: " + request.affectedRoadId);
+                }
+                if (request.blockedLaneIndexes != null && request.blockedLaneIndexes.stream()
+                        .anyMatch(laneIndex -> laneIndex == null || laneIndex < 0
+                                || laneIndex >= road.getLaneCount())) {
+                    throw new IllegalArgumentException(
+                            "blocked lane index must be between 0 and " + (road.getLaneCount() - 1));
+                }
+            }
             switch (type) {
                 case CONGESTION:
-                    event = new CongestionEvent(id, request.affectedRoadId, request.startTick, request.durationTicks, request.value != null ? request.value : 0.5);
+                    event = new CongestionEvent(id, request.affectedRoadId,
+                            request.startTimeSeconds(), request.durationSeconds(),
+                            request.value != null ? request.value : 0.5);
                     break;
                 case ACCIDENT:
-                    event = new AccidentEvent(id, request.affectedRoadId, request.startTick, request.durationTicks, request.value != null ? request.value : 1.0, request.causingVehicleId != null ? request.causingVehicleId : "UNKNOWN");
+                    event = new AccidentEvent(id, request.affectedRoadId,
+                            request.startTimeSeconds(), request.durationSeconds(),
+                            request.value != null ? request.value : 1.0,
+                            request.causingVehicleId != null ? request.causingVehicleId : "UNKNOWN",
+                            request.positionAlongRoad == null ? 0.5 : request.positionAlongRoad,
+                            request.blockedLaneIndexes == null
+                                    ? java.util.Set.of()
+                                    : java.util.Set.copyOf(request.blockedLaneIndexes));
+                    break;
+                case BREAKDOWN:
+                    String affectedVehicleId = request.affectedVehicleId();
+                    if (affectedVehicleId == null || affectedVehicleId.isBlank()) {
+                        throw new IllegalArgumentException("affected vehicle id is required for a breakdown");
+                    }
+                    if (simulationService.getVehicles().stream()
+                            .noneMatch(vehicle -> vehicle.getId().equals(affectedVehicleId))) {
+                        throw new IllegalArgumentException(
+                                "affected vehicle does not exist: " + affectedVehicleId);
+                    }
+                    event = new BreakdownEvent(id, request.affectedRoadId,
+                            request.startTimeSeconds(), request.durationSeconds(),
+                            affectedVehicleId,
+                            request.positionAlongRoad == null ? 0.5 : request.positionAlongRoad,
+                            request.blockedLaneIndexes == null
+                                    ? java.util.Set.of()
+                                    : java.util.Set.copyOf(request.blockedLaneIndexes));
                     break;
                 case ROAD_CLOSURE:
-                    event = new RoadClosureEvent(id, request.affectedRoadId, request.startTick, request.durationTicks);
-                    break;
-                case TRAFFIC_LIGHT_DELAY:
-                    event = new TrafficLightDelayEvent(id, request.affectedRoadId, request.startTick, request.durationTicks, request.value != null ? request.value.longValue() : 5L);
+                    event = new RoadClosureEvent(id, request.affectedRoadId,
+                            request.startTimeSeconds(), request.durationSeconds());
                     break;
                 default:
                     ctx.status(400).json(error("Unsupported event type"));
@@ -176,10 +214,28 @@ public class TrafficEventController {
     public static class EventCreationRequest {
         public String type;
         public String affectedRoadId;
-        public long startTick;
-        public long durationTicks;
+        public Double startTimeSeconds;
+        public Double durationSeconds;
+        /** Legacy input aliases; responses never emit these names. */
+        public Double startTick;
+        public Double durationTicks;
         public Double value;
         public String causingVehicleId;
+        public String affectedVehicleId;
+        public Double positionAlongRoad;
+        public List<Integer> blockedLaneIndexes;
+
+        double startTimeSeconds() {
+            return startTimeSeconds != null ? startTimeSeconds : startTick == null ? 0.0 : startTick;
+        }
+
+        double durationSeconds() {
+            return durationSeconds != null ? durationSeconds : durationTicks == null ? 0.0 : durationTicks;
+        }
+
+        String affectedVehicleId() {
+            return affectedVehicleId != null ? affectedVehicleId : causingVehicleId;
+        }
     }
 
     public static class StatusUpdateRequest {

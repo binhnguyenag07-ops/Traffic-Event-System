@@ -81,6 +81,9 @@ public final class JunctionController {
         List<JunctionApproach> cleared = new ArrayList<>();
         Set<String> clearedVehicleIds = new LinkedHashSet<>();
         for (JunctionApproach candidate : ordered) {
+            if (candidate.vehicle().getPriorityLevel() <= 0 && !environment.isSignalGreen(candidate)) {
+                continue;
+            }
             if (conflictsWithCleared(candidate, cleared)) {
                 continue;
             }

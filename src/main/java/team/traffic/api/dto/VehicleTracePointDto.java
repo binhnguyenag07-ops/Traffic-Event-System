@@ -20,6 +20,7 @@ public class VehicleTracePointDto {
     private double instantaneousSpeed;
     private int nextRouteStepIndex;
     private List<String> routeRoadIds;
+    private int laneIndex;
 
     public VehicleTracePointDto() {}
 
@@ -38,6 +39,7 @@ public class VehicleTracePointDto {
         this.instantaneousSpeed = point.instantaneousSpeed();
         this.nextRouteStepIndex = point.nextRouteStepIndex();
         this.routeRoadIds = point.routeRoadIds();
+        this.laneIndex = point.laneIndex();
     }
 
     public long getTick() { return tick; }
@@ -68,4 +70,6 @@ public class VehicleTracePointDto {
     public void setNextRouteStepIndex(int nextRouteStepIndex) { this.nextRouteStepIndex = nextRouteStepIndex; }
     public List<String> getRouteRoadIds() { return routeRoadIds; }
     public void setRouteRoadIds(List<String> routeRoadIds) { this.routeRoadIds = routeRoadIds; }
+    public int getLaneIndex() { return laneIndex; }
+    public void setLaneIndex(int laneIndex) { this.laneIndex = laneIndex; }
 }

@@ -17,12 +17,17 @@ import team.traffic.domain.vehicle.dynamics.DriverProfile;
 import team.traffic.domain.vehicle.dynamics.FollowContext;
 import team.traffic.domain.vehicle.dynamics.JunctionApproach;
 import team.traffic.domain.vehicle.dynamics.KraussCarFollowingModel;
-import team.traffic.domain.vehicle.dynamics.LaneOccupancy;
+import team.traffic.domain.vehicle.dynamics.Lane;
 import team.traffic.domain.vehicle.dynamics.LeaderGap;
 import team.traffic.domain.vehicle.dynamics.MovementPlan;
+import team.traffic.domain.vehicle.dynamics.LaneChangeModel;
+import team.traffic.domain.vehicle.dynamics.LaneChangeRequest;
+import team.traffic.domain.vehicle.dynamics.MobilLaneChangeModel;
+import team.traffic.domain.vehicle.dynamics.RoadOccupancy;
 import team.traffic.domain.vehicle.dynamics.TrafficParticipant;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.domain.vehicle.dynamics.TurnDirection;
+import team.traffic.domain.vehicle.pose.PolylineGeometry;
 import team.traffic.service.RoutingService;
 
 public abstract class Vehicle implements TrafficParticipant {
@@ -30,6 +35,8 @@ public abstract class Vehicle implements TrafficParticipant {
     private static final double KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND = 3.6;
     /** Below this speed a vehicle is reported as queueing rather than moving. */
     private static final double QUEUEING_THRESHOLD_MPS = 0.2;
+    /** Vehicles inside this distance participate in stop-line arbitration. */
+    private static final double JUNCTION_APPROACH_DISTANCE_METRES = 50.0;
 
     private final String id;
     private String currentIntersectionId;
@@ -44,11 +51,12 @@ public abstract class Vehicle implements TrafficParticipant {
     private String roadStartIntersectionId;
     private String roadEndIntersectionId;
     private double roadProgress;
+    private int laneIndex;
     private final TripRecord trip;
-    private final TrafficLightWait trafficLightWait;
     private String lastRoutingAlgorithm;
     private DriverProfile driverProfile;
     private CarFollowingModel carFollowingModel;
+    private LaneChangeModel laneChangeModel;
     private double instantaneousSpeedMps;
 
     protected Vehicle(
@@ -79,9 +87,10 @@ public abstract class Vehicle implements TrafficParticipant {
         this.routePreference = RoutePreference.CONGESTION_AWARE;
         this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
         this.trip = new TripRecord(currentIntersectionId);
-        this.trafficLightWait = new TrafficLightWait();
         this.carFollowingModel = new KraussCarFollowingModel();
+        this.laneChangeModel = new MobilLaneChangeModel();
         this.instantaneousSpeedMps = currentSpeed / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
+        this.laneIndex = 0;
     }
 
     public abstract VehicleType getType();
@@ -170,6 +179,11 @@ public abstract class Vehicle implements TrafficParticipant {
             throw new IllegalArgumentException("Simulation seconds must be positive.");
         }
 
+        if (status == VehicleStatus.STOPPED) {
+            instantaneousSpeedMps = 0.0;
+            return Optional.empty();
+        }
+
         if (hasReachedDestination()) {
             releaseOccupiedRoad(roadNetwork, trafficState);
             instantaneousSpeedMps = 0;
@@ -197,13 +211,23 @@ public abstract class Vehicle implements TrafficParticipant {
             return Optional.empty();
         }
 
-        LaneOccupancy lane = trafficState.occupancyOf(road.getId());
+        RoadOccupancy roadOccupancy = trafficState.occupancyOf(road.getId());
+        int targetLaneIndex = laneIndex;
+        if (roadOccupancy != null) {
+            targetLaneIndex = laneChangeModel.chooseTargetLane(new LaneChangeRequest(
+                    this, roadOccupancy, desiredSpeedMps(road),
+                    profile.accelerationMps2(), profile.decelerationMps2(), simulationSeconds));
+        }
+        Lane lane = roadOccupancy == null ? null : roadOccupancy.lane(targetLaneIndex);
         LeaderGap leaderGap = lane == null ? LeaderGap.FREE_ROAD : lane.findLeaderFor(this);
         double distanceToExitMetres = lane == null
                 ? (1.0 - roadProgress) * road.getDistance() * 1_000.0
                 : lane.distanceToExitMetres(this);
 
-        boolean mayLeaveRoad = canLeaveRoadAhead(roadNetwork, trafficState);
+        boolean heldAtRoadExit = shouldHoldAtRoadExit(
+                step.getToIntersectionId(), distanceToExitMetres, trafficState.getElapsedSeconds());
+        boolean mayLeaveRoad = !heldAtRoadExit
+                && canLeaveRoadAhead(roadNetwork, trafficState, distanceToExitMetres);
         double stopDistanceMetres = mayLeaveRoad ? Double.POSITIVE_INFINITY : distanceToExitMetres;
 
         double plannedSpeedMps = getCarFollowingModel().nextSpeedMps(new FollowContext(
@@ -221,7 +245,8 @@ public abstract class Vehicle implements TrafficParticipant {
                 road.getId(),
                 plannedSpeedMps,
                 Math.min(plannedSpeedMps * simulationSeconds, distanceToExitMetres),
-                mayLeaveRoad));
+                mayLeaveRoad,
+                targetLaneIndex));
     }
 
     /**
@@ -245,6 +270,7 @@ public abstract class Vehicle implements TrafficParticipant {
         // the step still reads its leader at the speed it was going, not the
         // one it just chose.
         instantaneousSpeedMps = plan.speedMps();
+        laneIndex = plan.targetLaneIndex();
 
         double previousProgress = roadProgress;
         roadProgress = Math.min(1.0, roadProgress + plan.travelMetres() / (road.getDistance() * 1_000.0));
@@ -279,7 +305,16 @@ public abstract class Vehicle implements TrafficParticipant {
      */
     public Optional<JunctionApproach> planJunctionApproach(RoadNetwork roadNetwork, TrafficState trafficState) {
         Objects.requireNonNull(roadNetwork, "Road network must not be null.");
-        if (occupiedRoadId != null || hasReachedDestination()) {
+        if (hasReachedDestination()) {
+            return Optional.empty();
+        }
+        if (occupiedRoadId != null) {
+            return planRoadExitApproach(roadNetwork);
+        }
+        if (shouldHoldAtJunction(currentIntersectionId, trafficState.getElapsedSeconds())) {
+            instantaneousSpeedMps = 0.0;
+            trip.recordWaitingTick();
+            status = VehicleStatus.WAITING;
             return Optional.empty();
         }
 
@@ -315,6 +350,52 @@ public abstract class Vehicle implements TrafficParticipant {
                 trip.getWaitingTicks()));
     }
 
+    private Optional<JunctionApproach> planRoadExitApproach(RoadNetwork roadNetwork) {
+        RouteStep currentStep = getNextRouteStep();
+        if (currentStep == null || currentRoute == null
+                || nextRouteStepIndex + 1 >= currentRoute.getStepCount()) {
+            return Optional.empty();
+        }
+        Road approachRoad = roadNetwork.getRoad(occupiedRoadId);
+        if (approachRoad == null || !currentStep.getRoadId().equals(occupiedRoadId)) {
+            return Optional.empty();
+        }
+        double distanceToJunctionMetres = Math.max(
+                0.0, (1.0 - roadProgress) * approachRoad.getDistance() * 1_000.0);
+        if (distanceToJunctionMetres > JUNCTION_APPROACH_DISTANCE_METRES) {
+            return Optional.empty();
+        }
+
+        RouteStep followingStep = currentRoute.getSteps().get(nextRouteStepIndex + 1);
+        Road targetRoad = roadNetwork.getRoad(followingStep.getRoadId());
+        if (targetRoad == null || !targetRoad.isAvailable()) {
+            return Optional.empty();
+        }
+        TurnDirection turnDirection = TurnDirection.of(
+                roadNetwork.getIntersection(currentStep.getFromIntersectionId()),
+                roadNetwork.getIntersection(currentStep.getToIntersectionId()),
+                roadNetwork.getIntersection(followingStep.getToIntersectionId()));
+        return Optional.of(new JunctionApproach(
+                this,
+                currentStep.getToIntersectionId(),
+                approachRoad,
+                targetRoad,
+                turnDirection,
+                distanceToJunctionMetres,
+                trip.getWaitingTicks()));
+    }
+
+    /** Extension point for transit dwell or another junction-side hold. */
+    protected boolean shouldHoldAtJunction(String junctionId, double elapsedSeconds) {
+        return false;
+    }
+
+    /** Extension point for a bus stop or another curb-side hold at the stop line. */
+    protected boolean shouldHoldAtRoadExit(
+            String junctionId, double distanceToExitMetres, double elapsedSeconds) {
+        return false;
+    }
+
     /**
      * Speed this driver would hold on an empty road, in metres per second.
      *
@@ -327,7 +408,12 @@ public abstract class Vehicle implements TrafficParticipant {
     private double desiredSpeedMps(Road road) {
         double postedKph = Math.min(profile.maxSpeedKph(), road.getSpeedLimit()) * getDriverProfile().speedFactor();
         double eventSlowdown = 1.0 + road.getCondition().getCongestionLevel();
-        return postedKph / eventSlowdown / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
+        double unconstrainedMps = postedKph / eventSlowdown / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
+        double radiusMetres = PolylineGeometry.curvatureRadiusAt(road.getGeometry(), roadProgress);
+        double corneringMps = Double.isInfinite(radiusMetres)
+                ? Double.POSITIVE_INFINITY
+                : Math.sqrt(getDriverProfile().lateralAccelerationMps2() * radiusMetres);
+        return Math.min(unconstrainedMps, corneringMps);
     }
 
     /**
@@ -351,6 +437,16 @@ public abstract class Vehicle implements TrafficParticipant {
             return false;
         }
 
+        RoadOccupancy targetOccupancy = trafficState.occupancyOf(road.getId());
+        int entryLane = targetOccupancy == null ? 0 : targetOccupancy.bestLaneForEntry(this);
+        if (entryLane < 0) {
+            instantaneousSpeedMps = 0;
+            trip.recordWaitingTick();
+            status = VehicleStatus.WAITING;
+            return false;
+        }
+
+        laneIndex = entryLane;
         enterNextRoad(roadNetwork, step);
         roadStartIntersectionId = step.getFromIntersectionId();
         roadEndIntersectionId = step.getToIntersectionId();
@@ -365,7 +461,10 @@ public abstract class Vehicle implements TrafficParticipant {
      * road still has physical room for it. Refusing otherwise is what makes a
      * queue back up through the junction into the road behind.
      */
-    private boolean canLeaveRoadAhead(RoadNetwork roadNetwork, TrafficState trafficState) {
+    private boolean canLeaveRoadAhead(
+            RoadNetwork roadNetwork,
+            TrafficState trafficState,
+            double distanceToExitMetres) {
         if (currentRoute == null || nextRouteStepIndex + 1 >= currentRoute.getStepCount()) {
             return true;
         }
@@ -376,8 +475,16 @@ public abstract class Vehicle implements TrafficParticipant {
             return false;
         }
 
-        LaneOccupancy followingLane = trafficState.occupancyOf(followingRoad.getId());
-        return followingLane == null || followingLane.canAdmit(this);
+        // A vehicle close enough to cross must have been cleared for the
+        // current signal phase and conflicting approaches. Farther upstream it
+        // may continue towards the line without reserving the junction.
+        if (distanceToExitMetres <= JUNCTION_APPROACH_DISTANCE_METRES
+                && !trafficState.isCleared(id)) {
+            return false;
+        }
+
+        RoadOccupancy followingRoadOccupancy = trafficState.occupancyOf(followingRoad.getId());
+        return followingRoadOccupancy == null || followingRoadOccupancy.canAdmit(this);
     }
 
     /**
@@ -488,30 +595,14 @@ public abstract class Vehicle implements TrafficParticipant {
         return roadProgress;
     }
 
+    @Override
+    public int getLaneIndex() {
+        return laneIndex;
+    }
+
     public String getNextRoadId() {
         RouteStep step = getNextRouteStep();
         return step == null ? null : step.getRoadId();
-    }
-
-    /**
-     * Holds the vehicle before it enters a road affected by a traffic-light
-     * delay. Each event delays this vehicle at most once.
-     */
-    public boolean waitForTrafficLight(String eventId, long delayTicks) {
-        if (!trafficLightWait.hold(eventId, delayTicks)) {
-            return false;
-        }
-        trip.recordWaitingTick();
-        status = VehicleStatus.WAITING;
-        return true;
-    }
-
-    public void clearTrafficLightWait() {
-        trafficLightWait.clear();
-    }
-
-    public long getWaitTicksRemaining() {
-        return trafficLightWait.getTicksRemaining();
     }
 
     public void addTravelTime(double simulationSeconds) {
@@ -587,10 +678,20 @@ public abstract class Vehicle implements TrafficParticipant {
         return profile.accelerationMps2();
     }
 
+    @Override
+    public double getAccelerationMps2() {
+        return profile.accelerationMps2();
+    }
+
     /**
      * Braking deceleration in metres per second squared.
      */
     public double getDeceleration() {
+        return profile.decelerationMps2();
+    }
+
+    @Override
+    public double getDecelerationMps2() {
         return profile.decelerationMps2();
     }
 
@@ -614,7 +715,7 @@ public abstract class Vehicle implements TrafficParticipant {
      */
     public DriverProfile getDriverProfile() {
         if (driverProfile == null) {
-            driverProfile = DriverProfile.forType(getType());
+            driverProfile = DriverProfile.variedFor(getType(), id);
         }
         return driverProfile;
     }
@@ -639,6 +740,15 @@ public abstract class Vehicle implements TrafficParticipant {
             throw new IllegalArgumentException("Car-following model is required.");
         }
         this.carFollowingModel = carFollowingModel;
+    }
+
+    public LaneChangeModel getLaneChangeModel() {
+        return laneChangeModel;
+    }
+
+    public void setLaneChangeModel(LaneChangeModel laneChangeModel) {
+        if (laneChangeModel == null) throw new IllegalArgumentException("Lane-change model is required.");
+        this.laneChangeModel = laneChangeModel;
     }
 
     /**
@@ -686,7 +796,19 @@ public abstract class Vehicle implements TrafficParticipant {
     }
 
     public void setStatus(VehicleStatus status) {
+        if (status == null) throw new IllegalArgumentException("Vehicle status is required.");
         this.status = status;
+    }
+
+    public void stop() {
+        instantaneousSpeedMps = 0.0;
+        status = VehicleStatus.STOPPED;
+    }
+
+    public void resumeFromStop() {
+        if (status == VehicleStatus.STOPPED) {
+            status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
+        }
     }
 
     public List<String> getTravelHistory() {
@@ -747,6 +869,7 @@ public abstract class Vehicle implements TrafficParticipant {
             roadNetwork.recordVehicleLeavingRoad(occupiedRoadId);
         }
         occupiedRoadId = null;
+        laneIndex = 0;
         roadStartIntersectionId = null;
         roadEndIntersectionId = null;
         roadProgress = 0.0;

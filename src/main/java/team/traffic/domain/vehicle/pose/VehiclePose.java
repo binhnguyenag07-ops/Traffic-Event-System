@@ -17,6 +17,8 @@ import team.traffic.domain.network.GeoPoint;
  * @param lengthMetres   bumper to bumper
  * @param widthMetres    mirror to mirror
  * @param roadId         the road it is on, or {@code null} while crossing a junction
+ * @param laneIndex      zero-based lane occupied on the road
+ * @param lateralOffsetMetres signed offset from the road centreline
  * @param inJunction     true while it is between roads
  */
 public record VehiclePose(
@@ -25,7 +27,15 @@ public record VehiclePose(
         double lengthMetres,
         double widthMetres,
         String roadId,
+        int laneIndex,
+        double lateralOffsetMetres,
         boolean inJunction) {
+
+    public VehiclePose(GeoPoint position, double headingDegrees,
+            double lengthMetres, double widthMetres, String roadId, boolean inJunction) {
+        this(position, headingDegrees, lengthMetres, widthMetres,
+                roadId, 0, 0.0, inJunction);
+    }
 
     public VehiclePose {
         if (position == null) {
@@ -39,6 +49,12 @@ public record VehiclePose(
         }
         if (!Double.isFinite(widthMetres) || widthMetres <= 0) {
             throw new IllegalArgumentException("Width must be positive.");
+        }
+        if (laneIndex < 0) {
+            throw new IllegalArgumentException("Lane index must not be negative.");
+        }
+        if (!Double.isFinite(lateralOffsetMetres)) {
+            throw new IllegalArgumentException("Lateral offset must be finite.");
         }
         headingDegrees = (headingDegrees % 360.0 + 360.0) % 360.0;
     }

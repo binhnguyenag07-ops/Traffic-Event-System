@@ -8,6 +8,20 @@ import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.GeoPoint;
 
 class PolylineGeometryTest {
+    @Test
+    void sharpCornerHasSmallerRadiusThanGentleCurve() {
+        List<GeoPoint> sharp = List.of(
+                new GeoPoint(10.0, 106.0),
+                new GeoPoint(10.0, 106.0001),
+                new GeoPoint(10.0001, 106.0001));
+        List<GeoPoint> gentle = List.of(
+                new GeoPoint(10.0, 106.0),
+                new GeoPoint(10.00005, 106.0001),
+                new GeoPoint(10.00012, 106.0002));
+
+        assertThat(PolylineGeometry.curvatureRadiusAt(sharp, 0.5))
+                .isLessThan(PolylineGeometry.curvatureRadiusAt(gentle, 0.5));
+    }
 
     private static final GeoPoint ORIGIN = new GeoPoint(10.77, 106.70);
     private static final GeoPoint NORTH = new GeoPoint(10.78, 106.70);

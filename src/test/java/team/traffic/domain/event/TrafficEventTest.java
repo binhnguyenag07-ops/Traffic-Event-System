@@ -65,18 +65,6 @@ class TrafficEventTest {
     }
 
     @Test
-    void trafficLightDelayAddsOneNormalizedImpact() {
-        RoadNetwork network = createNetwork(new RoadCondition(0.1, 0, RoadStatus.OPEN));
-        TrafficEvent event = new TrafficLightDelayEvent("event-1", "AB", 0, 10, 2);
-
-        event.apply(network);
-
-        assertThat(network.getRoad("AB").getCondition().getCongestionLevel()).isCloseTo(0.3, within(1e-9));
-        event.resolve(network);
-        assertThat(network.getRoad("AB").getCondition().getCongestionLevel()).isEqualTo(0.1);
-    }
-
-    @Test
     void activeWindowIncludesStartAndExcludesEnd() {
         TrafficEvent event = new RoadClosureEvent("event-1", "AB", 3, 4);
 

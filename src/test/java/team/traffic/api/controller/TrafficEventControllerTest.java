@@ -137,19 +137,38 @@ class TrafficEventControllerTest {
     }
 
     @Test
-    void createTrafficLightDelayEventReturns201() throws Exception {
+    void createPositionedBreakdownUsesSecondsAndReturnsAffectedVehicle() throws Exception {
         HttpResponse<String> response = postJson("/api/events", """
                 {
-                  "type": "TRAFFIC_LIGHT_DELAY",
+                  "type": "BREAKDOWN",
                   "affectedRoadId": "road-1",
-                  "startTick": 0,
-                  "durationTicks": 10,
-                  "value": 3
+                  "startTimeSeconds": 12.5,
+                  "durationSeconds": 30,
+                  "affectedVehicleId": "car-1",
+                  "positionAlongRoad": 0.75,
+                  "blockedLaneIndexes": [1]
                 }
                 """);
 
         assertThat(response.statusCode()).isEqualTo(201);
-        assertThat(response.body()).contains("TRAFFIC_LIGHT_DELAY");
+        assertThat(response.body()).contains("BREAKDOWN", "affectedVehicleId", "car-1");
+        assertThat(response.body()).contains("\"startTimeSeconds\":12.5");
+        assertThat(response.body()).doesNotContain("startTick", "durationTicks");
+    }
+
+    @Test
+    void createBreakdownRejectsMissingAffectedVehicle() throws Exception {
+        HttpResponse<String> response = postJson("/api/events", """
+                {
+                  "type": "BREAKDOWN",
+                  "affectedRoadId": "road-1",
+                  "startTimeSeconds": 0,
+                  "durationSeconds": 30
+                }
+                """);
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).contains("affected vehicle id is required");
     }
 
     @Test
@@ -373,7 +392,7 @@ class TrafficEventControllerTest {
         @Override public SimulationSnapshot getSnapshot() {
             return new SimulationSnapshot(0, SimulationStatus.READY, List.of(), List.of());
         }
-        @Override public List<Vehicle> getVehicles() { return List.of(); }
+        @Override public List<Vehicle> getVehicles() { return List.of(new team.traffic.domain.vehicle.Car("car-1", "A", "B")); }
         @Override public List<TrafficEvent> getEvents() { return List.of(); }
     }
 }

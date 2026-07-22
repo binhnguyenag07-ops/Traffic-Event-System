@@ -9,10 +9,12 @@ import team.traffic.domain.vehicle.pose.VehiclePoseResolver;
 
 public class SimulationSnapshotDto {
     private long tick;
+    private double elapsedSeconds;
     private SimulationStatus status;
     private List<VehicleDto> vehicles;
     private List<TrafficEventDto> trafficEvents;
     private List<RoadStateDto> roadStates;
+    private List<TrafficSignalDto> trafficSignals;
 
     public SimulationSnapshotDto() {}
 
@@ -22,6 +24,7 @@ public class SimulationSnapshotDto {
 
     public SimulationSnapshotDto(SimulationSnapshot snapshot, RoadNetwork network) {
         this.tick = snapshot.tick();
+        this.elapsedSeconds = snapshot.elapsedSeconds();
         this.status = snapshot.status();
         // With a network to hand, each vehicle also carries its resolved map
         // position and heading; without one it carries progress along a road
@@ -35,6 +38,9 @@ public class SimulationSnapshotDto {
         this.trafficEvents = snapshot.trafficEvents().stream()
                 .map(TrafficEventDto::new)
                 .collect(Collectors.toList());
+        this.trafficSignals = snapshot.trafficSignals().stream()
+                .map(TrafficSignalDto::new)
+                .collect(Collectors.toList());
         this.roadStates = network == null ? List.of() : network.getRoads().values().stream()
                 .map(RoadStateDto::new)
                 .collect(Collectors.toList());
@@ -47,6 +53,9 @@ public class SimulationSnapshotDto {
     public void setTick(long tick) {
         this.tick = tick;
     }
+
+    public double getElapsedSeconds() { return elapsedSeconds; }
+    public void setElapsedSeconds(double elapsedSeconds) { this.elapsedSeconds = elapsedSeconds; }
 
     public SimulationStatus getStatus() {
         return status;
@@ -74,4 +83,6 @@ public class SimulationSnapshotDto {
 
     public List<RoadStateDto> getRoadStates() { return roadStates; }
     public void setRoadStates(List<RoadStateDto> roadStates) { this.roadStates = roadStates; }
+    public List<TrafficSignalDto> getTrafficSignals() { return trafficSignals; }
+    public void setTrafficSignals(List<TrafficSignalDto> trafficSignals) { this.trafficSignals = trafficSignals; }
 }

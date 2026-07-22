@@ -17,6 +17,11 @@ import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
+import team.traffic.domain.vehicle.dynamics.MovementPlan;
+import team.traffic.domain.vehicle.dynamics.TrafficState;
+import team.traffic.domain.event.AccidentEvent;
+import team.traffic.domain.event.BreakdownEvent;
+import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.routing.DijkstraPathFindingStrategy;
 import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.RoutingService;
@@ -79,10 +84,118 @@ class TickProcessorTest {
                 .hasMessageContaining("dynamics engine");
     }
 
+    @Test
+    void unavoidableRearEndCollisionCreatesAccidentStopsBothVehiclesAndLaterReleasesThem() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addRoad(new Road("R", "A", "B", 0.1, 50, 100, 0,
+                new RoadCondition(0, 0, RoadStatus.OPEN)));
+        Car leader = carOnRoute("leader");
+        Car follower = carOnRoute("follower");
+        List<Vehicle> vehicles = new ArrayList<>(List.of(leader, follower));
+        placeOnRoad(network, vehicles, leader, 46.0, 0.0);
+        placeOnRoad(network, vehicles, follower, 40.0, 20.0);
+        List<team.traffic.domain.event.TrafficEvent> events = new ArrayList<>();
+        TickProcessor processor = new TickProcessor(dijkstra());
+
+        processor.process(0, 0, network, vehicles, events, 1.0);
+
+        assertThat(events).singleElement().isInstanceOfSatisfying(AccidentEvent.class, accident -> {
+            assertThat(accident.getCausingVehicleId()).isEqualTo("follower");
+            assertThat(accident.getInvolvedVehicleIds()).containsExactlyInAnyOrder("leader", "follower");
+        });
+        assertThat(leader.getStatus()).isEqualTo(VehicleStatus.STOPPED);
+        assertThat(follower.getStatus()).isEqualTo(VehicleStatus.STOPPED);
+
+        processor.process(301, 301, network, vehicles, events, 1.0);
+
+        assertThat(leader.getStatus()).isNotEqualTo(VehicleStatus.STOPPED);
+        assertThat(follower.getStatus()).isNotEqualTo(VehicleStatus.STOPPED);
+    }
+
+    @Test
+    void vehicleRemainsStoppedUntilEveryOverlappingFailureIsResolved() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addRoad(new Road("R", "A", "B", 0.1, 50, 100, 0,
+                new RoadCondition(0, 0, RoadStatus.OPEN)));
+        Car car = carOnRoute("car");
+        List<Vehicle> vehicles = new ArrayList<>(List.of(car));
+        placeOnRoad(network, vehicles, car, 40.0, 10.0);
+        List<team.traffic.domain.event.TrafficEvent> events = new ArrayList<>(List.of(
+                new BreakdownEvent("short", "R", 0, 5, "car", 0.4, java.util.Set.of(0)),
+                new BreakdownEvent("long", "R", 0, 10, "car", 0.4, java.util.Set.of(0))));
+        TickProcessor processor = new TickProcessor(dijkstra());
+
+        processor.process(0, 0, network, vehicles, events, 1.0);
+        processor.process(6, 6, network, vehicles, events, 1.0);
+        assertThat(car.getStatus()).isEqualTo(VehicleStatus.STOPPED);
+        assertThat(network.getRoad("R").getCondition().getCongestionLevel()).isEqualTo(0.2);
+
+        processor.process(11, 11, network, vehicles, events, 1.0);
+        assertThat(car.getStatus()).isNotEqualTo(VehicleStatus.STOPPED);
+        assertThat(network.getRoad("R").getCondition().getCongestionLevel()).isZero();
+    }
+
+    @Test
+    void aLogicalTickIsSplitAtExactEventSecondBoundaries() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addRoad(new Road("R", "A", "B", 0.1, 50, 100, 0,
+                new RoadCondition(0, 0, RoadStatus.OPEN)));
+        List<Double> stepDurations = new ArrayList<>();
+        List<RoadStatus> statusesDuringStep = new ArrayList<>();
+        VehicleDynamicsEngine recordingEngine = new VehicleDynamicsEngine() {
+            @Override
+            public TrafficState step(
+                    long tick,
+                    double elapsedSeconds,
+                    RoadNetwork roadNetwork,
+                    List<Vehicle> vehicles,
+                    List<team.traffic.domain.event.TrafficEvent> events,
+                    List<team.traffic.domain.signal.TrafficSignal> signals,
+                    double simulationSeconds) {
+                stepDurations.add(simulationSeconds);
+                statusesDuringStep.add(roadNetwork.getRoad("R").getCondition().getRoadStatus());
+                return null;
+            }
+        };
+        TickProcessor processor = new TickProcessor(dijkstra(), null, recordingEngine);
+        RoadClosureEvent closure = new RoadClosureEvent("closure", "R", 2.0, 3.0);
+
+        processor.process(0, 0.0, network, List.of(), new ArrayList<>(List.of(closure)), 10.0);
+
+        assertThat(stepDurations).containsExactly(2.0, 3.0, 5.0);
+        assertThat(statusesDuringStep).containsExactly(RoadStatus.OPEN, RoadStatus.CLOSED, RoadStatus.OPEN);
+        assertThat(closure.getStatus()).isEqualTo(team.traffic.domain.event.TrafficEventStatus.RESOLVED);
+    }
+
     private static RoutingService dijkstra() {
         RoutingStrategyRegistry registry = new RoutingStrategyRegistry();
         registry.register(new DijkstraPathFindingStrategy());
         return new RoutingServiceImpl(registry);
+    }
+
+    private static Car carOnRoute(String id) {
+        Car car = new Car(id, "A", "B");
+        car.setCurrentRoute(new Route(List.of(new RouteStep("A", "B", "R", 1.0)), 0.1, 1.0, 1.0));
+        return car;
+    }
+
+    private static void placeOnRoad(
+            RoadNetwork network,
+            List<Vehicle> vehicles,
+            Vehicle vehicle,
+            double progressMetres,
+            double speedMps) {
+        TrafficState state = TrafficState.capture(0, network, vehicles);
+        vehicle.planJunctionApproach(network, state).ifPresent(state::requestCrossing);
+        state.resolveJunctions();
+        vehicle.planMovement(network, state, 1.0).orElseThrow();
+        vehicle.commitMovement(new MovementPlan("R", speedMps, progressMetres, false), network, state);
     }
 
     /** A to C the direct way through B, or the long way round through D. */
