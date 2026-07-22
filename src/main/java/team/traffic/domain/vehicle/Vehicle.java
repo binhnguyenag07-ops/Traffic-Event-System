@@ -40,7 +40,9 @@ public abstract class Vehicle implements TrafficParticipant {
 
     private final String id;
     private String currentIntersectionId;
-    private final String destinationIntersectionId;
+    private String destinationIntersectionId;
+    private String originBuildingId;
+    private String destinationBuildingId;
     private Route currentRoute;
     private int nextRouteStepIndex;
     private RoutePreference routePreference;
@@ -123,13 +125,20 @@ public abstract class Vehicle implements TrafficParticipant {
             return;
         }
 
-        RouteRequest request = new RouteRequest(
-                currentIntersectionId,
-                destinationIntersectionId,
-                preference);
-
         try {
-            RouteResult result = routingService.findRoute(roadNetwork, request);
+            RouteResult result;
+            if (destinationBuildingId == null) {
+                RouteRequest request = new RouteRequest(
+                        currentIntersectionId,
+                        destinationIntersectionId,
+                        preference);
+                result = routingService.findRoute(roadNetwork, request);
+            } else {
+                var buildingPlan = routingService.findRouteToBuilding(
+                        roadNetwork, currentIntersectionId, destinationBuildingId, preference);
+                destinationIntersectionId = buildingPlan.destinationAccess().intersectionId();
+                result = buildingPlan.routeResult();
+            }
             currentRoute = result == null ? null : result.getRoute();
             lastRoutingAlgorithm = result == null ? null : result.getAlgorithmName();
             status = isUsableRoute(currentRoute) ? VehicleStatus.WAITING : VehicleStatus.BLOCKED;
@@ -551,6 +560,26 @@ public abstract class Vehicle implements TrafficParticipant {
 
     public String getDestinationIntersectionId() {
         return destinationIntersectionId;
+    }
+
+    public String getOriginBuildingId() {
+        return originBuildingId;
+    }
+
+    public String getDestinationBuildingId() {
+        return destinationBuildingId;
+    }
+
+    /** Marks this vehicle as a building-to-building trip without breaking legacy intersection trips. */
+    public void assignBuildingTrip(String originBuildingId, String destinationBuildingId) {
+        if (originBuildingId == null || originBuildingId.isBlank()) {
+            throw new IllegalArgumentException("Origin building id is required");
+        }
+        if (destinationBuildingId == null || destinationBuildingId.isBlank()) {
+            throw new IllegalArgumentException("Destination building id is required");
+        }
+        this.originBuildingId = originBuildingId;
+        this.destinationBuildingId = destinationBuildingId;
     }
 
     public Route getCurrentRoute() {
