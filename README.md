@@ -14,18 +14,26 @@ The repository currently includes:
 - JSON/CSV map loading, map saving, and synthetic grid-map generation;
 - route search with BFS, Dijkstra, A*, and congestion-aware route costs;
 - microscopic Krauss car-following with deterministic per-driver variation,
-  curve-speed limits, lane occupancy, and MOBIL lane changes;
+  curve-speed limits, lane occupancy, MOBIL lane changes, and a compact
+  motorcycle filtering strategy;
 - traffic-event models for congestion, positioned accidents, breakdowns, and road closures;
 - event service, event API, and dynamic rerouting support;
 - simulation clock, tick processing, pause/resume/reset, and snapshots;
 - server-owned live playback with configurable tick timing and SSE snapshots;
+- bounded authoritative frame history captured after every microscopic sub-step
+  and event boundary, with a LIVE/HISTORY scrubber on the macro map;
 - lane-offset vehicle pose (latitude, longitude, heading), collision detection,
   emergency priority, real stop-line control, and bus dwell stops;
 - open-boundary demo traffic where completed vehicles exit and different
   same-type vehicles enter from reachable boundary roads;
 - traffic and algorithm statistics services;
-- React operations console with an OpenStreetMap/Leaflet map, live vehicles,
-  traffic layers, controls, route comparison, events, and statistics;
+- React operations console with an OpenStreetMap/Leaflet macro map for road
+  pressure, incidents, routes, network editing, and statistics; lightweight
+  glowing vehicle dots remain visible while image sprites are reserved for a
+  separate physical view;
+- a Fleet **Spawn random test vehicle** control that creates a real backend car
+  or motorcycle on a reachable boundary-to-boundary route, with the request
+  policy isolated for later land-use/demand-based origin-destination models;
 - session-scoped network editing for junctions, directed/two-way roads, road
   conditions, connected-road searches, and JSON export;
 - atomic browser JSON import for geographic HCMC networks, with stored/OSRM/
@@ -142,6 +150,8 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `GET /api/simulation/snapshot` | current simulation snapshot |
 | `GET /api/simulation/stream` | live snapshot stream using Server-Sent Events |
 | `GET /api/simulation/signals` | generated traffic-signal plans |
+| `GET /api/simulation/trace/frames` | retained authoritative frame timeline |
+| `GET /api/simulation/trace/frames/at?elapsedSeconds={s}` | frame at or immediately before a simulated second |
 | `GET /api/simulation/trace/flow` | density, speed, and flow samples |
 | `GET /api/simulation/trace/fundamental` | fundamental-diagram density bins |
 | `GET /api/simulation/trace/roads/{roadId}/time-space` | vehicle trajectories on one road |
@@ -195,7 +205,10 @@ OpenStreetMap data. They are stored locally so simulation
 and routing do not depend on an external routing service at runtime. Map data
 © OpenStreetMap contributors, available under the ODbL.
 
-Regenerate the full-viewport network with `python3 tools/generate_osm_map.py`.
+The current centreline dataset can be regenerated with
+`python3 tools/generate_osm_map.py`. This legacy generator still uses public
+Overpass mirrors. See the [macro and physical map plan](docs/PHYSICAL_VIEW_PLAN.md)
+for the proposed reproducible local-PBF replacement and physical-view contract.
 
 ### Network Editor
 
@@ -210,7 +223,9 @@ Pause the simulation before editing. Occupied roads, intersections used as a
 vehicle endpoint, and roads referenced by unresolved events cannot be deleted.
 Waiting vehicles recompute their routes after topology or condition changes.
 Edits last for the current server session; use **Export network JSON** to save
-the result without overwriting the bundled scenarios.
+the result without overwriting the bundled scenarios. Because replay frames do
+not copy the whole geographic network, any network edit starts a new timeline;
+old frames are discarded instead of being rendered on incompatible geometry.
 
 Use **Import JSON** in the header to load a real-map network. Imports require
 latitude/longitude inside the displayed HCMC operating area, are limited to
@@ -316,6 +331,7 @@ Optional environment variables:
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Macro and physical map plan](docs/PHYSICAL_VIEW_PLAN.md)
 - [Class diagram](docs/CLASS_DIAGRAM.md)
 - [API contract](docs/API_CONTRACT.md)
 - [Algorithm explanation](docs/ALGORITHM_EXPLANATION.md)

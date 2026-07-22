@@ -44,12 +44,14 @@ classDiagram
         +resumeFromStop()
     }
     class Car
+    class Motorcycle
     class Bus {
         -int passengerCapacity
         -List~BusStop~ stops
     }
     class EmergencyVehicle
     Vehicle <|-- Car
+    Vehicle <|-- Motorcycle
     Vehicle <|-- Bus
     Vehicle <|-- EmergencyVehicle
 
@@ -71,6 +73,7 @@ classDiagram
         +chooseTargetLane(request) int
     }
     class MobilLaneChangeModel
+    class MotorcycleLaneChangeModel
     class CarFollowingModel {
         <<interface>>
         +nextSpeedMps(context) double
@@ -79,6 +82,8 @@ classDiagram
     TrafficState --> RoadOccupancy
     RoadOccupancy "1" *-- "many" Lane
     LaneChangeModel <|.. MobilLaneChangeModel
+    LaneChangeModel <|.. MotorcycleLaneChangeModel
+    Motorcycle --> MotorcycleLaneChangeModel
     CarFollowingModel <|.. KraussCarFollowingModel
     Vehicle --> LaneChangeModel
     Vehicle --> CarFollowingModel

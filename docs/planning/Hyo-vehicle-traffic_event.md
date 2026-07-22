@@ -29,6 +29,7 @@ the 734-road District 1 dataset did not require a noisy bulk rewrite.
 | 5 | Collision-generated accidents, `STOPPED`, `BreakdownEvent`, positioned lane obstacles |
 | 6 | Junction-owned `TrafficSignal`/`SignalPhase`; old delay event and wait state removed |
 | 7 | Capacity-based bus stops that hold the bus physically in its lane at the stop line |
+| 8 | Compact `Motorcycle` profile and safety-preserving low-threshold MOBIL filtering |
 
 ## Vehicle dynamics
 
@@ -76,6 +77,13 @@ The pose offset is:
 ```text
 (laneIndex - (laneCount - 1) / 2) * laneWidthMetres
 ```
+
+`Motorcycle` is 2.1 m long and 0.75 m wide. Its driver profile keeps shorter
+gaps and its `MotorcycleLaneChangeModel` accepts any adjacent lane with a real
+speed benefit while retaining the ordinary MOBIL target-follower braking check.
+The smaller body therefore fits some longitudinal openings that reject a car.
+This remains a discrete-lane approximation; continuous between-lane filtering
+is deferred until sub-lane occupancy exists for the physical view.
 
 The resolver offsets the road polyline normal and publishes latitude,
 longitude, heading, lane index, and lateral metres to the frontend.
@@ -161,8 +169,9 @@ vehicle's recorded position in metres on one road. Endpoints are documented in
 
 ## Verification
 
-Coverage includes lane capacity/pose, MOBIL safety and overtaking, deterministic
-driver variation, cornering, collision-to-event integration, overlapping event
+Coverage includes lane capacity/pose, MOBIL safety and overtaking, motorcycle
+compact-gap filtering and unsafe cut-in rejection, deterministic driver
+variation, cornering, collision-to-event integration, overlapping event
 resolution, signal stop-line behavior and emergency preemption, physical bus
 dwell/overtaking, arrived cleanup, flow aggregation, JSON lane round-trips, and
 the full pre-existing routing/persistence/API suite.
