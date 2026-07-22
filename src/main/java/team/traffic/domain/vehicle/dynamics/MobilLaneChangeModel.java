@@ -7,6 +7,23 @@ package team.traffic.domain.vehicle.dynamics;
  */
 public final class MobilLaneChangeModel implements LaneChangeModel {
     public static final double DEFAULT_INCENTIVE_THRESHOLD_MPS2 = 0.2;
+    private final double incentiveThresholdMps2;
+
+    public MobilLaneChangeModel() {
+        this(DEFAULT_INCENTIVE_THRESHOLD_MPS2);
+    }
+
+    /**
+     * Creates the same safety-preserving MOBIL model with a type-specific
+     * incentive threshold. A zero threshold changes lane for any real benefit
+     * without relaxing the braking-safety check for the target follower.
+     */
+    public MobilLaneChangeModel(double incentiveThresholdMps2) {
+        if (!Double.isFinite(incentiveThresholdMps2) || incentiveThresholdMps2 < 0) {
+            throw new IllegalArgumentException("Lane-change incentive threshold must not be negative.");
+        }
+        this.incentiveThresholdMps2 = incentiveThresholdMps2;
+    }
 
     @Override
     public int chooseTargetLane(LaneChangeRequest request) {
@@ -48,8 +65,8 @@ public final class MobilLaneChangeModel implements LaneChangeModel {
         return new int[] {current - 1, current + 1};
     }
 
-    private static double thresholdFor(TrafficParticipant vehicle) {
-        return vehicle.getPriorityLevel() > 0 ? 0.0 : DEFAULT_INCENTIVE_THRESHOLD_MPS2;
+    private double thresholdFor(TrafficParticipant vehicle) {
+        return vehicle.getPriorityLevel() > 0 ? 0.0 : incentiveThresholdMps2;
     }
 
     private static boolean safeForFollower(TrafficParticipant entering, Lane target) {

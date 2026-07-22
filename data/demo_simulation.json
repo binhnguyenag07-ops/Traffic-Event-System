@@ -1,6 +1,7 @@
 {
   "vehicles": [
     {"id":"DEMO-CAR","type":"CAR","startIntersectionId":"I1","destinationIntersectionId":"I6"},
+    {"id":"DEMO-MOTO","type":"MOTORCYCLE","startIntersectionId":"I1","destinationIntersectionId":"I6"},
     {"id":"DEMO-BUS","type":"BUS","startIntersectionId":"I3","destinationIntersectionId":"I1"},
     {"id":"DEMO-EMS","type":"EMERGENCY","startIntersectionId":"I1","destinationIntersectionId":"I4"}
   ],
