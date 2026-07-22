@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import TrafficMap from './components/TrafficMap'
 import NetworkEditor from './components/NetworkEditor'
 import ExperimentPanel from './components/ExperimentPanel'
+import TimelineScrubber from './components/TimelineScrubber'
 import { useTrafficDashboard } from './hooks/useTrafficDashboard'
 
 const PREFERENCES = [
@@ -57,7 +58,8 @@ function Inspector({ selected }) {
 export default function App() {
   const dashboard = useTrafficDashboard()
   const {
-    intersections, roads, scenarios, activeScenario, snapshot, statistics, algorithms,
+    intersections, roads, viewRoads, scenarios, activeScenario, snapshot, viewFrame,
+    timeline, viewingHistory, historyLoading, statistics, algorithms,
     route, comparison, selected, loading, error, tickDelay, streamConnected, importSummary,
   } = dashboard
   const [routeStart, setRouteStart] = useState('')
@@ -67,6 +69,8 @@ export default function App() {
   const [vehicleType, setVehicleType] = useState('CAR')
   const [vehicleStart, setVehicleStart] = useState('')
   const [vehicleEnd, setVehicleEnd] = useState('')
+  const [lastRandomSpawn, setLastRandomSpawn] = useState(null)
+  const [spawningRandomVehicle, setSpawningRandomVehicle] = useState(false)
   const [eventType, setEventType] = useState('CONGESTION')
   const [eventRoad, setEventRoad] = useState('')
   const [eventDuration, setEventDuration] = useState(30)
@@ -80,10 +84,15 @@ export default function App() {
 
   const traffic = statistics.traffic || {}
   const activeEvents = snapshot.trafficEvents?.filter((event) => event.status === 'ACTIVE') || []
+  const viewActiveEvents = viewFrame.trafficEvents?.filter((event) => event.status === 'ACTIVE') || []
   const canStart = snapshot.status === 'READY' && snapshot.vehicles.length > 0
   const canPause = snapshot.status === 'RUNNING'
   const canResume = snapshot.status === 'PAUSED'
-  const pressure = Math.round(Number(traffic.averageCongestionLevel || 0) * 100)
+  const viewRoadStates = viewFrame.roadStates || []
+  const pressure = viewRoadStates.length
+    ? Math.round(viewRoadStates.reduce((sum, road) => sum + Number(road.congestionLevel || 0), 0)
+      / viewRoadStates.length * 100)
+    : Math.round(Number(traffic.averageCongestionLevel || 0) * 100)
   const scenarioName = scenarios.find((scenario) => scenario.id === activeScenario)?.name || 'District 1 Live'
 
   const algorithmOptions = useMemo(
@@ -112,6 +121,20 @@ export default function App() {
       await dashboard.createVehicle(vehicleType, vehicleStart, vehicleEnd)
       setVehicleStart('')
       setVehicleEnd('')
+    })
+  }
+
+  const spawnRandomVehicle = () => {
+    if (spawningRandomVehicle) return
+    setSpawningRandomVehicle(true)
+    safely(async () => {
+      try {
+        const spawned = await dashboard.spawnRandomVehicle()
+        setLastRandomSpawn(spawned)
+        dashboard.setSelected({ kind: 'vehicle', data: spawned.vehicle })
+      } finally {
+        setSpawningRandomVehicle(false)
+      }
     })
   }
 
@@ -146,9 +169,9 @@ export default function App() {
         </div>
         <div className="live-strip" role="status" aria-live="polite">
           <span className={`connection-dot ${streamConnected ? 'connected' : ''}`} />
-          <span>{streamConnected ? 'Live stream' : 'Reconnecting'}</span>
-          <strong>{snapshot.status}</strong>
-          <b>T+{formatDuration(snapshot.elapsedSeconds)}</b>
+          <span>{viewingHistory ? 'Recorded frame' : streamConnected ? 'Live stream' : 'Reconnecting'}</span>
+          <strong>{viewingHistory ? 'HISTORY' : snapshot.status}</strong>
+          <b>T+{formatDuration(viewFrame.elapsedSeconds)}</b>
         </div>
         <div className="scenario-switcher">
           <label><span>Scenario</span>
@@ -183,9 +206,9 @@ export default function App() {
         <div className="map-stage">
           <TrafficMap
             intersections={intersections}
-            roads={roads}
-            vehicles={snapshot.vehicles || []}
-            events={snapshot.trafficEvents || []}
+            roads={viewRoads}
+            vehicles={viewFrame.vehicles || []}
+            events={viewFrame.trafficEvents || []}
             route={route}
             selected={selected}
             onSelect={dashboard.setSelected}
@@ -193,18 +216,19 @@ export default function App() {
             captureIntersection={captureIntersection}
             draftIntersection={draftPoint}
             highlightedRoadIds={highlightedRoadIds}
-            vehicleAnimationDuration={tickDelay}
             onMapCoordinate={(point) => {
               setDraftPoint(point)
               setCaptureIntersection(false)
             }}
           />
-          <div className="map-metrics" aria-label="Live traffic summary">
-            <Metric label="Fleet" value={snapshot.vehicles?.length || 0} />
-            <Metric label="Average trip" value={formatDuration(traffic.averageTravelTimeSeconds)} />
+          <div className="map-metrics" aria-label={viewingHistory ? 'Historical traffic summary' : 'Live traffic summary'}>
+            <Metric label="Fleet" value={viewFrame.vehicles?.length || 0} />
+            <Metric label={viewingHistory ? 'Frame time' : 'Average trip'}
+              value={viewingHistory ? formatDuration(viewFrame.elapsedSeconds) : formatDuration(traffic.averageTravelTimeSeconds)} />
             <Metric label="Network pressure" value={`${pressure}%`} tone={pressure > 65 ? 'danger' : ''} />
-            <Metric label="Active incidents" value={activeEvents.length} tone={activeEvents.length ? 'warning' : ''} />
-            <Metric label="Arrived" value={traffic.arrivedVehicles || 0} />
+            <Metric label="Active incidents" value={viewActiveEvents.length} tone={viewActiveEvents.length ? 'warning' : ''} />
+            <Metric label={viewingHistory ? 'Frame ID' : 'Arrived'}
+              value={viewingHistory ? viewFrame.frameId : traffic.arrivedVehicles || 0} />
           </div>
         </div>
 
@@ -250,11 +274,21 @@ export default function App() {
             </div>
           </details>
 
-          <details className="rail-section">
+          <details className="rail-section" open>
             <summary><span>Fleet</span><b>{snapshot.vehicles?.length || 0} vehicles</b></summary>
             <div className="section-body">
+              <button className="spawn-random-button wide" onClick={spawnRandomVehicle}
+                disabled={loading || spawningRandomVehicle || intersections.length < 2}>
+                {spawningRandomVehicle ? 'Spawning…' : 'Spawn random test vehicle'}
+              </button>
+              {lastRandomSpawn ? <p className="spawn-result" role="status">
+                <strong>{lastRandomSpawn.vehicle.id}</strong>
+                <span>{lastRandomSpawn.type} · {lastRandomSpawn.startIntersectionId} → {lastRandomSpawn.destinationIntersectionId}</span>
+                {snapshot.status === 'RUNNING' ? <small>Live: movement begins on simulation ticks.</small>
+                  : <small>Press Start or Resume to move this vehicle.</small>}
+              </p> : <p className="spawn-hint">Creates one real car or motorcycle on a reachable cross-map route.</p>}
               <div className="three-fields">
-                <Field label="Type"><select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}><option>CAR</option><option>BUS</option><option>EMERGENCY</option></select></Field>
+                <Field label="Type"><select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}><option>CAR</option><option>MOTORCYCLE</option><option>BUS</option><option>EMERGENCY</option></select></Field>
                 <Field label="Start"><select value={vehicleStart} onChange={(e) => setVehicleStart(e.target.value)}><option value="">Choose</option>{intersections.map((i) => <option key={i.id}>{i.id}</option>)}</select></Field>
                 <Field label="Destination"><select value={vehicleEnd} onChange={(e) => setVehicleEnd(e.target.value)}><option value="">Choose</option>{intersections.map((i) => <option key={i.id}>{i.id}</option>)}</select></Field>
               </div>
@@ -331,11 +365,10 @@ export default function App() {
         </aside>
       </section>
 
-      <footer className="tick-rail">
-        <div><span>Simulation timeline</span><strong>{formatDuration(snapshot.elapsedSeconds)}</strong></div>
-        <div className="timeline-track"><i style={{ width: `${Math.min(100, (Number(snapshot.elapsedSeconds || 0) % 100))}%` }} /></div>
-        <span>{roads.length} roads</span><span>{intersections.length} junctions</span><span>{activeEvents.length} incidents</span>
-      </footer>
+      <TimelineScrubber timeline={timeline} frame={viewFrame} viewingHistory={viewingHistory}
+        loading={historyLoading} onSeek={dashboard.seekFrame} onLive={dashboard.returnToLive}
+        roadCount={roads.length} intersectionCount={intersections.length}
+        incidentCount={viewActiveEvents.length} />
     </main>
   )
 }

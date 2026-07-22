@@ -9,9 +9,15 @@ import {
   vehicleApi,
 } from '../api/trafficAPI'
 import { buildDemoTraffic, createBoundaryTripPlanner, replacementDelayMs } from '../demoTraffic'
+import { randomBoundarySpawnPolicy } from '../spawnPolicies'
 
 const EMPTY_SNAPSHOT = {
-  tick: 0, elapsedSeconds: 0, status: 'READY', vehicles: [], trafficEvents: [], roadStates: [], trafficSignals: [],
+  timelineId: null, frameId: null, tick: 0, elapsedSeconds: 0, status: 'READY',
+  vehicles: [], trafficEvents: [], roadStates: [], trafficSignals: [],
+}
+const EMPTY_TIMELINE = {
+  timelineId: null, firstElapsedSeconds: 0, lastElapsedSeconds: 0,
+  retainedFrameCount: 0, retentionLimit: 0, recordedSeconds: [],
 }
 const DEMO_VEHICLE_IDS_KEY = 'traffic-demo-vehicle-ids-v1'
 
@@ -38,6 +44,9 @@ export function useTrafficDashboard() {
   const [scenarios, setScenarios] = useState([])
   const [activeScenario, setActiveScenario] = useState('district-1')
   const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT)
+  const [timeline, setTimeline] = useState(EMPTY_TIMELINE)
+  const [historicalFrame, setHistoricalFrame] = useState(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [statistics, setStatistics] = useState({ traffic: {}, algorithms: [] })
   const [algorithms, setAlgorithms] = useState([])
   const [route, setRoute] = useState(null)
@@ -58,6 +67,10 @@ export function useTrafficDashboard() {
   const nextDemoTripRef = useRef(0)
   const pauseStartedAtRef = useRef(null)
   const demoGenerationRef = useRef(0)
+  const timelineIdRef = useRef(null)
+  const timelineRequestRef = useRef(0)
+  const historicalFrameRef = useRef(null)
+  const historyRequestRef = useRef(0)
   const boundaryPlanner = useMemo(
     () => createBoundaryTripPlanner(intersections, roads),
     [intersections, roads],
@@ -72,15 +85,40 @@ export function useTrafficDashboard() {
     setRoads(nextRoads)
   }, [])
 
+  const applyTimeline = useCallback((nextTimeline) => {
+    const currentTimelineId = timelineIdRef.current
+    const activeHistoricalFrame = historicalFrameRef.current
+    const changedTimeline = currentTimelineId && nextTimeline.timelineId !== currentTimelineId
+    const evictedFrame = activeHistoricalFrame
+      && nextTimeline.timelineId === activeHistoricalFrame.timelineId
+      && activeHistoricalFrame.elapsedSeconds < nextTimeline.firstElapsedSeconds - 1e-9
+    if (changedTimeline || evictedFrame) {
+      historyRequestRef.current += 1
+      historicalFrameRef.current = null
+      setHistoricalFrame(null)
+    }
+    timelineIdRef.current = nextTimeline.timelineId
+    setTimeline(nextTimeline)
+  }, [])
+
+  const refreshTimeline = useCallback(async () => {
+    const requestId = timelineRequestRef.current + 1
+    timelineRequestRef.current = requestId
+    const nextTimeline = await simulationApi.frameTimeline()
+    if (requestId === timelineRequestRef.current) applyTimeline(nextTimeline)
+    return nextTimeline
+  }, [applyTimeline])
+
   const refreshLiveData = useCallback(async () => {
     const [nextSnapshot, nextStatistics] = await Promise.all([
       simulationApi.snapshot(),
       statisticsApi.all(),
+      refreshTimeline(),
     ])
     setSnapshot(nextSnapshot)
     setStatistics(nextStatistics)
     return nextSnapshot
-  }, [])
+  }, [refreshTimeline])
 
   const refreshAll = useCallback(async () => {
     setLoading(true)
@@ -110,6 +148,13 @@ export function useTrafficDashboard() {
       const nextSnapshot = JSON.parse(event.data)
       setSnapshot(nextSnapshot)
       setStreamConnected(true)
+      if (nextSnapshot.timelineId
+        && timelineIdRef.current
+        && nextSnapshot.timelineId !== timelineIdRef.current) {
+        historicalFrameRef.current = null
+        setHistoricalFrame(null)
+      }
+      refreshTimeline().catch(() => {})
       if (nextSnapshot.tick % 2 === 0) {
         statisticsApi.all().then(setStatistics).catch(() => {})
       }
@@ -121,7 +166,7 @@ export function useTrafficDashboard() {
       stream.removeEventListener('snapshot', handleSnapshot)
       stream.close()
     }
-  }, [])
+  }, [refreshTimeline])
 
   useEffect(() => {
     if (streamConnected) return undefined
@@ -239,6 +284,7 @@ export function useTrafficDashboard() {
   }, [intersections, refreshLiveData, roads])
 
   const replaceArrivedDemoVehicles = useCallback(async (vehicleIds) => {
+    const replacementErrors = []
     await Promise.all(vehicleIds.map(async (vehicleId) => {
       const pending = pendingReplacementsRef.current.get(vehicleId)
       if (!pending || replacementsInFlightRef.current.has(vehicleId)) return
@@ -261,17 +307,30 @@ export function useTrafficDashboard() {
           demoVehicleIdsRef.current.add(replacement.id)
           persistDemoVehicleIds(demoVehicleIdsRef.current)
         }
-        await vehicleApi.remove(vehicleId)
+        try {
+          await vehicleApi.remove(vehicleId)
+        } catch (removeError) {
+          // The simulator may expire an arrived vehicle before this delayed replacement runs.
+          // Treat that lifecycle race as an already-completed delete, but surface every other error.
+          if (removeError.status !== 404) throw removeError
+        }
         demoVehicleIdsRef.current.delete(vehicleId)
         pendingReplacementsRef.current.delete(vehicleId)
         persistDemoVehicleIds(demoVehicleIdsRef.current)
       } catch (nextError) {
         pending.dueAt = Date.now() + 1000
-        setError(`Could not replace boundary traffic: ${nextError.message}`)
+        replacementErrors.push(nextError)
       } finally {
         replacementsInFlightRef.current.delete(vehicleId)
       }
     }))
+    if (replacementErrors.length > 0) {
+      setError(`Could not replace boundary traffic: ${replacementErrors[0].message}`)
+    } else if (vehicleIds.length > 0) {
+      setError((current) => (
+        current.startsWith('Could not replace boundary traffic:') ? '' : current
+      ))
+    }
     await refreshLiveData()
   }, [boundaryPlanner, refreshLiveData])
 
@@ -287,7 +346,11 @@ export function useTrafficDashboard() {
 
     const activeVehicles = snapshot.vehicles.filter((item) => item.status !== 'ARRIVED')
     if (activeVehicles.length > 0) {
-      if (snapshot.status === 'READY') {
+      if (snapshot.status === 'RUNNING') {
+        // A page reload reconnects to the server-owned playback. Keep the local
+        // boundary-fleet lifecycle active instead of silently stopping replacements.
+        setAutoRun(true)
+      } else if (snapshot.status === 'READY') {
         setAutoRun(true)
         updateStatus(simulationApi.start).catch(() => {})
       } else if (snapshot.status === 'PAUSED') {
@@ -303,7 +366,7 @@ export function useTrafficDashboard() {
   useEffect(() => {
     let trackedIdsChanged = false
     snapshot.vehicles.forEach((vehicle) => {
-      if (/^(CAR|BUS|EMS)-\d+$/.test(vehicle.id) && !demoVehicleIdsRef.current.has(vehicle.id)) {
+      if (/^(CAR|MOTO|BUS|EMS)-\d+$/.test(vehicle.id) && !demoVehicleIdsRef.current.has(vehicle.id)) {
         demoVehicleIdsRef.current.add(vehicle.id)
         trackedIdsChanged = true
       }
@@ -343,10 +406,55 @@ export function useTrafficDashboard() {
       const nextSnapshot = await runAction(simulationApi.tick, { refresh: false })
       setSnapshot(nextSnapshot)
       statisticsApi.all().then(setStatistics).catch((nextError) => setError(nextError.message))
+      refreshTimeline().catch((nextError) => setError(nextError.message))
     } finally {
       tickingRef.current = false
     }
-  }, [runAction])
+  }, [refreshTimeline, runAction])
+
+  const seekFrame = useCallback(async (elapsedSeconds) => {
+    const requestId = historyRequestRef.current + 1
+    historyRequestRef.current = requestId
+    setHistoryLoading(true)
+    setError('')
+    try {
+      const frame = await simulationApi.frameAt(elapsedSeconds)
+      if (requestId !== historyRequestRef.current) return null
+      if (timelineIdRef.current && frame.timelineId !== timelineIdRef.current) {
+        throw new Error('The simulation timeline changed while loading this frame.')
+      }
+      historicalFrameRef.current = frame
+      setHistoricalFrame(frame)
+      setSelected(null)
+      return frame
+    } catch (nextError) {
+      if (requestId === historyRequestRef.current) setError(nextError.message)
+      return null
+    } finally {
+      if (requestId === historyRequestRef.current) setHistoryLoading(false)
+    }
+  }, [])
+
+  const returnToLive = useCallback(() => {
+    historyRequestRef.current += 1
+    historicalFrameRef.current = null
+    setHistoricalFrame(null)
+    setHistoryLoading(false)
+    setSelected(null)
+  }, [])
+
+  const spawnRandomVehicle = useCallback(async () => {
+    const request = randomBoundarySpawnPolicy.plan({ boundaryPlanner })
+    if (historicalFrameRef.current) returnToLive()
+    const vehicle = await runAction(() => vehicleApi.create(
+      request.type,
+      request.startIntersectionId,
+      request.destinationIntersectionId,
+    ))
+    return { ...request, vehicle }
+  }, [boundaryPlanner, returnToLive, runAction])
+
+  const viewFrame = historicalFrame || snapshot
 
   const roadStateById = useMemo(
     () => new Map((snapshot.roadStates || []).map((road) => [road.id, road])),
@@ -355,6 +463,14 @@ export function useTrafficDashboard() {
   const liveRoads = useMemo(
     () => roads.map((road) => ({ ...road, ...roadStateById.get(road.id) })),
     [roadStateById, roads],
+  )
+  const viewRoadStateById = useMemo(
+    () => new Map((viewFrame.roadStates || []).map((road) => [road.id, road])),
+    [viewFrame.roadStates],
+  )
+  const viewRoads = useMemo(
+    () => roads.map((road) => ({ ...road, ...viewRoadStateById.get(road.id) })),
+    [roads, viewRoadStateById],
   )
 
   const editNetwork = useCallback(async (action) => {
@@ -403,9 +519,14 @@ export function useTrafficDashboard() {
   return {
     intersections,
     roads: liveRoads,
+    viewRoads,
     scenarios,
     activeScenario,
     snapshot,
+    viewFrame,
+    timeline,
+    viewingHistory: historicalFrame !== null,
+    historyLoading,
     statistics,
     algorithms,
     route,
@@ -429,6 +550,8 @@ export function useTrafficDashboard() {
     resume: resumeSimulation,
     reset: resetSimulation,
     advanceTick,
+    seekFrame,
+    returnToLive,
     setPlaybackInterval: async (milliseconds) => {
       setTickDelay(milliseconds)
       const status = await runAction(
@@ -452,6 +575,7 @@ export function useTrafficDashboard() {
       if (firstSuccess) setRoute(firstSuccess.result)
     },
     createVehicle: async (type, start, destination) => runAction(() => vehicleApi.create(type, start, destination)),
+    spawnRandomVehicle,
     removeVehicle: async (id) => runAction(() => vehicleApi.remove(id)),
     createEvent: async (payload) => runAction(() => trafficEventApi.create(payload)),
     updateEvent: async (id, status) => runAction(() => trafficEventApi.updateStatus(id, status)),

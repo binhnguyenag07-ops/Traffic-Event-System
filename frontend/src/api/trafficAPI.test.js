@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { experimentApi, scenarioApi } from './trafficAPI'
+import { experimentApi, request, scenarioApi, simulationApi } from './trafficAPI'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -26,5 +26,28 @@ describe('extended traffic API', () => {
 
     await expect(experimentApi.latest()).resolves.toEqual({ seed: 42 })
     expect(fetchMock).toHaveBeenCalledWith('/api/experiments/latest', expect.any(Object))
+  })
+
+  it('loads an authoritative frame at a recorded simulation second', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      timelineId: 'timeline-1', frameId: 12, elapsedSeconds: 3.5,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await expect(simulationApi.frameAt(3.5)).resolves.toMatchObject({ frameId: 12 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/simulation/trace/frames/at?elapsedSeconds=3.5',
+      expect.any(Object),
+    )
+  })
+
+  it('preserves the HTTP status on API errors', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      error: 'Vehicle not found: EMS-01',
+    }), { status: 404, headers: { 'Content-Type': 'application/json' } }))
+
+    await expect(request('/vehicles/EMS-01', { method: 'DELETE' })).rejects.toMatchObject({
+      message: 'Vehicle not found: EMS-01',
+      status: 404,
+    })
   })
 })
