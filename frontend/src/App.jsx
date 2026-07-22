@@ -14,8 +14,8 @@ const PREFERENCES = [
 const EVENT_TYPES = [
   ['CONGESTION', 'Congestion'],
   ['ACCIDENT', 'Accident'],
+  ['BREAKDOWN', 'Vehicle breakdown'],
   ['ROAD_CLOSURE', 'Road closure'],
-  ['TRAFFIC_LIGHT_DELAY', 'Signal delay'],
 ]
 
 function Metric({ label, value, tone = '' }) {
@@ -69,8 +69,10 @@ export default function App() {
   const [vehicleEnd, setVehicleEnd] = useState('')
   const [eventType, setEventType] = useState('CONGESTION')
   const [eventRoad, setEventRoad] = useState('')
-  const [eventDuration, setEventDuration] = useState(8)
-  const [signalDelay, setSignalDelay] = useState(3)
+  const [eventDuration, setEventDuration] = useState(30)
+  const [eventPositionPercent, setEventPositionPercent] = useState(50)
+  const [eventLaneIndex, setEventLaneIndex] = useState('')
+  const [eventVehicleId, setEventVehicleId] = useState('')
   const [captureIntersection, setCaptureIntersection] = useState(false)
   const [draftPoint, setDraftPoint] = useState(null)
   const [highlightedRoadIds, setHighlightedRoadIds] = useState([])
@@ -115,17 +117,23 @@ export default function App() {
 
   const addEvent = () => {
     if (!eventRoad) return
-    const value = eventType === 'TRAFFIC_LIGHT_DELAY' ? Number(signalDelay)
-      : eventType === 'ROAD_CLOSURE' ? undefined : 0.55
+    if (eventType === 'BREAKDOWN' && !eventVehicleId) return
+    const isPositioned = eventType === 'ACCIDENT' || eventType === 'BREAKDOWN'
+    const value = eventType === 'ROAD_CLOSURE' || eventType === 'BREAKDOWN' ? undefined : 0.55
+    const elapsedSeconds = Number(snapshot.elapsedSeconds ?? snapshot.tick ?? 0)
     safely(async () => {
       await dashboard.createEvent({
         type: eventType,
         affectedRoadId: eventRoad,
-        startTick: snapshot.tick + 1,
-        durationTicks: Number(eventDuration),
+        startTimeSeconds: elapsedSeconds,
+        durationSeconds: Number(eventDuration),
         value,
+        affectedVehicleId: eventType === 'BREAKDOWN' ? eventVehicleId : undefined,
+        positionAlongRoad: isPositioned ? Number(eventPositionPercent) / 100 : undefined,
+        blockedLaneIndexes: isPositioned && eventLaneIndex !== '' ? [Number(eventLaneIndex)] : undefined,
       })
       setEventRoad('')
+      setEventVehicleId('')
     })
   }
 
@@ -140,7 +148,7 @@ export default function App() {
           <span className={`connection-dot ${streamConnected ? 'connected' : ''}`} />
           <span>{streamConnected ? 'Live stream' : 'Reconnecting'}</span>
           <strong>{snapshot.status}</strong>
-          <b>T+{String(snapshot.tick).padStart(4, '0')}</b>
+          <b>T+{formatDuration(snapshot.elapsedSeconds)}</b>
         </div>
         <div className="scenario-switcher">
           <label><span>Scenario</span>
@@ -274,13 +282,23 @@ export default function App() {
               <div className="three-fields">
                 <Field label="Type"><select value={eventType} onChange={(e) => setEventType(e.target.value)}>{EVENT_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
                 <Field label="Road"><select value={eventRoad} onChange={(e) => setEventRoad(e.target.value)}><option value="">Choose</option>{roads.map((road) => <option key={road.id}>{road.id}</option>)}</select></Field>
-                <Field label="Ticks"><input type="number" min="1" max="50" value={eventDuration} onChange={(e) => setEventDuration(e.target.value)} /></Field>
+                <Field label="Duration (s)"><input type="number" min="1" max="3600" value={eventDuration} onChange={(e) => setEventDuration(e.target.value)} /></Field>
               </div>
-              {eventType === 'TRAFFIC_LIGHT_DELAY' ? <Field label="Wait ticks">
-                <input type="number" min="1" max="50" value={signalDelay}
-                  onChange={(event) => setSignalDelay(event.target.value)} />
-              </Field> : null}
-              <button className="primary wide" onClick={addEvent} disabled={!eventRoad}>Schedule incident</button>
+              {eventType === 'ACCIDENT' || eventType === 'BREAKDOWN' ? <div className="three-fields">
+                <Field label="Position (%)"><input type="number" min="0" max="100" value={eventPositionPercent}
+                  onChange={(event) => setEventPositionPercent(event.target.value)} /></Field>
+                <Field label="Lane (optional)"><input type="number" min="0" value={eventLaneIndex}
+                  placeholder="All" onChange={(event) => setEventLaneIndex(event.target.value)} /></Field>
+                {eventType === 'BREAKDOWN' ? <Field label="Vehicle"><select value={eventVehicleId}
+                  onChange={(event) => {
+                    setEventVehicleId(event.target.value)
+                    const vehicleRoadId = snapshot.vehicles?.find((vehicle) => vehicle.id === event.target.value)?.occupiedRoadId
+                    if (vehicleRoadId) setEventRoad(vehicleRoadId)
+                  }}><option value="">Choose</option>
+                  {snapshot.vehicles?.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.id}</option>)}</select></Field> : <span />}
+              </div> : null}
+              <button className="primary wide" onClick={addEvent}
+                disabled={!eventRoad || (eventType === 'BREAKDOWN' && !eventVehicleId)}>Schedule incident</button>
             </div>
           </details>
 
@@ -314,8 +332,8 @@ export default function App() {
       </section>
 
       <footer className="tick-rail">
-        <div><span>Simulation timeline</span><strong>Tick {snapshot.tick}</strong></div>
-        <div className="timeline-track"><i style={{ width: `${Math.min(100, (snapshot.tick % 100))}%` }} /></div>
+        <div><span>Simulation timeline</span><strong>{formatDuration(snapshot.elapsedSeconds)}</strong></div>
+        <div className="timeline-track"><i style={{ width: `${Math.min(100, (Number(snapshot.elapsedSeconds || 0) % 100))}%` }} /></div>
         <span>{roads.length} roads</span><span>{intersections.length} junctions</span><span>{activeEvents.length} incidents</span>
       </footer>
     </main>

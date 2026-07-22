@@ -29,6 +29,13 @@ export class Road {
     this.distance = numberOr(data.distance ?? data.length, 1)
     this.travelTime = numberOr(data.travelTime ?? data.estimatedTravelTime, this.distance)
     this.capacity = numberOr(data.capacity, 10)
+    this.name = textOr(data.name, this.id)
+    this.physicalRoadId = textOr(data.physicalRoadId, this.id)
+    this.laneCount = Math.max(1, Math.trunc(numberOr(data.laneCount, 1)))
+    this.laneWidthMetres = numberOr(data.laneWidthMetres, 3)
+    this.roadWidthMetres = numberOr(data.roadWidthMetres, this.laneCount * this.laneWidthMetres)
+    this.roadClass = data.roadClass || 'UNCLASSIFIED'
+    this.geometry = Array.isArray(data.geometry) ? data.geometry : []
     this.status = data.status || data.roadStatus || 'OPEN'
     this.condition = data.condition || {}
     this.congestionLevel = numberOr(
@@ -221,6 +228,11 @@ export class Vehicle {
     this.status = data.status || 'READY'
     this.route = data.route || []
     this.pathHistory = data.pathHistory || (this.currentIntersectionId ? [this.currentIntersectionId] : [])
+    this.laneIndex = Math.max(0, Math.trunc(numberOr(data.laneIndex, 0)))
+    this.lateralOffsetMetres = numberOr(data.lateralOffsetMetres, 0)
+    this.latitude = data.latitude == null ? null : numberOr(data.latitude, null)
+    this.longitude = data.longitude == null ? null : numberOr(data.longitude, null)
+    this.headingDegrees = data.headingDegrees == null ? null : numberOr(data.headingDegrees, null)
   }
 
   getTypeName() {
@@ -269,8 +281,13 @@ export class TrafficEvent {
     this.id = textOr(data.id ?? data.eventId, '')
     this.type = data.type || data.eventType || 'CONGESTION'
     this.affectedRoadId = textOr(data.affectedRoadId ?? data.roadId, '')
-    this.startTick = numberOr(data.startTick, 0)
-    this.durationTicks = numberOr(data.durationTicks ?? data.duration, 1)
+    this.startTimeSeconds = numberOr(data.startTimeSeconds ?? data.startTick, 0)
+    this.durationSeconds = numberOr(data.durationSeconds ?? data.durationTicks ?? data.duration, 1)
+    this.positionAlongRoad = numberOr(data.positionAlongRoad, 0.5)
+    this.blockedLaneIndexes = Array.isArray(data.blockedLaneIndexes) ? data.blockedLaneIndexes : []
+    this.causingVehicleId = data.causingVehicleId || null
+    this.affectedVehicleId = data.affectedVehicleId || null
+    this.involvedVehicleIds = Array.isArray(data.involvedVehicleIds) ? data.involvedVehicleIds : []
     this.status = data.status || 'ACTIVE'
   }
 
@@ -287,38 +304,40 @@ export class TrafficEvent {
       CONGESTION: '#f59e0b',
       ACCIDENT: '#dc2626',
       ROAD_CLOSURE: '#7c3aed',
-      TRAFFIC_LIGHT_DELAY: '#0891b2',
+      BREAKDOWN: '#be123c',
     }
     return colors[this.type] || '#64748b'
   }
 
-  getProgressPercentage(currentTick = 0) {
-    const elapsed = Math.max(0, currentTick - this.startTick)
-    return Math.min(100, (elapsed / Math.max(1, this.durationTicks)) * 100)
+  getProgressPercentage(elapsedSeconds = 0) {
+    const elapsed = Math.max(0, elapsedSeconds - this.startTimeSeconds)
+    return Math.min(100, (elapsed / Math.max(1, this.durationSeconds)) * 100)
   }
 
-  getTimeRemaining(currentTick = 0) {
-    return Math.max(0, this.startTick + this.durationTicks - currentTick)
+  getTimeRemaining(elapsedSeconds = 0) {
+    return Math.max(0, this.startTimeSeconds + this.durationSeconds - elapsedSeconds)
   }
 
-  isActive(currentTick = 0) {
-    return this.status === 'ACTIVE' && currentTick >= this.startTick && this.getTimeRemaining(currentTick) > 0
+  isActive(elapsedSeconds = 0) {
+    return this.status === 'ACTIVE' && elapsedSeconds >= this.startTimeSeconds && this.getTimeRemaining(elapsedSeconds) > 0
   }
 }
 
 export class SimulationSnapshot {
   constructor(data = {}) {
     this.tick = numberOr(data.tick ?? data.currentTick, 0)
+    this.elapsedSeconds = numberOr(data.elapsedSeconds, this.tick)
     this.vehicles = (data.vehicles || []).map((vehicle) =>
       vehicle instanceof Vehicle ? vehicle : new Vehicle(vehicle)
     )
     this.trafficEvents = (data.trafficEvents || data.events || []).map((event) =>
       event instanceof TrafficEvent ? event : new TrafficEvent(event)
     )
+    this.trafficSignals = Array.isArray(data.trafficSignals) ? data.trafficSignals : []
   }
 
   getActiveEvents() {
-    return this.trafficEvents.filter((event) => event.isActive(this.tick))
+    return this.trafficEvents.filter((event) => event.isActive(this.elapsedSeconds))
   }
 
   getMovingVehicles() {
