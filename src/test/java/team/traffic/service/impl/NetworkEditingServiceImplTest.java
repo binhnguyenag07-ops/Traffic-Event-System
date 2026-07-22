@@ -51,11 +51,16 @@ class NetworkEditingServiceImplTest {
     @Test
     void addsTwoWayRoadsAndFindsThemByIntersection() {
         var outcome = editingService.addRoads(new RoadCreationRequest(
-                "BC", "CB", "B", "C", 40, 25, true, RoadClass.RESIDENTIAL));
+                "BC", "CB", "B", "C", 40, 25, true, RoadClass.RESIDENTIAL,
+                2, 3.4, "Connector", "BC-CB"));
 
         assertThat(outcome.roads()).extracting(Road::getId).containsExactly("BC", "CB");
         assertThat(outcome.roads()).extracting(Road::getRoadClass)
                 .containsOnly(RoadClass.RESIDENTIAL);
+        assertThat(outcome.roads()).extracting(Road::getName).containsOnly("Connector");
+        assertThat(outcome.roads()).extracting(Road::getPhysicalRoadId).containsOnly("BC-CB");
+        assertThat(outcome.roads()).extracting(Road::getLaneCount).containsOnly(2);
+        assertThat(outcome.roads()).extracting(Road::getLaneWidthMetres).containsOnly(3.4);
         assertThat(outcome.geometrySources()).containsExactly("test", "test");
         assertThat(editingService.findConnectedRoads("B").outgoing())
                 .extracting(Road::getId).contains("BC");

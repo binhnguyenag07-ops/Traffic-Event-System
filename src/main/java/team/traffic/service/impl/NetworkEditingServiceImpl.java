@@ -156,9 +156,10 @@ public class NetworkEditingServiceImpl implements NetworkEditingService {
 
     private Road createRoad(String id, Intersection start, Intersection end, RoadCreationRequest request,
             RoadGeometryProvider.RoadGeometryResult geometry) {
-        return new Road(id, start.getId(), end.getId(), geometry.distanceKilometres(), request.speedLimit(),
-                request.capacity(), 0, new RoadCondition(0, 0, RoadStatus.OPEN), geometry.geometry(),
-                request.roadClass());
+        return new Road(id, request.name(), request.physicalRoadId(), start.getId(), end.getId(),
+                geometry.distanceKilometres(), request.speedLimit(), request.capacity(), 0,
+                request.laneCount(), request.laneWidthMetres(),
+                new RoadCondition(0, 0, RoadStatus.OPEN), geometry.geometry(), request.roadClass());
     }
 
     private void validateRoadRequest(RoadCreationRequest request) {
@@ -172,6 +173,10 @@ public class NetworkEditingServiceImpl implements NetworkEditingService {
             throw new IllegalArgumentException("Speed limit must be positive");
         }
         if (request.capacity() <= 0) throw new IllegalArgumentException("Capacity must be positive");
+        if (request.laneCount() <= 0) throw new IllegalArgumentException("Lane count must be positive");
+        if (!Double.isFinite(request.laneWidthMetres()) || request.laneWidthMetres() <= 0) {
+            throw new IllegalArgumentException("Lane width must be positive");
+        }
         if (request.bidirectional() && (request.reverseRoadId() == null || request.reverseRoadId().isBlank()
                 || request.id().equals(request.reverseRoadId()))) {
             throw new IllegalArgumentException("A distinct reverse road id is required");

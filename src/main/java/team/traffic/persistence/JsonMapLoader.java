@@ -140,12 +140,16 @@ public class JsonMapLoader implements MapLoader {
 
     static class RoadData {
         public String id;
+        public String name;
+        public String physicalRoadId;
         public String startIntersectionId;
         public String endIntersectionId;
         public Double distance;
         public Double speedLimit;
         public Integer capacity;
         public Integer currentVehicleCount;
+        public Integer laneCount;
+        public Double laneWidthMetres;
         public Double congestionLevel;
         public Double vehicleDensity;
         public RoadStatus roadStatus;
@@ -165,15 +169,27 @@ public class JsonMapLoader implements MapLoader {
                     requireField(roadStatus, "roadStatus"));
             return new Road(
                     id,
+                    defaultIfBlank(name, id),
+                    defaultIfBlank(physicalRoadId, defaultPhysicalRoadId(startIntersectionId, endIntersectionId)),
                     startIntersectionId,
                     endIntersectionId,
                     requireField(distance, "distance"),
                     requireField(speedLimit, "speedLimit"),
                     requiredCapacity,
                     requiredVehicleCount,
+                    laneCount == null
+                            ? normalizedRoadClass().getDefaultLaneCount()
+                            : laneCount,
+                    laneWidthMetres == null
+                            ? normalizedRoadClass().getDefaultLaneWidthMetres()
+                            : laneWidthMetres,
                     condition,
                     toGeometry(geometry),
-                    roadClass == null ? RoadClass.UNCLASSIFIED : roadClass);
+                    normalizedRoadClass());
+        }
+
+        private RoadClass normalizedRoadClass() {
+            return roadClass == null ? RoadClass.UNCLASSIFIED : roadClass;
         }
 
         private List<GeoPoint> toGeometry(List<List<Double>> coordinates) {
@@ -188,6 +204,19 @@ public class JsonMapLoader implements MapLoader {
                 return new GeoPoint(coordinate.get(0), coordinate.get(1));
             }).toList();
         }
+    }
+
+    private static String defaultIfBlank(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value;
+    }
+
+    private static String defaultPhysicalRoadId(String firstIntersectionId, String secondIntersectionId) {
+        if (firstIntersectionId == null || secondIntersectionId == null) {
+            return "legacy-road";
+        }
+        return firstIntersectionId.compareTo(secondIntersectionId) <= 0
+                ? firstIntersectionId + "<->" + secondIntersectionId
+                : secondIntersectionId + "<->" + firstIntersectionId;
     }
 
     private static <T> T requireField(T value, String fieldName) {
