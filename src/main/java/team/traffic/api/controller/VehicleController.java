@@ -10,6 +10,7 @@ import team.traffic.service.VehicleService;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class VehicleController {
@@ -80,7 +81,10 @@ public class VehicleController {
         try {
             type = VehicleType.valueOf(request.type.toUpperCase());
         } catch (IllegalArgumentException e) {
-            ctx.status(400).json(error("Invalid type. Valid values: CAR, BUS, EMERGENCY"));
+            String validTypes = Arrays.stream(VehicleType.values())
+                    .map(Enum::name)
+                    .collect(Collectors.joining(", "));
+            ctx.status(400).json(error("Invalid type. Valid values: " + validTypes));
             return;
         }
 

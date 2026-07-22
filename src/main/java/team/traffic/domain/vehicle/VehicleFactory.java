@@ -7,6 +7,7 @@ public class VehicleFactory {
     public Vehicle createVehicle(VehicleType type, String currentIntersectionId, String destinationIntersectionId) {
         return switch (type) {
             case CAR -> createCar(currentIntersectionId, destinationIntersectionId);
+            case MOTORCYCLE -> createMotorcycle(currentIntersectionId, destinationIntersectionId);
             case BUS -> createBus(currentIntersectionId, destinationIntersectionId);
             case EMERGENCY -> createEmergencyVehicle(currentIntersectionId, destinationIntersectionId);
         };
@@ -19,6 +20,7 @@ public class VehicleFactory {
             String destinationIntersectionId) {
         return switch (type) {
             case CAR -> createCar(id, currentIntersectionId, destinationIntersectionId);
+            case MOTORCYCLE -> createMotorcycle(id, currentIntersectionId, destinationIntersectionId);
             case BUS -> createBus(id, currentIntersectionId, destinationIntersectionId);
             case EMERGENCY -> createEmergencyVehicle(id, currentIntersectionId, destinationIntersectionId);
         };
@@ -36,6 +38,12 @@ public class VehicleFactory {
                 destinationIntersectionId);
     }
 
+    public Motorcycle createMotorcycle(String currentIntersectionId, String destinationIntersectionId) {
+        return createMotorcycle("motorcycle-" + currentIntersectionId + "-" + destinationIntersectionId,
+                currentIntersectionId,
+                destinationIntersectionId);
+    }
+
     public EmergencyVehicle createEmergencyVehicle(String currentIntersectionId, String destinationIntersectionId) {
         return createEmergencyVehicle("emergency-" + currentIntersectionId + "-" + destinationIntersectionId,
                 currentIntersectionId,
@@ -44,6 +52,10 @@ public class VehicleFactory {
 
     public Car createCar(String id, String currentIntersectionId, String destinationIntersectionId) {
         return new Car(id, currentIntersectionId, destinationIntersectionId);
+    }
+
+    public Motorcycle createMotorcycle(String id, String currentIntersectionId, String destinationIntersectionId) {
+        return new Motorcycle(id, currentIntersectionId, destinationIntersectionId);
     }
 
     public Bus createBus(String id, String currentIntersectionId, String destinationIntersectionId) {
