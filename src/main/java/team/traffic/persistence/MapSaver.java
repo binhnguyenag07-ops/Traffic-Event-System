@@ -96,12 +96,16 @@ public class MapSaver {
 
     static class RoadData {
         public String id;
+        public String name;
+        public String physicalRoadId;
         public String startIntersectionId;
         public String endIntersectionId;
         public double distance;
         public double speedLimit;
         public int capacity;
         public int currentVehicleCount;
+        public int laneCount;
+        public double laneWidthMetres;
         public double congestionLevel;
         public double vehicleDensity;
         public RoadStatus roadStatus;
@@ -112,12 +116,16 @@ public class MapSaver {
             RoadCondition condition = road.getCondition();
             RoadData data = new RoadData();
             data.id = road.getId();
+            data.name = road.getName();
+            data.physicalRoadId = road.getPhysicalRoadId();
             data.startIntersectionId = road.getStartIntersectionId();
             data.endIntersectionId = road.getEndIntersectionId();
             data.distance = road.getDistance();
             data.speedLimit = road.getSpeedLimit();
             data.capacity = road.getCapacity();
             data.currentVehicleCount = road.getCurrentVehicleCount();
+            data.laneCount = road.getLaneCount();
+            data.laneWidthMetres = road.getLaneWidthMetres();
             data.congestionLevel = condition.getCongestionLevel();
             data.vehicleDensity = condition.getVehicleDensity();
             data.roadStatus = condition.getRoadStatus();

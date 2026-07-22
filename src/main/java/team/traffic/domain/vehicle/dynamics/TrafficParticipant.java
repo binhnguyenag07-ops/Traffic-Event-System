@@ -36,4 +36,19 @@ public interface TrafficParticipant {
 
     /** Behaviour parameters of whoever is driving. */
     DriverProfile getDriverProfile();
+
+    /** Zero-based lane index. Legacy participants occupy lane zero. */
+    default int getLaneIndex() {
+        return 0;
+    }
+
+    /** Maximum comfortable braking magnitude in metres per second squared. */
+    default double getDecelerationMps2() {
+        return 4.5;
+    }
+
+    /** Maximum comfortable acceleration in metres per second squared. */
+    default double getAccelerationMps2() {
+        return 2.5;
+    }
 }

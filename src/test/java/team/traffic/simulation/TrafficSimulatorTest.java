@@ -12,7 +12,6 @@ import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.event.TrafficEventStatus;
 import team.traffic.domain.event.TrafficEventType;
-import team.traffic.domain.event.TrafficLightDelayEvent;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
@@ -42,8 +41,8 @@ class TrafficSimulatorTest {
 
         assertThat(event).isInstanceOf(CongestionEvent.class);
         assertThat(event.getAffectedRoadId()).isEqualTo("AB");
-        assertThat(event.getStartTick()).isEqualTo(0);
-        assertThat(event.getDurationTicks()).isEqualTo(10);
+        assertThat(event.getStartTimeSeconds()).isEqualTo(0);
+        assertThat(event.getDurationSeconds()).isEqualTo(10);
         assertThat(event.getStatus()).isEqualTo(TrafficEventStatus.SCHEDULED);
         assertThat(((CongestionEvent) event).getCongestionIncrease()).isEqualTo(0.7);
     }
@@ -64,16 +63,7 @@ class TrafficSimulatorTest {
                 TrafficEventType.ROAD_CLOSURE, "AB", 0, 5, null, null);
 
         assertThat(event).isInstanceOf(RoadClosureEvent.class);
-        assertThat(event.getDurationTicks()).isEqualTo(5);
-    }
-
-    @Test
-    void createTrafficLightDelayEventWithExplicitValue() {
-        TrafficEvent event = simulator.createEvent(
-                TrafficEventType.TRAFFIC_LIGHT_DELAY, "AB", 0, 10, 3.0, null);
-
-        assertThat(event).isInstanceOf(TrafficLightDelayEvent.class);
-        assertThat(((TrafficLightDelayEvent) event).getDelayTicks()).isEqualTo(3);
+        assertThat(event.getDurationSeconds()).isEqualTo(5);
     }
 
     // --- createEvent with defaults ---
@@ -93,14 +83,6 @@ class TrafficSimulatorTest {
 
         assertThat(((AccidentEvent) event).getCapacityReduction()).isEqualTo(0.5);
         assertThat(((AccidentEvent) event).getCausingVehicleId()).isEqualTo("system");
-    }
-
-    @Test
-    void createTrafficLightDelayEventUsesDefaultDelay() {
-        TrafficEvent event = simulator.createEvent(
-                TrafficEventType.TRAFFIC_LIGHT_DELAY, "AB", 0, 10, null, null);
-
-        assertThat(((TrafficLightDelayEvent) event).getDelayTicks()).isEqualTo(5);
     }
 
     // --- convenience overload ---
@@ -180,8 +162,8 @@ class TrafficSimulatorTest {
     }
 
     @Test
-    void advanceTickActivatesScheduledEventWhenStartTickHasAlreadyPassed() {
-        RoadClosureEvent event = new RoadClosureEvent("late-event", "AB", 0, 5);
+    void advanceTickActivatesScheduledEventWhenStartTimeHasAlreadyPassedButWindowIsOpen() {
+        RoadClosureEvent event = new RoadClosureEvent("late-event", "AB", 0, 50);
 
         simulator.advanceTick();
         simulator.advanceTick();
@@ -216,6 +198,24 @@ class TrafficSimulatorTest {
         assertThat(simulator.removeVehicle("car-1")).isTrue();
 
         assertThat(simulator.getCompletedTrips()).isEmpty();
+    }
+
+    @Test
+    void arrivedVehicleRemainsVisibleBrieflyThenIsRemovedAndArchived() {
+        Car vehicle = new Car("car-1", "A", "B");
+        simulator.addVehicle(vehicle);
+        vehicle.moveTo("B");
+
+        simulator.advanceTick();
+        assertThat(simulator.getVehicles()).extracting(vehicleItem -> vehicleItem.getId())
+                .containsExactly("car-1");
+
+        simulator.advanceTick();
+        simulator.advanceTick();
+
+        assertThat(simulator.getVehicles()).isEmpty();
+        assertThat(simulator.getCompletedTrips()).extracting(trip -> trip.vehicleId())
+                .containsExactly("car-1");
     }
 
     @Test

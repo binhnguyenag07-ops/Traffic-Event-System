@@ -94,15 +94,19 @@ classDiagram
 
     class SimulationClock {
         -long currentTick
-        +tick()
+        -double elapsedSeconds
+        +advance(double simulationSeconds)
         +reset()
         +getCurrentTick() long
+        +getElapsedSeconds() double
     }
 
     class SimulationSnapshot {
         -long tick
+        -double elapsedSeconds
         -SimulationStatus status
         -List~Vehicle~ vehicles
+        -List~TrafficSignal~ signals
         -RoadNetwork roadNetwork
         -TrafficStatistics statistics
     }
@@ -187,3 +191,24 @@ classDiagram
     StatisticsServiceImpl --> TrafficStatistics
     StatisticsServiceImpl --> AlgorithmStatistics
     ```
+
+## 2026 Dynamics Integration Update
+
+The service and frontend ownership boundaries above remain unchanged. The
+cross-layer contract now uses simulation seconds for event timing and exposes
+the physical state required by the lane-aware dynamics owned by Student C:
+
+- snapshots include `elapsedSeconds`, lane-resolved vehicle poses, and active
+  junction signals;
+- event create/update payloads use `startTimeSeconds`, `durationSeconds`,
+  `positionAlongRoad`, and optional `blockedLaneIndexes`;
+- `BREAKDOWN` targets a runtime vehicle, while traffic lights are persistent
+  `TrafficSignal` domain objects rather than road events;
+- the network editor accepts road name, lane count, and lane width while
+  preserving the existing routing/capacity fields;
+- flow samples, fundamental-diagram bins, and per-road time-space points are
+  available below `/api/simulation/trace`.
+
+The old `startTick` and `durationTicks` names remain input-only migration
+aliases. Responses and the React models always use seconds so the public API
+does not expose two competing time units.

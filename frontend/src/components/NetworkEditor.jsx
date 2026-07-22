@@ -20,6 +20,9 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
   const [speedLimit, setSpeedLimit] = useState(40)
   const [capacity, setCapacity] = useState(60)
   const [roadClass, setRoadClass] = useState('RESIDENTIAL')
+  const [laneCount, setLaneCount] = useState(1)
+  const [laneWidthMetres, setLaneWidthMetres] = useState(3)
+  const [roadName, setRoadName] = useState('')
   const [bidirectional, setBidirectional] = useState(true)
   const [connectionId, setConnectionId] = useState('')
   const [connections, setConnections] = useState({ incoming: [], outgoing: [] })
@@ -71,12 +74,15 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
       id: roadId.trim(), reverseRoadId: reverseRoadId.trim(),
       startIntersectionId: roadStart, endIntersectionId: roadEnd,
       speedLimit: Number(speedLimit), capacity: Number(capacity), bidirectional, roadClass,
+      laneCount: Number(laneCount), laneWidthMetres: Number(laneWidthMetres),
+      name: roadName.trim() || roadId.trim(), physicalRoadId: roadId.trim(),
     }), `Road ${roadId.trim()} added`)
     if (result) {
       const sources = result.geometrySources?.join(' / ')
       setNotice(`Road ${roadId.trim()} added · ${sources || 'geometry ready'}`)
       setRoadId('')
       setReverseRoadId('')
+      setRoadName('')
     }
   }
 
@@ -138,6 +144,8 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
             <Field label="Reverse ID"><input value={reverseRoadId} disabled={!bidirectional}
               onChange={(event) => setReverseRoadId(event.target.value)} /></Field>
           </div>
+          <Field label="Road name"><input value={roadName} onChange={(event) => setRoadName(event.target.value)}
+            placeholder="Display name (optional)" /></Field>
           <div className="two-fields">
             <Field label="From"><select value={roadStart} onChange={(event) => setRoadStart(event.target.value)}>
               <option value="">Choose</option>{intersections.map((item) => <option key={item.id}>{item.id}</option>)}</select></Field>
@@ -147,6 +155,12 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
           <div className="two-fields">
             <Field label="Speed km/h"><input type="number" min="1" value={speedLimit} onChange={(event) => setSpeedLimit(event.target.value)} /></Field>
             <Field label="Capacity"><input type="number" min="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
+          </div>
+          <div className="two-fields">
+            <Field label="Lanes"><input type="number" min="1" value={laneCount}
+              onChange={(event) => setLaneCount(event.target.value)} /></Field>
+            <Field label="Lane width (m)"><input type="number" min="2" max="6" step="0.05" value={laneWidthMetres}
+              onChange={(event) => setLaneWidthMetres(event.target.value)} /></Field>
           </div>
           <Field label="Street class"><select value={roadClass} onChange={(event) => setRoadClass(event.target.value)}>
             {ROAD_CLASSES.map((item) => <option key={item} value={item}>{item.replaceAll('_', ' ')}</option>)}

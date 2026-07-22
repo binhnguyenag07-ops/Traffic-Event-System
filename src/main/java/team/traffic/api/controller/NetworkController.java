@@ -101,7 +101,9 @@ public class NetworkController {
                             request.speedLimit, request.capacity, request.bidirectional,
                             request.roadClass == null || request.roadClass.isBlank()
                                     ? RoadClass.UNCLASSIFIED
-                                    : RoadClass.valueOf(request.roadClass.toUpperCase())));
+                                    : RoadClass.valueOf(request.roadClass.toUpperCase()),
+                            request.laneCount, request.laneWidthMetres,
+                            request.name, request.physicalRoadId));
             ctx.status(201).json(Map.of(
                     "roads", outcome.roads().stream().map(this::roadToMap).toList(),
                     "geometrySources", outcome.geometrySources()));
@@ -168,11 +170,16 @@ public class NetworkController {
     private Map<String, Object> roadToMap(Road r) {
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("id", r.getId());
+        result.put("name", r.getName());
+        result.put("physicalRoadId", r.getPhysicalRoadId());
         result.put("startIntersectionId", r.getStartIntersectionId());
         result.put("endIntersectionId", r.getEndIntersectionId());
         result.put("distance", r.getDistance());
         result.put("speedLimit", r.getSpeedLimit());
         result.put("capacity", r.getCapacity());
+        result.put("laneCount", r.getLaneCount());
+        result.put("laneWidthMetres", r.getLaneWidthMetres());
+        result.put("roadWidthMetres", r.getRoadWidthMetres());
         result.put("roadClass", r.getRoadClass().name());
         result.put("currentVehicleCount", r.getCurrentVehicleCount());
         result.put("vehicleDensity", r.getCondition().getVehicleDensity());
@@ -201,6 +208,10 @@ public class NetworkController {
         public int capacity;
         public boolean bidirectional;
         public String roadClass = "UNCLASSIFIED";
+        public Integer laneCount;
+        public Double laneWidthMetres;
+        public String name;
+        public String physicalRoadId;
     }
 
     public static class RoadConditionRequest {

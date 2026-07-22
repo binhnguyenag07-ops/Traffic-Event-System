@@ -58,6 +58,10 @@ export const simulationApi = {
   tick: () => post('/simulation/tick'),
   snapshot: () => get('/simulation/snapshot'),
   status: () => get('/simulation/status'),
+  signals: () => get('/simulation/signals'),
+  flowTrace: () => get('/simulation/trace/flow'),
+  fundamentalDiagram: () => get('/simulation/trace/fundamental'),
+  timeSpaceDiagram: (roadId) => get(`/simulation/trace/roads/${encodeURIComponent(roadId)}/time-space`),
   setParameters: (simulationSecondsPerTick, playbackIntervalMs) =>
     put('/simulation/parameters', { simulationSecondsPerTick, playbackIntervalMs }),
   streamUrl: () => `${API_BASE}/simulation/stream`,

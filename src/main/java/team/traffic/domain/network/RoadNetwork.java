@@ -108,6 +108,16 @@ public class RoadNetwork {
         return List.copyOf(neighbors);
     }
 
+    /** Returns both directed sides, when present, of one physical road. */
+    public List<Road> findRoadsByPhysicalRoadId(String physicalRoadId) {
+        if (physicalRoadId == null || physicalRoadId.isBlank()) {
+            throw new IllegalArgumentException("Physical road id is required");
+        }
+        return roads.values().stream()
+                .filter(road -> physicalRoadId.equals(road.getPhysicalRoadId()))
+                .toList();
+    }
+
     // Replaces the current condition of one road.
     public void updateRoadCondition(String roadId, RoadCondition condition) {
         Road road = requireRoad(roadId);

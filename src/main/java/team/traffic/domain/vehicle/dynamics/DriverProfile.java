@@ -24,13 +24,28 @@ import team.traffic.domain.vehicle.VehicleType;
  * @param speedFactor          multiplier applied to the posted speed limit,
  *                             modelling drivers who habitually travel slightly
  *                             above or below the limit.
+ * @param lateralAccelerationMps2 comfortable lateral acceleration in a curve
+ * @param politeness           weight given to the inconvenience imposed on
+ *                             neighbouring vehicles during a lane change
  */
 public record DriverProfile(
         double minimumGapMetres,
         double reactionTimeSeconds,
         double imperfection,
         double gapAcceptanceSeconds,
-        double speedFactor) {
+        double speedFactor,
+        double lateralAccelerationMps2,
+        double politeness) {
+
+    public DriverProfile(
+            double minimumGapMetres,
+            double reactionTimeSeconds,
+            double imperfection,
+            double gapAcceptanceSeconds,
+            double speedFactor) {
+        this(minimumGapMetres, reactionTimeSeconds, imperfection,
+                gapAcceptanceSeconds, speedFactor, 2.5, 0.35);
+    }
 
     public DriverProfile {
         requireNonNegative("Minimum gap", minimumGapMetres);
@@ -40,6 +55,10 @@ public record DriverProfile(
         }
         requireNonNegative("Gap acceptance", gapAcceptanceSeconds);
         requirePositive("Speed factor", speedFactor);
+        requirePositive("Lateral acceleration", lateralAccelerationMps2);
+        if (!Double.isFinite(politeness) || politeness < 0 || politeness > 1) {
+            throw new IllegalArgumentException("Politeness must be between 0 and 1.");
+        }
     }
 
     /**
@@ -54,10 +73,26 @@ public record DriverProfile(
             throw new IllegalArgumentException("Vehicle type is required.");
         }
         return switch (type) {
-            case CAR -> new DriverProfile(2.5, 1.0, 0.5, 3.0, 1.0);
-            case BUS -> new DriverProfile(3.0, 1.4, 0.4, 4.5, 0.95);
-            case EMERGENCY -> new DriverProfile(2.0, 0.7, 0.1, 1.5, 1.3);
+            case CAR -> new DriverProfile(2.5, 1.0, 0.5, 3.0, 1.0, 2.5, 0.35);
+            case BUS -> new DriverProfile(3.0, 1.4, 0.4, 4.5, 0.95, 2.0, 0.6);
+            case EMERGENCY -> new DriverProfile(2.0, 0.7, 0.1, 1.5, 1.3, 3.2, 0.0);
         };
+    }
+
+    /** Stable per-vehicle variation that keeps repeated experiments reproducible. */
+    public static DriverProfile variedFor(VehicleType type, String vehicleId) {
+        if (vehicleId == null || vehicleId.isBlank()) {
+            throw new IllegalArgumentException("Vehicle id is required.");
+        }
+        DriverProfile base = forType(type);
+        return new DriverProfile(
+                base.minimumGapMetres * factor(vehicleId, 1),
+                base.reactionTimeSeconds * factor(vehicleId, 2),
+                clamp01(base.imperfection * factor(vehicleId, 3)),
+                base.gapAcceptanceSeconds * factor(vehicleId, 4),
+                base.speedFactor * factor(vehicleId, 5),
+                base.lateralAccelerationMps2 * factor(vehicleId, 6),
+                clamp01(base.politeness * factor(vehicleId, 7)));
     }
 
     /**
@@ -78,5 +113,18 @@ public record DriverProfile(
         if (!Double.isFinite(value) || value < 0) {
             throw new IllegalArgumentException(name + " must not be negative.");
         }
+    }
+
+    private static double factor(String id, int salt) {
+        long mixed = id.hashCode() * 0x9E3779B97F4A7C15L + salt * 0x632BE59BD9B4E019L;
+        mixed ^= mixed >>> 33;
+        mixed *= 0xFF51AFD7ED558CCDL;
+        mixed ^= mixed >>> 33;
+        double unit = (mixed >>> 11) * 0x1.0p-53;
+        return 0.85 + unit * 0.30;
+    }
+
+    private static double clamp01(double value) {
+        return Math.max(0.0, Math.min(1.0, value));
     }
 }

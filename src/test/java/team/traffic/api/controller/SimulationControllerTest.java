@@ -138,6 +138,20 @@ class SimulationControllerTest {
         assertThat(missingVehicle.statusCode()).isEqualTo(404);
     }
 
+    @Test
+    void signalAndFlowDiagnosticEndpointsAreAvailable() throws Exception {
+        HttpResponse<String> signals = get("/api/simulation/signals");
+        HttpResponse<String> flow = get("/api/simulation/trace/flow");
+        HttpResponse<String> fundamental = get("/api/simulation/trace/fundamental");
+        HttpResponse<String> timeSpace = get("/api/simulation/trace/roads/AB/time-space");
+
+        assertThat(signals.statusCode()).isEqualTo(200);
+        assertThat(flow.statusCode()).isEqualTo(200);
+        assertThat(fundamental.statusCode()).isEqualTo(200);
+        assertThat(timeSpace.statusCode()).isEqualTo(200);
+        assertThat(timeSpace.body()).contains("\"roadId\":\"AB\"", "\"points\":[]");
+    }
+
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + app.port() + path))

@@ -46,6 +46,11 @@ class MapSaverTest {
         assertThat(restored.getRoad("R1").getGeometry())
                 .containsExactly(new GeoPoint(10.77, 106.69), new GeoPoint(10.78, 106.70));
         assertThat(restored.getRoad("R1").getRoadClass()).isEqualTo(RoadClass.PRIMARY);
+        assertThat(restored.getRoad("R1").getName()).isEqualTo("Main boulevard");
+        assertThat(restored.getRoad("R1").getPhysicalRoadId()).isEqualTo("main-boulevard");
+        assertThat(restored.getRoad("R1").getLaneCount()).isEqualTo(4);
+        assertThat(restored.getRoad("R1").getLaneWidthMetres()).isEqualTo(3.2);
+        assertThat(restored.getRoad("R1").getRoadWidthMetres()).isEqualTo(12.8);
         assertThat(restored.getRoad("R2").getCondition().getRoadStatus())
                 .isEqualTo(RoadStatus.CONGESTED);
     }
@@ -70,8 +75,8 @@ class MapSaverTest {
                 "R2", "I2", "I1", 12, 40, 80, 20,
                 new RoadCondition(0.4, 0.25, RoadStatus.CONGESTED)));
         network.addRoad(new Road(
-                "R1", "I1", "I2", 10, 50, 100, 0,
-                new RoadCondition(0, 0, RoadStatus.OPEN),
+                "R1", "Main boulevard", "main-boulevard", "I1", "I2", 10, 50, 100, 0,
+                4, 3.2, new RoadCondition(0, 0, RoadStatus.OPEN),
                 List.of(new GeoPoint(10.77, 106.69), new GeoPoint(10.78, 106.70)),
                 RoadClass.PRIMARY));
         return network;

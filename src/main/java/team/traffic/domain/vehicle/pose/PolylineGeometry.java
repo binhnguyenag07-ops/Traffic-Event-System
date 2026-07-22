@@ -96,6 +96,42 @@ public final class PolylineGeometry {
         return bearingBetween(polyline.get(polyline.size() - 2), polyline.get(polyline.size() - 1));
     }
 
+    /**
+     * Radius in metres of the local circumcircle. Straight or underspecified
+     * geometry returns positive infinity, so it imposes no cornering limit.
+     */
+    public static double curvatureRadiusAt(List<GeoPoint> polyline, double fraction) {
+        if (polyline == null || polyline.size() < 3) {
+            return Double.POSITIVE_INFINITY;
+        }
+        double[] lengths = segmentLengths(polyline);
+        double total = sum(lengths);
+        if (total <= 0) return Double.POSITIVE_INFINITY;
+        double remaining = total * clampFraction(fraction);
+        int segment = lengths.length - 1;
+        for (int index = 0; index < lengths.length; index++) {
+            if (remaining <= lengths[index]) {
+                segment = index;
+                break;
+            }
+            remaining -= lengths[index];
+        }
+        int middle = Math.max(1, Math.min(polyline.size() - 2, segment + 1));
+        GeoPoint a = polyline.get(middle - 1);
+        GeoPoint b = polyline.get(middle);
+        GeoPoint c = polyline.get(middle + 1);
+        double sideA = segmentLengthMetres(b, c);
+        double sideB = segmentLengthMetres(a, c);
+        double sideC = segmentLengthMetres(a, b);
+        double semiperimeter = (sideA + sideB + sideC) / 2.0;
+        double areaSquared = semiperimeter
+                * (semiperimeter - sideA)
+                * (semiperimeter - sideB)
+                * (semiperimeter - sideC);
+        if (areaSquared <= 1e-9) return Double.POSITIVE_INFINITY;
+        return sideA * sideB * sideC / (4.0 * Math.sqrt(areaSquared));
+    }
+
     /** Compass bearing from one point to another, in degrees clockwise from north. */
     public static double bearingBetween(GeoPoint from, GeoPoint to) {
         if (from == null || to == null) {
@@ -124,6 +160,20 @@ public final class PolylineGeometry {
     public static double interpolateBearing(double fromDegrees, double toDegrees, double fraction) {
         double turned = fromDegrees + bearingDifference(fromDegrees, toDegrees) * clampFraction(fraction);
         return (turned % 360.0 + 360.0) % 360.0;
+    }
+
+    /** Shifts a geographic point sideways by a metric distance. */
+    public static GeoPoint offsetMetres(GeoPoint point, double headingDegrees, double lateralOffsetMetres) {
+        if (point == null || !Double.isFinite(lateralOffsetMetres) || lateralOffsetMetres == 0) {
+            return point;
+        }
+        double normal = Math.toRadians(headingDegrees + 90.0);
+        double northMetres = Math.cos(normal) * lateralOffsetMetres;
+        double eastMetres = Math.sin(normal) * lateralOffsetMetres;
+        double latitude = point.latitude() + northMetres / METRES_PER_DEGREE_LATITUDE;
+        double longitudeScale = METRES_PER_DEGREE_LATITUDE * Math.cos(Math.toRadians(point.latitude()));
+        double longitude = point.longitude() + (longitudeScale == 0 ? 0 : eastMetres / longitudeScale);
+        return new GeoPoint(latitude, longitude);
     }
 
     /** Straight two-point polyline, used when a road carries no stored shape. */

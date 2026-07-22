@@ -14,7 +14,6 @@ import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.event.TrafficEventStatus;
 import team.traffic.domain.event.TrafficEventType;
-import team.traffic.domain.event.TrafficLightDelayEvent;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
@@ -109,6 +108,17 @@ class TrafficEventServiceImplTest {
 
         assertThat(service.getActiveEvents()).hasSize(1);
         assertThat(service.getActiveEvents().get(0).getId()).isEqualTo("ev-1");
+    }
+
+    @Test
+    void anEventWhoseWholeWindowWasSkippedIsResolvedWithoutBeingApplied() {
+        RoadClosureEvent expired = new RoadClosureEvent("expired", "AB", 2, 3);
+        service.addEvent(expired);
+
+        service.processEventsAt(10, network);
+
+        assertThat(expired.getStatus()).isEqualTo(TrafficEventStatus.RESOLVED);
+        assertThat(network.getRoad("AB").getCondition().getRoadStatus()).isEqualTo(RoadStatus.OPEN);
     }
 
     // --- getEventsByRoad ---
@@ -246,15 +256,23 @@ class TrafficEventServiceImplTest {
     }
 
     @Test
-    void processEventsHandlesTrafficLightDelayEvent() {
-        RoadNetwork dlNetwork = createNetwork(new RoadCondition(0, 0, RoadStatus.OPEN));
-        TrafficLightDelayEvent delay = new TrafficLightDelayEvent("ev-1", "AB", 0, 10, 3);
-        service.addEvent(delay);
-        service.processEventsForTick(0, dlNetwork);
+    void overlappingEventsRebuildRemainingEffectAndRestoreOriginalRoadAtTheEnd() {
+        CongestionEvent shortCongestion = new CongestionEvent("short", "AB", 0, 5, 0.4);
+        RoadClosureEvent longClosure = new RoadClosureEvent("long", "AB", 0, 10);
+        service.addEvent(shortCongestion);
+        service.addEvent(longClosure);
 
-        assertThat(delay.getStatus()).isEqualTo(TrafficEventStatus.ACTIVE);
-        assertThat(dlNetwork.getRoad("AB").getCondition().getCongestionLevel())
-                .isCloseTo(0.3, within(1e-9));
+        service.processEventsAt(0, network);
+        service.processEventsAt(6, network);
+
+        assertThat(shortCongestion.getStatus()).isEqualTo(TrafficEventStatus.RESOLVED);
+        assertThat(longClosure.getStatus()).isEqualTo(TrafficEventStatus.ACTIVE);
+        assertThat(network.getRoad("AB").getCondition().getRoadStatus()).isEqualTo(RoadStatus.CLOSED);
+
+        service.processEventsAt(11, network);
+
+        assertThat(network.getRoad("AB").getCondition().getRoadStatus()).isEqualTo(RoadStatus.OPEN);
+        assertThat(network.getRoad("AB").getCondition().getCongestionLevel()).isZero();
     }
 
     // --- helper ---
