@@ -8,6 +8,8 @@ This file links the final planning documents for the Traffic Event System projec
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Complete project folder structure and layer summary. |
 | [CLASS_DIAGRAM.md](CLASS_DIAGRAM.md) | Complete Mermaid class diagram and design patterns. |
+| [API_CONTRACT.md](API_CONTRACT.md) | Current seconds-based API, lane, event, signal, and trace contracts. |
+| [DEMO_GUIDE.md](DEMO_GUIDE.md) | End-to-end demo flow and observable checks. |
 
 ## Individual Member Planning Files
 

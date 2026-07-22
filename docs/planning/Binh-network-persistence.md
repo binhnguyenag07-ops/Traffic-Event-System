@@ -54,6 +54,9 @@ The network and routing modules use the following units:
 | `distance` | kilometres |
 | `speedLimit` | kilometres per hour |
 | free-flow travel time | hours |
+| `laneCount` | positive integer |
+| `laneWidthMetres` | metres per lane |
+| `roadWidthMetres` | `laneCount * laneWidthMetres` |
 | `congestionLevel` | normalized ratio from `0.0` to `1.0` |
 | `vehicleDensity` | normalized ratio from `0.0` to `1.0` |
 | routing travel cost | equivalent travel hours |
@@ -70,6 +73,20 @@ travelCost = freeFlowTimeHours * conditionMultiplier
 `currentVehicleCount / capacity` ratio is therefore not multiplied into the
 cost again; it is used for capacity checks and traffic statistics. A blocked,
 closed, or full road has an infinite routing cost.
+
+### Lane-layout compatibility extension
+
+The lane upgrade is additive to Binh's density and routing contract. `Road`
+retains its original identity, endpoints, capacity, condition, and travel-cost
+behaviour, while restoring `name`, `physicalRoadId`, `laneCount`, and geometry
+that had been lost during an earlier merge. `laneWidthMetres` is the only new
+physical-width field.
+
+Old JSON remains valid. When lane fields are absent, `JsonMapLoader` derives
+stable defaults from `RoadClass` (3 lanes for primary roads, 2 for secondary
+and tertiary roads, otherwise 1) and uses the class default lane width. Two
+opposite directed roads may share a `physicalRoadId`; this lets junction logic
+count physical branches without changing the directed graph used by routing.
 
 ## Week 4 Road Density Contract
 
@@ -206,10 +223,14 @@ classDiagram
 
     class Road {
         -String id
+        -String name
+        -String physicalRoadId
         -String startIntersectionId
         -String endIntersectionId
         -double distance
         -double speedLimit
+        -int laneCount
+        -double laneWidthMetres
         -int capacity
         -int currentVehicleCount
         -RoadCondition condition
