@@ -19,6 +19,9 @@ import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.network.Building;
+import team.traffic.domain.network.BuildingAccessPoint;
+import team.traffic.domain.network.BuildingType;
 
 class MapSaverTest {
     private final MapSaver saver = new MapSaver();
@@ -53,6 +56,10 @@ class MapSaverTest {
         assertThat(restored.getRoad("R1").getRoadWidthMetres()).isEqualTo(12.8);
         assertThat(restored.getRoad("R2").getCondition().getRoadStatus())
                 .isEqualTo(RoadStatus.CONGESTED);
+        assertThat(restored.getBuilding("B1").getType()).isEqualTo(BuildingType.OFFICE);
+        assertThat(restored.getBuilding("B1").getAccessPoints())
+                .extracting(BuildingAccessPoint::intersectionId)
+                .containsExactly("I1", "I2");
     }
 
     @Test
@@ -79,6 +86,11 @@ class MapSaverTest {
                 4, 3.2, new RoadCondition(0, 0, RoadStatus.OPEN),
                 List.of(new GeoPoint(10.77, 106.69), new GeoPoint(10.78, 106.70)),
                 RoadClass.PRIMARY));
+        network.addBuilding(new Building(
+                "B1", "Office", BuildingType.OFFICE, 0.5, 0.2, 10.77, 106.70,
+                List.of(
+                        new BuildingAccessPoint("B1-I1", "I1", 10),
+                        new BuildingAccessPoint("B1-I2", "I2", 15))));
         return network;
     }
 }

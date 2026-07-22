@@ -168,6 +168,55 @@ class JsonMapLoaderTest {
                 .hasMessage("Map must contain at least one intersection");
     }
 
+    @Test
+    void loadsBuildingsWithMultipleRoadAccessNodes() throws IOException {
+        Path file = writeJson("""
+                {
+                  "intersections": [
+                    {"id":"A1","name":"West curb","x":0,"y":0,"locationType":"NORMAL"},
+                    {"id":"A2","name":"East curb","x":1,"y":0,"locationType":"NORMAL"}
+                  ],
+                  "roads": [],
+                  "buildings": [{
+                    "id":"B1","name":"Office","type":"OFFICE","x":0.5,"y":0.2,
+                    "latitude":10.77,"longitude":106.70,
+                    "accessPoints":[
+                      {"id":"B1-W","intersectionId":"A1","drivewayDistanceMetres":8},
+                      {"id":"B1-E","intersectionId":"A2","drivewayDistanceMetres":12}
+                    ]
+                  }]
+                }
+                """);
+
+        RoadNetwork network = loader.load(file.toString());
+
+        assertThat(network.getBuildingCount()).isEqualTo(1);
+        assertThat(network.getBuilding("B1").getAccessPoints())
+                .extracting(access -> access.intersectionId())
+                .containsExactly("A1", "A2");
+    }
+
+    @Test
+    void rejectsBuildingThatReferencesMissingAccessNode() throws IOException {
+        Path file = writeJson("""
+                {
+                  "intersections": [
+                    {"id":"A1","name":"West curb","x":0,"y":0,"locationType":"NORMAL"}
+                  ],
+                  "roads": [],
+                  "buildings": [{
+                    "id":"B1","name":"Office","type":"OFFICE","x":0.5,"y":0.2,
+                    "accessPoints":[{"id":"B1-E","intersectionId":"UNKNOWN"}]
+                  }]
+                }
+                """);
+
+        assertThatThrownBy(() -> loader.load(file.toString()))
+                .isInstanceOf(InvalidMapException.class)
+                .hasMessageContaining("Invalid JSON building at index 0")
+                .hasMessageContaining("Building access intersection does not exist");
+    }
+
     private Path writeJson(String content) throws IOException {
         Path file = tempDirectory.resolve("map.json");
         Files.writeString(file, content);

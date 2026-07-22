@@ -7,6 +7,7 @@ import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.network.Building;
 import team.traffic.exception.NetworkEditConflictException;
 import team.traffic.service.NetworkEditingService;
 import team.traffic.service.RoadNetworkService;
@@ -32,7 +33,8 @@ public class NetworkController {
             RoadNetwork network = networkService.getNetwork();
             ctx.json(Map.of(
                     "intersectionCount", network.getIntersectionCount(),
-                    "roadCount", network.getRoadCount()));
+                    "roadCount", network.getRoadCount(),
+                    "buildingCount", network.getBuildingCount()));
         });
 
         app.get("/api/network/intersections", ctx -> {
@@ -67,6 +69,21 @@ public class NetworkController {
                 return;
             }
             ctx.json(roadToMap(road));
+        });
+        app.get("/api/network/buildings", ctx -> {
+            RoadNetwork network = networkService.getNetwork();
+            ctx.json(network.getBuildings().values().stream()
+                    .map(this::buildingToMap)
+                    .collect(Collectors.toList()));
+        });
+        app.get("/api/network/buildings/{id}", ctx -> {
+            String id = ctx.pathParam("id");
+            Building building = networkService.getNetwork().getBuilding(id);
+            if (building == null) {
+                ctx.status(404).json(Map.of("error", "Building not found: " + id));
+                return;
+            }
+            ctx.json(buildingToMap(building));
         });
         app.post("/api/network/intersections", this::addIntersection);
         app.delete("/api/network/intersections/{id}", ctx -> runEdit(ctx,
@@ -188,6 +205,22 @@ public class NetworkController {
         result.put("travelCost", r.calculateTravelCost());
         result.put("available", r.isAvailable());
         result.put("geometry", r.getGeometry());
+        return result;
+    }
+
+    private Map<String, Object> buildingToMap(Building building) {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("id", building.getId());
+        result.put("name", building.getName());
+        result.put("type", building.getType().name());
+        result.put("x", building.getX());
+        result.put("y", building.getY());
+        result.put("latitude", building.getLatitude());
+        result.put("longitude", building.getLongitude());
+        result.put("accessPoints", building.getAccessPoints().stream().map(access -> Map.of(
+                "id", access.id(),
+                "intersectionId", access.intersectionId(),
+                "drivewayDistanceMetres", access.drivewayDistanceMetres())).toList());
         return result;
     }
 

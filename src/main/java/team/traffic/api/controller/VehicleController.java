@@ -67,12 +67,17 @@ public class VehicleController {
             ctx.status(400).json(error("type is required"));
             return;
         }
-        if (request.startIntersectionId == null) {
-            ctx.status(400).json(error("startIntersectionId is required"));
+        boolean buildingTrip = request.hasBuildingEndpoint();
+        if (buildingTrip && !request.hasCompleteBuildingTrip()) {
+            ctx.status(400).json(error("startBuildingId and destinationBuildingId are required together"));
             return;
         }
         String destinationIntersectionId = request.getDestinationIntersectionId();
-        if (destinationIntersectionId == null) {
+        if (!buildingTrip && request.startIntersectionId == null) {
+            ctx.status(400).json(error("startIntersectionId is required"));
+            return;
+        }
+        if (!buildingTrip && destinationIntersectionId == null) {
             ctx.status(400).json(error("destinationIntersectionId is required"));
             return;
         }
@@ -89,11 +94,13 @@ public class VehicleController {
         }
 
         try {
-            Vehicle vehicle = vehicleService.createVehicle(
-                    type,
-                    request.startIntersectionId,
-                    destinationIntersectionId,
-                    networkService.getNetwork());
+            Vehicle vehicle = buildingTrip
+                    ? vehicleService.createVehicleBetweenBuildings(
+                            type, request.startBuildingId, request.destinationBuildingId,
+                            networkService.getNetwork())
+                    : vehicleService.createVehicle(
+                            type, request.startIntersectionId, destinationIntersectionId,
+                            networkService.getNetwork());
             ctx.status(201).json(new VehicleDto(vehicle));
         } catch (IllegalArgumentException e) {
             ctx.status(400).json(error(e.getMessage()));
@@ -111,12 +118,23 @@ public class VehicleController {
         public String startIntersectionId;
         public String destinationIntersectionId;
         public String endIntersectionId;
+        public String startBuildingId;
+        public String destinationBuildingId;
 
         public String getDestinationIntersectionId() {
             if (destinationIntersectionId != null && !destinationIntersectionId.isBlank()) {
                 return destinationIntersectionId;
             }
             return endIntersectionId;
+        }
+
+        public boolean hasBuildingEndpoint() {
+            return startBuildingId != null || destinationBuildingId != null;
+        }
+
+        public boolean hasCompleteBuildingTrip() {
+            return startBuildingId != null && !startBuildingId.isBlank()
+                    && destinationBuildingId != null && !destinationBuildingId.isBlank();
         }
     }
 
