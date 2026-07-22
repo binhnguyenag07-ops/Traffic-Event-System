@@ -14,12 +14,14 @@ public class RoadNetwork {
     private final Map<String, Road> roads;
     private final Map<String, List<Road>> outgoingRoads;
     private final Map<String, List<Road>> incomingRoads;
+    private final Map<String, Building> buildings;
 
     public RoadNetwork() {
         this.intersections = new LinkedHashMap<>();
         this.roads = new LinkedHashMap<>();
         this.outgoingRoads = new LinkedHashMap<>();
         this.incomingRoads = new LinkedHashMap<>();
+        this.buildings = new LinkedHashMap<>();
     }
 
     // Adds an intersection while preserving the graph-wide unique-id invariant.
@@ -39,6 +41,12 @@ public class RoadNetwork {
     public void removeIntersection(String intersectionId) {
         if (!intersections.containsKey(intersectionId)) {
             return;
+        }
+        boolean usedByBuilding = buildings.values().stream()
+                .flatMap(building -> building.getAccessPoints().stream())
+                .anyMatch(access -> access.intersectionId().equals(intersectionId));
+        if (usedByBuilding) {
+            throw new IllegalStateException("Intersection is used by a building access point: " + intersectionId);
         }
 
         Set<String> connectedRoadIds = new LinkedHashSet<>();
@@ -243,6 +251,40 @@ public class RoadNetwork {
 
     public Map<String, Road> getRoads() {
         return Collections.unmodifiableMap(roads);
+    }
+
+    public void addBuilding(Building building) {
+        if (building == null) throw new IllegalArgumentException("Building is required");
+        if (buildings.containsKey(building.getId())) {
+            throw new IllegalArgumentException("Duplicate building id: " + building.getId());
+        }
+        for (BuildingAccessPoint access : building.getAccessPoints()) {
+            if (!containsIntersection(access.intersectionId())) {
+                throw new IllegalArgumentException(
+                        "Building access intersection does not exist: " + access.intersectionId());
+            }
+        }
+        buildings.put(building.getId(), building);
+    }
+
+    public void removeBuilding(String buildingId) {
+        buildings.remove(buildingId);
+    }
+
+    public Building getBuilding(String buildingId) {
+        return buildings.get(buildingId);
+    }
+
+    public boolean containsBuilding(String buildingId) {
+        return buildings.containsKey(buildingId);
+    }
+
+    public int getBuildingCount() {
+        return buildings.size();
+    }
+
+    public Map<String, Building> getBuildings() {
+        return Collections.unmodifiableMap(buildings);
     }
 
     private Road requireRoad(String roadId) {

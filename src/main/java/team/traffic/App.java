@@ -58,7 +58,7 @@ public class App {
         RoutingServiceImpl routingService = new RoutingServiceImpl(registry);
         TrafficSimulator simulator = new TrafficSimulator(network, routingService, eventBus);
         SimulationServiceImpl simulationService = new SimulationServiceImpl(simulator);
-        VehicleServiceImpl vehicleService = new VehicleServiceImpl(simulator);
+        VehicleServiceImpl vehicleService = new VehicleServiceImpl(simulator, routingService);
         TrafficEventServiceImpl trafficEventService = new TrafficEventServiceImpl(eventBus, networkService, simulator);
         DynamicReroutingListener reroutingListener = new DynamicReroutingListener(
                 simulator::getNetwork,

@@ -10,6 +10,14 @@ public interface VehicleService {
     Vehicle getVehicleById(String id);
     Vehicle createVehicle(VehicleType type, String startIntersectionId, String destinationIntersectionId, RoadNetwork network);
 
+    default Vehicle createVehicleBetweenBuildings(
+            VehicleType type,
+            String originBuildingId,
+            String destinationBuildingId,
+            RoadNetwork network) {
+        throw new UnsupportedOperationException("Building trips are not supported");
+    }
+
     default boolean removeVehicle(String id) {
         return false;
     }

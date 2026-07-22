@@ -16,6 +16,8 @@ import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.network.Building;
+import team.traffic.domain.network.BuildingAccessPoint;
 
 public class MapSaver {
     private final ObjectMapper objectMapper;
@@ -51,6 +53,7 @@ public class MapSaver {
     static class MapData {
         public List<IntersectionData> intersections = new ArrayList<>();
         public List<RoadData> roads = new ArrayList<>();
+        public List<BuildingData> buildings = new ArrayList<>();
 
         // Copies domain objects into simple JSON-friendly data objects.
         static MapData from(RoadNetwork roadNetwork) {
@@ -68,7 +71,54 @@ public class MapSaver {
                 mapData.roads.add(RoadData.from(road));
             }
 
+            List<Building> buildings = new ArrayList<>(roadNetwork.getBuildings().values());
+            buildings.sort(Comparator.comparing(Building::getId));
+            for (Building building : buildings) {
+                mapData.buildings.add(BuildingData.from(building));
+            }
+
             return mapData;
+        }
+    }
+
+    static class BuildingData {
+        public String id;
+        public String name;
+        public String type;
+        public double x;
+        public double y;
+        public Double latitude;
+        public Double longitude;
+        public List<BuildingAccessData> accessPoints = new ArrayList<>();
+
+        static BuildingData from(Building building) {
+            BuildingData data = new BuildingData();
+            data.id = building.getId();
+            data.name = building.getName();
+            data.type = building.getType().name();
+            data.x = building.getX();
+            data.y = building.getY();
+            data.latitude = building.getLatitude();
+            data.longitude = building.getLongitude();
+            data.accessPoints = building.getAccessPoints().stream()
+                    .sorted(Comparator.comparing(BuildingAccessPoint::id))
+                    .map(BuildingAccessData::from)
+                    .toList();
+            return data;
+        }
+    }
+
+    static class BuildingAccessData {
+        public String id;
+        public String intersectionId;
+        public double drivewayDistanceMetres;
+
+        static BuildingAccessData from(BuildingAccessPoint accessPoint) {
+            BuildingAccessData data = new BuildingAccessData();
+            data.id = accessPoint.id();
+            data.intersectionId = accessPoint.intersectionId();
+            data.drivewayDistanceMetres = accessPoint.drivewayDistanceMetres();
+            return data;
         }
     }
 

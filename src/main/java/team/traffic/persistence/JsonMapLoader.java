@@ -17,6 +17,9 @@ import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.network.Building;
+import team.traffic.domain.network.BuildingAccessPoint;
+import team.traffic.domain.network.BuildingType;
 import team.traffic.exception.InvalidMapException;
 
 public class JsonMapLoader implements MapLoader {
@@ -64,6 +67,7 @@ public class JsonMapLoader implements MapLoader {
         RoadNetwork roadNetwork = new RoadNetwork();
         addIntersections(roadNetwork, mapData.intersections);
         addRoads(roadNetwork, mapData.roads == null ? Collections.emptyList() : mapData.roads);
+        addBuildings(roadNetwork, mapData.buildings == null ? Collections.emptyList() : mapData.buildings);
         return roadNetwork;
     }
 
@@ -98,6 +102,18 @@ public class JsonMapLoader implements MapLoader {
         }
     }
 
+    private void addBuildings(RoadNetwork roadNetwork, List<BuildingData> buildings)
+            throws InvalidMapException {
+        for (int index = 0; index < buildings.size(); index++) {
+            try {
+                BuildingData data = requireEntry(buildings.get(index), "building", index);
+                roadNetwork.addBuilding(data.toBuilding());
+            } catch (RuntimeException exception) {
+                throw invalidEntry("building", index, exception);
+            }
+        }
+    }
+
     private <T> T requireEntry(T entry, String type, int index) {
         if (entry == null) {
             throw new IllegalArgumentException(type + " entry must not be null at index " + index);
@@ -114,6 +130,44 @@ public class JsonMapLoader implements MapLoader {
     static class MapData {
         public List<IntersectionData> intersections;
         public List<RoadData> roads;
+        public List<BuildingData> buildings;
+    }
+
+    static class BuildingData {
+        public String id;
+        public String name;
+        public BuildingType type;
+        public Double x;
+        public Double y;
+        public Double latitude;
+        public Double longitude;
+        public List<BuildingAccessData> accessPoints;
+
+        public Building toBuilding() {
+            if (accessPoints == null) throw new IllegalArgumentException("Building accessPoints are required");
+            return new Building(
+                    id,
+                    name,
+                    requireField(type, "type"),
+                    requireField(x, "x"),
+                    requireField(y, "y"),
+                    latitude,
+                    longitude,
+                    accessPoints.stream().map(BuildingAccessData::toAccessPoint).toList());
+        }
+    }
+
+    static class BuildingAccessData {
+        public String id;
+        public String intersectionId;
+        public Double drivewayDistanceMetres;
+
+        public BuildingAccessPoint toAccessPoint() {
+            return new BuildingAccessPoint(
+                    id,
+                    intersectionId,
+                    drivewayDistanceMetres == null ? 0.0 : drivewayDistanceMetres);
+        }
     }
 
     static class IntersectionData {
