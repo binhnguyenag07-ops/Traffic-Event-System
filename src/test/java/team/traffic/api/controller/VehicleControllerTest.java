@@ -59,7 +59,10 @@ class VehicleControllerTest {
         assertThat(response.body()).contains("\"destinationIntersectionId\":\"B\"");
         assertThat(response.body()).contains("\"length\":4.5");
         assertThat(response.body()).contains("\"maxSpeed\":120.0");
-        assertThat(response.body()).contains("\"currentSpeed\":50.0");
+        assertThat(response.body()).contains("\"cruisingSpeedKph\":50.0");
+        assertThat(response.body())
+                .as("the duplicate of cruising speed is gone from the contract")
+                .doesNotContain("\"movementSpeed\"");
         assertThat(response.body()).contains("\"priorityLevel\":0");
     }
 

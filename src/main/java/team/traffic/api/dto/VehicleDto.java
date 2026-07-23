@@ -15,11 +15,10 @@ public class VehicleDto {
     private String originBuildingId;
     private String destinationBuildingId;
     private VehicleStatus status;
-    private double movementSpeed;
     private double length;
     private double width;
     private double maxSpeed;
-    private double currentSpeed;
+    private double cruisingSpeedKph;
     private double acceleration;
     private double deceleration;
     private double vehicleWeight;
@@ -70,11 +69,10 @@ public class VehicleDto {
         this.originBuildingId = vehicle.getOriginBuildingId();
         this.destinationBuildingId = vehicle.getDestinationBuildingId();
         this.status = vehicle.getStatus();
-        this.movementSpeed = vehicle.getMovementSpeed();
         this.length = vehicle.getLength();
         this.width = vehicle.getWidth();
         this.maxSpeed = vehicle.getMaxSpeed();
-        this.currentSpeed = vehicle.getCurrentSpeed();
+        this.cruisingSpeedKph = vehicle.getCruisingSpeedKph();
         this.acceleration = vehicle.getAcceleration();
         this.deceleration = vehicle.getDeceleration();
         this.vehicleWeight = vehicle.getVehicleWeight();
@@ -109,16 +107,14 @@ public class VehicleDto {
     public void setDestinationBuildingId(String destinationBuildingId) { this.destinationBuildingId = destinationBuildingId; }
     public VehicleStatus getStatus() { return status; }
     public void setStatus(VehicleStatus status) { this.status = status; }
-    public double getMovementSpeed() { return movementSpeed; }
-    public void setMovementSpeed(double movementSpeed) { this.movementSpeed = movementSpeed; }
     public double getLength() { return length; }
     public void setLength(double length) { this.length = length; }
     public double getWidth() { return width; }
     public void setWidth(double width) { this.width = width; }
     public double getMaxSpeed() { return maxSpeed; }
     public void setMaxSpeed(double maxSpeed) { this.maxSpeed = maxSpeed; }
-    public double getCurrentSpeed() { return currentSpeed; }
-    public void setCurrentSpeed(double currentSpeed) { this.currentSpeed = currentSpeed; }
+    public double getCruisingSpeedKph() { return cruisingSpeedKph; }
+    public void setCruisingSpeedKph(double cruisingSpeedKph) { this.cruisingSpeedKph = cruisingSpeedKph; }
     public double getAcceleration() { return acceleration; }
     public void setAcceleration(double acceleration) { this.acceleration = acceleration; }
     public double getDeceleration() { return deceleration; }

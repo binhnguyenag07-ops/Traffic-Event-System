@@ -81,7 +81,7 @@ public record VehicleTracePoint(
                 vehicle.getRoadStartIntersectionId(),
                 vehicle.getRoadEndIntersectionId(),
                 vehicle.getRoadProgress(),
-                vehicle.getCurrentSpeed(),
+                vehicle.getCruisingSpeedKph(),
                 vehicle.getInstantaneousSpeedKph(),
                 vehicle.getNextRouteStepIndex(),
                 routeRoadIds,

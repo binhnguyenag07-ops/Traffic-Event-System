@@ -102,7 +102,7 @@ class VehicleDynamicsEngineTest {
                 .filter(vehicle -> "AB".equals(vehicle.getOccupiedRoadId()))
                 .max((left, right) -> Double.compare(left.getRoadProgress(), right.getRoadProgress()))
                 .orElseThrow();
-        assertThat(leader.getInstantaneousSpeedKph()).isLessThan(leader.getCurrentSpeed());
+        assertThat(leader.getInstantaneousSpeedKph()).isLessThan(leader.getCruisingSpeedKph());
         assertThat(leader.getWaitingTicks()).isPositive();
     }
 
