@@ -42,6 +42,19 @@ public interface TrafficParticipant {
         return 0;
     }
 
+    /**
+     * Signed distance from the road centreline in metres, positive towards
+     * increasing lane indexes.
+     *
+     * <p>Distinct from the lane index because the two disagree for as long as a
+     * lane change lasts: the index names the lane the vehicle has committed to,
+     * this says where it physically is while getting there. Participants that
+     * never change lane report their lane centre and the two agree always.</p>
+     */
+    default double getLateralOffsetMetres() {
+        return 0.0;
+    }
+
     /** Maximum comfortable braking magnitude in metres per second squared. */
     default double getDecelerationMps2() {
         return 4.5;

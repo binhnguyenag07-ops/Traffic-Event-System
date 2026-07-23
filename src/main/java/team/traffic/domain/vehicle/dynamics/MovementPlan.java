@@ -16,16 +16,29 @@ package team.traffic.domain.vehicle.dynamics;
  * @param mayLeaveRoad  whether running off the end is permitted, which it is
  *                      not when the road beyond has no room
  * @param targetLaneIndex lane occupied during this movement
+ * @param lateralOffsetMetres where the vehicle sits across the road at the end
+ *                      of the step, which is the target lane's centre only once
+ *                      a lane change has finished
  */
 public record MovementPlan(
         String roadId,
         double speedMps,
         double travelMetres,
         boolean mayLeaveRoad,
-        int targetLaneIndex) {
+        int targetLaneIndex,
+        double lateralOffsetMetres) {
 
     public MovementPlan(String roadId, double speedMps, double travelMetres, boolean mayLeaveRoad) {
-        this(roadId, speedMps, travelMetres, mayLeaveRoad, 0);
+        this(roadId, speedMps, travelMetres, mayLeaveRoad, 0, 0.0);
+    }
+
+    public MovementPlan(
+            String roadId,
+            double speedMps,
+            double travelMetres,
+            boolean mayLeaveRoad,
+            int targetLaneIndex) {
+        this(roadId, speedMps, travelMetres, mayLeaveRoad, targetLaneIndex, 0.0);
     }
 
     public MovementPlan {
@@ -40,6 +53,9 @@ public record MovementPlan(
         }
         if (targetLaneIndex < 0) {
             throw new IllegalArgumentException("Target lane index must not be negative.");
+        }
+        if (!Double.isFinite(lateralOffsetMetres)) {
+            throw new IllegalArgumentException("Planned lateral offset must be finite.");
         }
     }
 }
