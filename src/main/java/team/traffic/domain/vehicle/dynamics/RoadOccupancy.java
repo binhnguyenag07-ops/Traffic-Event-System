@@ -9,6 +9,7 @@ import team.traffic.domain.network.Road;
 public final class RoadOccupancy {
     private final Road road;
     private final List<Lane> lanes;
+    private final double laneWidthMetres;
 
     static RoadOccupancy of(
             Road road,
@@ -26,17 +27,29 @@ public final class RoadOccupancy {
                     .toList();
             lanes.add(new Lane(road, index, inLane, events));
         }
-        return new RoadOccupancy(road, lanes);
+        return new RoadOccupancy(road, lanes, roadLayout.laneWidthMetresOf(road));
     }
 
-    private RoadOccupancy(Road road, List<Lane> lanes) {
+    private RoadOccupancy(Road road, List<Lane> lanes, double laneWidthMetres) {
         this.road = road;
         this.lanes = List.copyOf(lanes);
+        this.laneWidthMetres = laneWidthMetres;
     }
 
     public Road getRoad() { return road; }
     public int getLaneCount() { return lanes.size(); }
     public List<Lane> getLanes() { return lanes; }
+    public double getLaneWidthMetres() { return laneWidthMetres; }
+
+    /**
+     * Signed offset of a lane's centre from the road centreline, in metres.
+     *
+     * <p>Carried here so a vehicle can steer towards its target lane without
+     * having to be handed the road layout as well as its occupancy.</p>
+     */
+    public double laneCentreOffsetMetres(int laneIndex) {
+        return RoadLayout.laneCentreOffsetMetres(laneIndex, lanes.size(), laneWidthMetres);
+    }
 
     public Lane lane(int laneIndex) {
         if (laneIndex < 0 || laneIndex >= lanes.size()) return null;

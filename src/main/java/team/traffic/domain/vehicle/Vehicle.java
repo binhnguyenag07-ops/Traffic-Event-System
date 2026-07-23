@@ -18,6 +18,7 @@ import team.traffic.domain.vehicle.dynamics.FollowContext;
 import team.traffic.domain.vehicle.dynamics.JunctionApproach;
 import team.traffic.domain.vehicle.dynamics.KraussCarFollowingModel;
 import team.traffic.domain.vehicle.dynamics.Lane;
+import team.traffic.domain.vehicle.dynamics.LateralMotionModel;
 import team.traffic.domain.vehicle.dynamics.LeaderGap;
 import team.traffic.domain.vehicle.dynamics.MovementPlan;
 import team.traffic.domain.vehicle.dynamics.LaneChangeModel;
@@ -54,6 +55,7 @@ public abstract class Vehicle implements TrafficParticipant {
     private String roadEndIntersectionId;
     private double roadProgress;
     private int laneIndex;
+    private double lateralOffsetMetres;
     private final TripRecord trip;
     private String lastRoutingAlgorithm;
     private DriverProfile driverProfile;
@@ -93,6 +95,7 @@ public abstract class Vehicle implements TrafficParticipant {
         this.laneChangeModel = new MobilLaneChangeModel();
         this.instantaneousSpeedMps = currentSpeed / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
         this.laneIndex = 0;
+        this.lateralOffsetMetres = 0.0;
     }
 
     public abstract VehicleType getType();
@@ -222,10 +225,23 @@ public abstract class Vehicle implements TrafficParticipant {
 
         RoadOccupancy roadOccupancy = trafficState.occupancyOf(road.getId());
         int targetLaneIndex = laneIndex;
+        double plannedLateralOffsetMetres = lateralOffsetMetres;
         if (roadOccupancy != null) {
-            targetLaneIndex = laneChangeModel.chooseTargetLane(new LaneChangeRequest(
-                    this, roadOccupancy, desiredSpeedMps(road),
-                    profile.accelerationMps2(), profile.decelerationMps2(), simulationSeconds));
+            // A vehicle still crossing a lane line is committed to the lane it
+            // picked and does not get another say until it arrives. Asking the
+            // model afresh every step would let it drift back and forth over
+            // the line without ever completing a change.
+            if (LateralMotionModel.hasSettled(
+                    lateralOffsetMetres, roadOccupancy.laneCentreOffsetMetres(laneIndex))) {
+                targetLaneIndex = laneChangeModel.chooseTargetLane(new LaneChangeRequest(
+                        this, roadOccupancy, desiredSpeedMps(road),
+                        profile.accelerationMps2(), profile.decelerationMps2(), simulationSeconds));
+            }
+            plannedLateralOffsetMetres = LateralMotionModel.nextOffsetMetres(
+                    lateralOffsetMetres,
+                    roadOccupancy.laneCentreOffsetMetres(targetLaneIndex),
+                    getDriverProfile().maxLateralSpeedMps(),
+                    simulationSeconds);
         }
         Lane lane = roadOccupancy == null ? null : roadOccupancy.lane(targetLaneIndex);
         LeaderGap leaderGap = lane == null ? LeaderGap.FREE_ROAD : lane.findLeaderFor(this);
@@ -255,7 +271,8 @@ public abstract class Vehicle implements TrafficParticipant {
                 plannedSpeedMps,
                 Math.min(plannedSpeedMps * simulationSeconds, distanceToExitMetres),
                 mayLeaveRoad,
-                targetLaneIndex));
+                targetLaneIndex,
+                plannedLateralOffsetMetres));
     }
 
     /**
@@ -280,6 +297,7 @@ public abstract class Vehicle implements TrafficParticipant {
         // one it just chose.
         instantaneousSpeedMps = plan.speedMps();
         laneIndex = plan.targetLaneIndex();
+        lateralOffsetMetres = plan.lateralOffsetMetres();
 
         double previousProgress = roadProgress;
         roadProgress = Math.min(1.0, roadProgress + plan.travelMetres() / (road.getDistance() * 1_000.0));
@@ -456,6 +474,12 @@ public abstract class Vehicle implements TrafficParticipant {
         }
 
         laneIndex = entryLane;
+        // A vehicle arrives already lined up with the lane it enters: the
+        // sideways movement it needed happened while crossing the junction,
+        // which this model does not simulate in metres.
+        lateralOffsetMetres = targetOccupancy == null
+                ? 0.0
+                : targetOccupancy.laneCentreOffsetMetres(entryLane);
         enterNextRoad(roadNetwork, step);
         roadStartIntersectionId = step.getFromIntersectionId();
         roadEndIntersectionId = step.getToIntersectionId();
@@ -627,6 +651,16 @@ public abstract class Vehicle implements TrafficParticipant {
     @Override
     public int getLaneIndex() {
         return laneIndex;
+    }
+
+    /**
+     * Where the vehicle sits across the road in metres, signed from the road
+     * centreline. Equal to its lane's centre except while a lane change is in
+     * progress, when it reports the intermediate position.
+     */
+    @Override
+    public double getLateralOffsetMetres() {
+        return lateralOffsetMetres;
     }
 
     public String getNextRoadId() {
@@ -899,6 +933,7 @@ public abstract class Vehicle implements TrafficParticipant {
         }
         occupiedRoadId = null;
         laneIndex = 0;
+        lateralOffsetMetres = 0.0;
         roadStartIntersectionId = null;
         roadEndIntersectionId = null;
         roadProgress = 0.0;
