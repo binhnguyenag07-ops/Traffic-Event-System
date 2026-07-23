@@ -108,7 +108,7 @@ public record SimulationFrame(
                     vehicle.getRoadStartIntersectionId(),
                     vehicle.getRoadEndIntersectionId(),
                     vehicle.getRoadProgress(),
-                    vehicle.getCurrentSpeed(),
+                    vehicle.getCruisingSpeedKph(),
                     vehicle.getInstantaneousSpeedKph(),
                     pose == null ? vehicle.getLaneIndex() : pose.laneIndex(),
                     vehicle.getLength(),

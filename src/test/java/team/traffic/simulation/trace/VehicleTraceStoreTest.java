@@ -15,7 +15,7 @@ class VehicleTraceStoreTest {
         Car vehicle = new Car("car-1", "A", "B");
 
         store.reset(0, List.of(vehicle));
-        vehicle.setCurrentSpeed(20.0);
+        vehicle.setCruisingSpeedKph(20.0);
         vehicle.moveTo("C");
         store.record(1, List.of(vehicle));
 
