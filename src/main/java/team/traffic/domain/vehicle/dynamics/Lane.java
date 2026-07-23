@@ -40,6 +40,11 @@ public final class Lane {
     public int getVehicleCount() { return vehicles.size(); }
     public List<TrafficParticipant> getVehicles() { return List.copyOf(vehicles); }
 
+    /** Active events physically blocking this lane, ordered along the road. */
+    public List<TrafficEvent> getObstructions() {
+        return obstructions;
+    }
+
     public double positionMetresOf(TrafficParticipant vehicle) {
         return vehicle.getRoadProgress() * roadLengthMetres;
     }

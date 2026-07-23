@@ -1,6 +1,6 @@
 package team.traffic.domain.vehicle;
 
-import team.traffic.domain.vehicle.dynamics.MotorcycleLaneChangeModel;
+import team.traffic.domain.vehicle.dynamics.FilteringLaneChangeModel;
 
 /** Compact two-wheel vehicle with its own safe, low-threshold lane strategy. */
 public class Motorcycle extends Vehicle {
@@ -18,7 +18,7 @@ public class Motorcycle extends Vehicle {
             VehicleProfile profile,
             double cruisingSpeedKph) {
         super(id, currentIntersectionId, destinationIntersectionId, profile, cruisingSpeedKph);
-        setLaneChangeModel(new MotorcycleLaneChangeModel());
+        setLaneChangeModel(new FilteringLaneChangeModel());
     }
 
     @Override

@@ -97,7 +97,8 @@ public final class MobilLaneChangeModel implements LaneChangeModel {
         return afterAcceleration - beforeAcceleration;
     }
 
-    private static double predictedAcceleration(
+    /** Shared with {@link FilteringLaneChangeModel}, which scores corridors the same way. */
+    static double predictedAcceleration(
             TrafficParticipant participant,
             LeaderGap gap,
             LaneChangeRequest request) {
