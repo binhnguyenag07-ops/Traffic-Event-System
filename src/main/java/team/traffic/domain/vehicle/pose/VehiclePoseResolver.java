@@ -9,8 +9,6 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.routing.Route;
 import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Vehicle;
-import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
-import team.traffic.domain.vehicle.dynamics.RoadLayout;
 
 /**
  * Works out where a vehicle is on the map and which way it faces.
@@ -27,18 +25,16 @@ import team.traffic.domain.vehicle.dynamics.RoadLayout;
  * travelling when it arrived. Its route is what supplies that: the step before
  * the one it is waiting on is the road it just came off. A vehicle that has not
  * started yet faces the road it is about to take instead.</p>
+ *
+ * <p>Placement across the road comes from the vehicle rather than from its lane
+ * index and a road layout. That removes a second way of arriving at the same
+ * number: the resolver used to consult a layout of its own choosing, so a
+ * scenario whose simulation ran on a different layout would be drawn in lanes
+ * of a width it was never simulated with. It also means a vehicle half way
+ * through a lane change is drawn half way across, which a lane index cannot
+ * express.</p>
  */
 public final class VehiclePoseResolver {
-    private final RoadLayout roadLayout;
-
-    public VehiclePoseResolver() {
-        this(new RoadDataRoadLayout());
-    }
-
-    public VehiclePoseResolver(RoadLayout roadLayout) {
-        if (roadLayout == null) throw new IllegalArgumentException("Road layout is required.");
-        this.roadLayout = roadLayout;
-    }
 
     /**
      * Resolves the pose of one vehicle, or an empty result when the map carries
@@ -65,8 +61,11 @@ public final class VehiclePoseResolver {
             return Optional.empty();
         }
         double heading = PolylineGeometry.bearingAt(shape, vehicle.getRoadProgress());
-        double lateralOffset = (vehicle.getLaneIndex() - (roadLayout.laneCountOf(road) - 1) / 2.0)
-                * roadLayout.laneWidthMetresOf(road);
+        // The vehicle's own lateral offset, not one derived from its lane
+        // index: a vehicle part-way through a lane change is genuinely between
+        // two lanes, and deriving the offset from the index would jump it
+        // across the full lane width in a single frame.
+        double lateralOffset = vehicle.getLateralOffsetMetres();
         position = PolylineGeometry.offsetMetres(position, heading, lateralOffset);
         return Optional.of(new VehiclePose(
                 position,

@@ -42,7 +42,10 @@ class VehicleTest {
         assertThat(motorcycle.getWidth()).isEqualTo(0.75);
         assertThat(motorcycle.getVehicleWeight()).isEqualTo(150.0);
         assertThat(motorcycle.getLaneChangeModel().getName())
-                .isEqualTo("MOTORCYCLE_FILTERING_MOBIL");
+                .isEqualTo("MOTORCYCLE_SUBLANE_FILTERING");
+        assertThat(car.getLaneChangeModel().getName())
+                .as("only narrow vehicles filter; everything else uses ordinary MOBIL")
+                .isEqualTo("MOBIL");
 
         assertThat(bus.getLength()).isEqualTo(12.0);
         assertThat(bus.getVehicleWeight()).isEqualTo(12_000.0);
