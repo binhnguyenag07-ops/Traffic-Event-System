@@ -76,6 +76,149 @@ public final class RoadOccupancy {
         return best == null ? -1 : best.getLaneIndex();
     }
 
+    /** The strip of road a whole lane occupies, used to place obstructions. */
+    public LateralExtent laneExtent(int laneIndex) {
+        return new LateralExtent(laneCentreOffsetMetres(laneIndex), laneWidthMetres);
+    }
+
+    /**
+     * Nearest thing ahead that is actually in the way of {@code follower},
+     * decided by lateral overlap rather than by a shared lane index.
+     *
+     * <p>This is what lets a narrow vehicle ride past traffic it has room
+     * beside. It scans every lane because a filtering motorcycle straddles two
+     * of them and is obstructed by neither unless one of their occupants
+     * reaches across the line it is riding.</p>
+     *
+     * <p>For a vehicle sitting squarely on a lane centre the answer is the same
+     * one {@link Lane#findLeaderFor} gives, because only that lane's occupants
+     * can overlap it. {@code SubLaneLeaderEquivalenceTest} holds that claim.</p>
+     */
+    public LeaderGap findLeaderFor(TrafficParticipant follower, double lateralClearanceMetres) {
+        if (follower == null) return LeaderGap.FREE_ROAD;
+        return findLeaderAt(follower, follower.lateralExtent(), lateralClearanceMetres);
+    }
+
+    /**
+     * The leader the follower would have if it were riding at
+     * {@code offsetMetres}, used to judge a corridor before committing to it.
+     */
+    public LeaderGap findLeaderAtOffset(
+            TrafficParticipant follower, double offsetMetres, double lateralClearanceMetres) {
+        if (follower == null) return LeaderGap.FREE_ROAD;
+        return findLeaderAt(
+                follower, new LateralExtent(offsetMetres, follower.getWidth()), lateralClearanceMetres);
+    }
+
+    private LeaderGap findLeaderAt(
+            TrafficParticipant follower, LateralExtent followerExtent, double lateralClearanceMetres) {
+        double followerPosition = positionMetresOf(follower);
+        double closestPosition = Double.POSITIVE_INFINITY;
+        double closestLength = 0.0;
+        double closestSpeed = 0.0;
+
+        for (Lane lane : lanes) {
+            for (TrafficParticipant candidate : lane.getVehicles()) {
+                if (candidate == follower || candidate.getId().equals(follower.getId())) continue;
+                if (!followerExtent.overlaps(candidate.lateralExtent(), lateralClearanceMetres)) continue;
+                double position = positionMetresOf(candidate);
+                if (position >= followerPosition && position < closestPosition) {
+                    closestPosition = position;
+                    closestLength = candidate.getLength();
+                    closestSpeed = candidate.getInstantaneousSpeedMps();
+                }
+            }
+            LateralExtent blocked = laneExtent(lane.getLaneIndex());
+            if (!followerExtent.overlaps(blocked, 0.0)) continue;
+            for (TrafficEvent obstruction : lane.getObstructions()) {
+                double position = obstruction.getPositionAlongRoad() * roadLengthMetres();
+                if (position >= followerPosition && position < closestPosition) {
+                    closestPosition = position;
+                    closestLength = 0.0;
+                    closestSpeed = 0.0;
+                }
+            }
+        }
+
+        if (Double.isInfinite(closestPosition)) return LeaderGap.FREE_ROAD;
+        double bumperGap = closestPosition - closestLength - followerPosition;
+        return new LeaderGap(
+                bumperGap - follower.getDriverProfile().minimumGapMetres(),
+                closestSpeed);
+    }
+
+    /** Whether anything laterally overlaps a vehicle of this width at {@code centreMetres}. */
+    public boolean isLaterallyClear(
+            TrafficParticipant mover,
+            double centreMetres,
+            double lateralClearanceMetres,
+            double longitudinalWindowMetres) {
+        if (mover == null) return false;
+        LateralExtent candidate = new LateralExtent(centreMetres, mover.getWidth());
+        double moverPosition = positionMetresOf(mover);
+        for (Lane lane : lanes) {
+            for (TrafficParticipant other : lane.getVehicles()) {
+                if (other == mover || other.getId().equals(mover.getId())) continue;
+                if (Math.abs(positionMetresOf(other) - moverPosition) > longitudinalWindowMetres) continue;
+                if (candidate.overlaps(other.lateralExtent(), lateralClearanceMetres)) return false;
+            }
+        }
+        return withinRoad(candidate);
+    }
+
+    /**
+     * Whether anything alongside is itself mid-manoeuvre.
+     *
+     * <p>A gap beside a vehicle that is still crossing a lane line is not a gap
+     * worth riding into: it is about to close. Detecting that is only possible
+     * because lateral position is continuous, so a vehicle between lane centres
+     * is visibly between them.</p>
+     */
+    public boolean hasManoeuvringNeighbour(TrafficParticipant mover, double longitudinalWindowMetres) {
+        if (mover == null) return false;
+        double moverPosition = positionMetresOf(mover);
+        for (Lane lane : lanes) {
+            for (TrafficParticipant other : lane.getVehicles()) {
+                if (other == mover || other.getId().equals(mover.getId())) continue;
+                if (Math.abs(positionMetresOf(other) - moverPosition) > longitudinalWindowMetres) continue;
+                double ownLaneCentre = laneCentreOffsetMetres(other.getLaneIndex());
+                if (!LateralMotionModel.hasSettled(other.getLateralOffsetMetres(), ownLaneCentre)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Slowest vehicle alongside {@code mover}, or its own speed when it is alone. */
+    public double slowestNeighbourSpeedMps(
+            TrafficParticipant mover, double longitudinalWindowMetres) {
+        if (mover == null) return 0.0;
+        double moverPosition = positionMetresOf(mover);
+        double slowest = Double.POSITIVE_INFINITY;
+        for (Lane lane : lanes) {
+            for (TrafficParticipant other : lane.getVehicles()) {
+                if (other == mover || other.getId().equals(mover.getId())) continue;
+                if (Math.abs(positionMetresOf(other) - moverPosition) > longitudinalWindowMetres) continue;
+                slowest = Math.min(slowest, other.getInstantaneousSpeedMps());
+            }
+        }
+        return Double.isInfinite(slowest) ? mover.getInstantaneousSpeedMps() : slowest;
+    }
+
+    public double roadLengthMetres() {
+        return road.getDistance() * 1_000.0;
+    }
+
+    private boolean withinRoad(LateralExtent extent) {
+        double halfRoad = lanes.size() * laneWidthMetres / 2.0;
+        return extent.lowerEdgeMetres() >= -halfRoad && extent.upperEdgeMetres() <= halfRoad;
+    }
+
+    private double positionMetresOf(TrafficParticipant participant) {
+        return participant.getRoadProgress() * roadLengthMetres();
+    }
+
     public double getPhysicalJamRatio() {
         return lanes.stream().mapToDouble(Lane::getPhysicalJamRatio).average().orElse(0.0);
     }

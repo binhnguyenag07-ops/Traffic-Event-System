@@ -34,9 +34,10 @@ bounded lateral speed, so a vehicle part-way through a lane change reports a
 position it genuinely occupies. The renderer may interpolate between those
 offsets and should not derive lateral position from the lane index.
 
-Sub-lane occupancy is still missing, so `MOTORCYCLE_FILTERING_MOBIL` continues to
-travel between discrete lane centres. Between-lane filtering must not be depicted
-until that lands; see `MOTORCYCLE_FILTERING_PLAN.md`.
+Sub-lane occupancy has since landed too. A motorcycle can now ride the gap
+between two lanes, and the offset it reports is a position it genuinely
+occupies, so the physical renderer may draw filtering as it happens. See
+`MOTORCYCLE_FILTERING_PLAN.md` for the model and its limits.
 
 ## Implemented replay contract
 

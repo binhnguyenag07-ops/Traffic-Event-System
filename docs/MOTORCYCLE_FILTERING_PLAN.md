@@ -2,20 +2,31 @@
 
 ## Status
 
-Continuous lateral position is **implemented**. A vehicle now carries a signed
-offset in metres from the road centreline, moves towards its chosen lane at a
-bounded lateral speed, and cannot re-decide until it arrives. See
-`LateralMotionModel`, `DriverProfile.maxLateralSpeedMps`, and
-`Vehicle.getLateralOffsetMetres()`.
+**Implemented**, phases 1 to 5. A motorcycle now rides the gap between two lanes
+when both are blocked and the gap is wide enough for it, and stays in a lane
+when filtering buys nothing.
 
-Filtering itself is **not implemented**. `MotorcycleLaneChangeModel` is still a
-delegate to `MobilLaneChangeModel` with a zero incentive threshold: a motorcycle
-changes lane more readily than a car, but it still travels between discrete lane
-centres and is still blocked by anything ahead of it in its lane, however narrow
-it is and however much room there is beside that vehicle.
+| Phase | State |
+|---|---|
+| 1. `LateralExtent`, `TrafficParticipant.getWidth()` | done |
+| 2. Overlap-based leader finding, with equivalence proof | done |
+| 3. `LateralTarget`, `LaneChangeModel.chooseTarget` | done |
+| 4. `FilteringLaneChangeModel`, `FilteringRules` | done |
+| 5. Leader finding switched to lateral overlap for every type | done |
+| 6. Width-aware queue length and jam ratio | **not done** |
 
-This document is the design for closing that gap. It builds on the lateral state
-that now exists and requires no change outside `domain/vehicle/**`.
+Phase 6 is deliberately outstanding: it changes congestion numbers and therefore
+every figure in `EXPERIMENT_RESULTS.md`. A row of motorcycles still consumes a
+lane's worth of queue length, so `getPhysicalJamRatio` overstates congestion
+wherever they gather. Nothing else depends on it.
+
+`MotorcycleLaneChangeModel` has been deleted. It was a delegate to
+`MobilLaneChangeModel` with a zero incentive threshold and never filtered
+anything, despite reporting its name as `MOTORCYCLE_FILTERING_MOBIL`. Its
+replacement reports `MOTORCYCLE_SUBLANE_FILTERING` and earns it.
+
+The rest of this document is the design as built. Everything lives in
+`domain/vehicle/**`.
 
 ## What filtering actually is
 
@@ -110,10 +121,14 @@ all in `FilteringRules`:
    uses).
 3. **Absolute speed ceiling** — no filtering above roughly 14 m/s. Above that
    speed riders use lanes.
-4. **No filtering into a closing gap** — a neighbour whose own target offset
-   moves towards the corridor invalidates it. This check is only possible
-   because target offsets are now continuous and visible; it could not have been
-   written before.
+4. **No filtering into a closing gap** — implemented as
+   `RoadOccupancy.hasManoeuvringNeighbour`: if anything alongside is still
+   crossing towards its own lane centre, no corridor is treated as available.
+   This is a conservative reading of the rule. It refuses corridors that a
+   neighbour is moving *away* from as well as ones it is closing, because a
+   vehicle's target is not visible to others during the planning half of a
+   sub-step. The check is only possible at all because lateral position is now
+   continuous, so a vehicle between lane centres is visibly mid-manoeuvre.
 
 Rules 2 and 4 are the ones that keep the result honest. Without them the model
 would report throughput gains that come from motorcycles behaving impossibly.
