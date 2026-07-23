@@ -2,9 +2,9 @@
 
 ## Status
 
-**Implemented**, phases 1 to 5. A motorcycle now rides the gap between two lanes
-when both are blocked and the gap is wide enough for it, and stays in a lane
-when filtering buys nothing.
+**Complete.** A motorcycle rides the gap between two lanes when both are blocked
+and the gap is wide enough, stays in a lane when filtering buys nothing, and a
+row of riders standing abreast now costs the queue one row rather than three.
 
 | Phase | State |
 |---|---|
@@ -13,12 +13,23 @@ when filtering buys nothing.
 | 3. `LateralTarget`, `LaneChangeModel.chooseTarget` | done |
 | 4. `FilteringLaneChangeModel`, `FilteringRules` | done |
 | 5. Leader finding switched to lateral overlap for every type | done |
-| 6. Width-aware queue length and jam ratio | **not done** |
+| 6. Width-aware queue length and jam ratio | done |
 
-Phase 6 is deliberately outstanding: it changes congestion numbers and therefore
-every figure in `EXPERIMENT_RESULTS.md`. A row of motorcycles still consumes a
-lane's worth of queue length, so `getPhysicalJamRatio` overstates congestion
-wherever they gather. Nothing else depends on it.
+Phase 6 was held back on the grounds that it would change every figure in
+`EXPERIMENT_RESULTS.md`. That was wrong: `ExperimentService` benchmarks routing
+on static networks and creates no vehicles at all, so a jam ratio computed from
+vehicles cannot reach it. The delay was unnecessary.
+
+`Lane.abreastCapacityOf` divides the lane width by the vehicle's width plus its
+queueing clearance: one car or bus to a 3.5 m lane, three motorcycles, two on a
+3.0 m residential lane. Each vehicle then claims its standstill footprint
+divided by that number. Storage is shared between vehicles abreast; the gap at
+the lane entry is not, because a rider joining a queue still needs its own body
+length there whatever is beside it.
+
+`LaneOccupancy` was deleted alongside this. It was the single-lane predecessor
+of `Lane`, superseded when lanes arrived, and nothing in `src/main` had
+constructed it since; only its own test kept it compiling.
 
 `MotorcycleLaneChangeModel` has been deleted. It was a delegate to
 `MobilLaneChangeModel` with a zero incentive threshold and never filtered
