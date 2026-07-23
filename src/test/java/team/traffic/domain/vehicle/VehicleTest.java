@@ -31,7 +31,7 @@ class VehicleTest {
         assertThat(car.getLength()).isEqualTo(4.5);
         assertThat(car.getWidth()).isEqualTo(1.8);
         assertThat(car.getMaxSpeed()).isEqualTo(120.0);
-        assertThat(car.getCurrentSpeed()).isEqualTo(50.0);
+        assertThat(car.getCruisingSpeedKph()).isEqualTo(50.0);
         assertThat(car.getAcceleration()).isEqualTo(2.5);
         assertThat(car.getDeceleration()).isEqualTo(6.5);
         assertThat(car.getVehicleWeight()).isEqualTo(1_500.0);
@@ -60,16 +60,15 @@ class VehicleTest {
         Vehicle vehicle = new Car("car-1", "A", "B");
 
         vehicle.accelerate(2.0);
-        assertThat(vehicle.getCurrentSpeed()).isEqualTo(68.0);
-        assertThat(vehicle.getMovementSpeed()).isEqualTo(68.0);
+        assertThat(vehicle.getCruisingSpeedKph()).isEqualTo(68.0);
 
         vehicle.decelerate(10.0);
-        assertThat(vehicle.getCurrentSpeed()).isZero();
+        assertThat(vehicle.getCruisingSpeedKph()).isZero();
 
-        vehicle.setCurrentSpeed(120.0);
-        assertThatThrownBy(() -> vehicle.setCurrentSpeed(120.1))
+        vehicle.setCruisingSpeedKph(120.0);
+        assertThatThrownBy(() -> vehicle.setCruisingSpeedKph(120.1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Current speed must be between zero and the maximum speed.");
+                .hasMessage("Cruising speed must be between zero and the maximum speed.");
     }
 
     @Test
@@ -80,7 +79,7 @@ class VehicleTest {
 
         assertThatThrownBy(() -> new Bus("bus-1", "A", "B", 40, VehicleProfile.bus(), 91.0))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Current speed must be between zero and the maximum speed.");
+                .hasMessage("Cruising speed must be between zero and the maximum speed.");
 
         assertThatThrownBy(() -> new EmergencyVehicle("emergency-1", "A", "B", 0))
                 .isInstanceOf(IllegalArgumentException.class)
