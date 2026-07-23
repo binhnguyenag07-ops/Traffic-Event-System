@@ -19,15 +19,16 @@ public final class RoadOccupancy {
         if (road == null) throw new IllegalArgumentException("Road is required.");
         if (roadLayout == null) throw new IllegalArgumentException("Road layout is required.");
         int laneCount = roadLayout.laneCountOf(road);
+        double laneWidthMetres = roadLayout.laneWidthMetresOf(road);
         List<Lane> lanes = new ArrayList<>(laneCount);
         for (int index = 0; index < laneCount; index++) {
             int laneIndex = index;
             List<TrafficParticipant> inLane = vehicles.stream()
                     .filter(vehicle -> vehicle.getLaneIndex() == laneIndex)
                     .toList();
-            lanes.add(new Lane(road, index, inLane, events));
+            lanes.add(new Lane(road, index, laneWidthMetres, inLane, events));
         }
-        return new RoadOccupancy(road, lanes, roadLayout.laneWidthMetresOf(road));
+        return new RoadOccupancy(road, lanes, laneWidthMetres);
     }
 
     private RoadOccupancy(Road road, List<Lane> lanes, double laneWidthMetres) {
