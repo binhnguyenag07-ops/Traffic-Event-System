@@ -14,10 +14,14 @@ import team.traffic.domain.routing.RouteResult;
 import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.dynamics.CarFollowingModel;
 import team.traffic.domain.vehicle.dynamics.DriverProfile;
+import team.traffic.domain.vehicle.dynamics.FilteringLaneChangeModel;
+import team.traffic.domain.vehicle.dynamics.FilteringRules;
 import team.traffic.domain.vehicle.dynamics.FollowContext;
+import team.traffic.domain.vehicle.dynamics.LateralTarget;
 import team.traffic.domain.vehicle.dynamics.JunctionApproach;
 import team.traffic.domain.vehicle.dynamics.KraussCarFollowingModel;
 import team.traffic.domain.vehicle.dynamics.Lane;
+import team.traffic.domain.vehicle.dynamics.LateralMotionModel;
 import team.traffic.domain.vehicle.dynamics.LeaderGap;
 import team.traffic.domain.vehicle.dynamics.MovementPlan;
 import team.traffic.domain.vehicle.dynamics.LaneChangeModel;
@@ -54,6 +58,8 @@ public abstract class Vehicle implements TrafficParticipant {
     private String roadEndIntersectionId;
     private double roadProgress;
     private int laneIndex;
+    private double lateralOffsetMetres;
+    private double lateralTargetOffsetMetres;
     private final TripRecord trip;
     private String lastRoutingAlgorithm;
     private DriverProfile driverProfile;
@@ -93,6 +99,8 @@ public abstract class Vehicle implements TrafficParticipant {
         this.laneChangeModel = new MobilLaneChangeModel();
         this.instantaneousSpeedMps = currentSpeed / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
         this.laneIndex = 0;
+        this.lateralOffsetMetres = 0.0;
+        this.lateralTargetOffsetMetres = 0.0;
     }
 
     public abstract VehicleType getType();
@@ -222,13 +230,32 @@ public abstract class Vehicle implements TrafficParticipant {
 
         RoadOccupancy roadOccupancy = trafficState.occupancyOf(road.getId());
         int targetLaneIndex = laneIndex;
+        double plannedLateralOffsetMetres = lateralOffsetMetres;
+        double targetOffsetMetres = lateralOffsetMetres;
         if (roadOccupancy != null) {
-            targetLaneIndex = laneChangeModel.chooseTargetLane(new LaneChangeRequest(
-                    this, roadOccupancy, desiredSpeedMps(road),
-                    profile.accelerationMps2(), profile.decelerationMps2(), simulationSeconds));
+            targetOffsetMetres = lateralTargetOffset();
+            // A vehicle still crossing towards its chosen position is committed
+            // to it and does not get another say until it arrives. Asking the
+            // model afresh every step would let it drift back and forth without
+            // ever completing a manoeuvre.
+            if (LateralMotionModel.hasSettled(lateralOffsetMetres, targetOffsetMetres)) {
+                LateralTarget target = laneChangeModel.chooseTarget(new LaneChangeRequest(
+                        this, roadOccupancy, desiredSpeedMps(road),
+                        profile.accelerationMps2(), profile.decelerationMps2(), simulationSeconds));
+                targetLaneIndex = target.laneIndex();
+                targetOffsetMetres = target.offsetMetres();
+            }
+            plannedLateralOffsetMetres = LateralMotionModel.nextOffsetMetres(
+                    lateralOffsetMetres,
+                    targetOffsetMetres,
+                    getDriverProfile().maxLateralSpeedMps(),
+                    simulationSeconds);
         }
         Lane lane = roadOccupancy == null ? null : roadOccupancy.lane(targetLaneIndex);
-        LeaderGap leaderGap = lane == null ? LeaderGap.FREE_ROAD : lane.findLeaderFor(this);
+        LeaderGap leaderGap = roadOccupancy == null
+                ? LeaderGap.FREE_ROAD
+                : roadOccupancy.findLeaderAtOffset(
+                        this, plannedLateralOffsetMetres, lateralClearanceMetres());
         double distanceToExitMetres = lane == null
                 ? (1.0 - roadProgress) * road.getDistance() * 1_000.0
                 : lane.distanceToExitMetres(this);
@@ -250,12 +277,55 @@ public abstract class Vehicle implements TrafficParticipant {
                 simulationSeconds,
                 reproducibleNoise(trafficState.getTick())));
 
+        plannedSpeedMps = applyFilteringSpeedCap(
+                plannedSpeedMps, roadOccupancy, plannedLateralOffsetMetres, targetLaneIndex);
+
         return Optional.of(new MovementPlan(
                 road.getId(),
                 plannedSpeedMps,
                 Math.min(plannedSpeedMps * simulationSeconds, distanceToExitMetres),
                 mayLeaveRoad,
-                targetLaneIndex));
+                targetLaneIndex,
+                plannedLateralOffsetMetres,
+                targetOffsetMetres));
+    }
+
+    /**
+     * Holds a filtering rider to a sane speed relative to the traffic it is
+     * passing. A rider threading stopped traffic at road speed would produce
+     * real throughput numbers from an unreal manoeuvre.
+     */
+    private double applyFilteringSpeedCap(
+            double plannedSpeedMps,
+            RoadOccupancy roadOccupancy,
+            double lateralOffsetAfterStep,
+            int targetLaneIndex) {
+        if (roadOccupancy == null
+                || !(laneChangeModel instanceof FilteringLaneChangeModel filtering)) {
+            return plannedSpeedMps;
+        }
+        boolean betweenLanes = !LateralMotionModel.hasSettled(
+                lateralOffsetAfterStep, roadOccupancy.laneCentreOffsetMetres(targetLaneIndex));
+        FilteringRules rules = filtering.getRules();
+        return rules.cappedSpeedMps(
+                plannedSpeedMps,
+                roadOccupancy.slowestNeighbourSpeedMps(this, rules.neighbourWindowMetres()),
+                betweenLanes);
+    }
+
+    /** Room this vehicle's driver keeps beside them when judging who is in the way. */
+    private double lateralClearanceMetres() {
+        return laneChangeModel instanceof FilteringLaneChangeModel filtering
+                ? filtering.getRules().lateralClearanceMetres()
+                : FilteringRules.defaults().lateralClearanceMetres();
+    }
+
+    /**
+     * Where this vehicle is currently steering towards: its lane centre unless
+     * it is a filtering rider that chose a gap between lanes.
+     */
+    private double lateralTargetOffset() {
+        return lateralTargetOffsetMetres;
     }
 
     /**
@@ -280,6 +350,8 @@ public abstract class Vehicle implements TrafficParticipant {
         // one it just chose.
         instantaneousSpeedMps = plan.speedMps();
         laneIndex = plan.targetLaneIndex();
+        lateralOffsetMetres = plan.lateralOffsetMetres();
+        lateralTargetOffsetMetres = plan.targetLateralOffsetMetres();
 
         double previousProgress = roadProgress;
         roadProgress = Math.min(1.0, roadProgress + plan.travelMetres() / (road.getDistance() * 1_000.0));
@@ -456,6 +528,13 @@ public abstract class Vehicle implements TrafficParticipant {
         }
 
         laneIndex = entryLane;
+        // A vehicle arrives already lined up with the lane it enters: the
+        // sideways movement it needed happened while crossing the junction,
+        // which this model does not simulate in metres.
+        lateralOffsetMetres = targetOccupancy == null
+                ? 0.0
+                : targetOccupancy.laneCentreOffsetMetres(entryLane);
+        lateralTargetOffsetMetres = lateralOffsetMetres;
         enterNextRoad(roadNetwork, step);
         roadStartIntersectionId = step.getFromIntersectionId();
         roadEndIntersectionId = step.getToIntersectionId();
@@ -627,6 +706,16 @@ public abstract class Vehicle implements TrafficParticipant {
     @Override
     public int getLaneIndex() {
         return laneIndex;
+    }
+
+    /**
+     * Where the vehicle sits across the road in metres, signed from the road
+     * centreline. Equal to its lane's centre except while a lane change is in
+     * progress, when it reports the intermediate position.
+     */
+    @Override
+    public double getLateralOffsetMetres() {
+        return lateralOffsetMetres;
     }
 
     public String getNextRoadId() {
@@ -899,6 +988,8 @@ public abstract class Vehicle implements TrafficParticipant {
         }
         occupiedRoadId = null;
         laneIndex = 0;
+        lateralOffsetMetres = 0.0;
+        lateralTargetOffsetMetres = 0.0;
         roadStartIntersectionId = null;
         roadEndIntersectionId = null;
         roadProgress = 0.0;

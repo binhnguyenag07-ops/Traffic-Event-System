@@ -22,6 +22,17 @@ public interface TrafficParticipant {
     /** Bumper-to-bumper length in metres. */
     double getLength();
 
+    /**
+     * Mirror-to-mirror width in metres, used to decide who is in whose way.
+     *
+     * <p>Defaults to a car so that participants written before sub-lane
+     * occupancy existed keep a sensible footprint rather than a zero-width
+     * one, which would let them share a lane with anything.</p>
+     */
+    default double getWidth() {
+        return 1.8;
+    }
+
     /** How far along its current road it is, from 0 at the entry to 1 at the exit. */
     double getRoadProgress();
 
@@ -40,6 +51,24 @@ public interface TrafficParticipant {
     /** Zero-based lane index. Legacy participants occupy lane zero. */
     default int getLaneIndex() {
         return 0;
+    }
+
+    /**
+     * Signed distance from the road centreline in metres, positive towards
+     * increasing lane indexes.
+     *
+     * <p>Distinct from the lane index because the two disagree for as long as a
+     * lane change lasts: the index names the lane the vehicle has committed to,
+     * this says where it physically is while getting there. Participants that
+     * never change lane report their lane centre and the two agree always.</p>
+     */
+    default double getLateralOffsetMetres() {
+        return 0.0;
+    }
+
+    /** The strip of road this participant occupies across its width. */
+    default LateralExtent lateralExtent() {
+        return new LateralExtent(getLateralOffsetMetres(), getWidth());
     }
 
     /** Maximum comfortable braking magnitude in metres per second squared. */

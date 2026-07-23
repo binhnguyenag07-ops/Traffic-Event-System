@@ -27,6 +27,11 @@ import team.traffic.domain.vehicle.VehicleType;
  * @param lateralAccelerationMps2 comfortable lateral acceleration in a curve
  * @param politeness           weight given to the inconvenience imposed on
  *                             neighbouring vehicles during a lane change
+ * @param maxLateralSpeedMps   fastest the driver will slide sideways while
+ *                             changing lane, in metres per second. This is what
+ *                             gives a lane change a duration instead of letting
+ *                             it happen between one step and the next. SUMO
+ *                             calls this {@code maxSpeedLat}.
  */
 public record DriverProfile(
         double minimumGapMetres,
@@ -35,7 +40,11 @@ public record DriverProfile(
         double gapAcceptanceSeconds,
         double speedFactor,
         double lateralAccelerationMps2,
-        double politeness) {
+        double politeness,
+        double maxLateralSpeedMps) {
+
+    /** SUMO's {@code maxSpeedLat} default, and the value used where none is given. */
+    public static final double DEFAULT_MAX_LATERAL_SPEED_MPS = 1.0;
 
     public DriverProfile(
             double minimumGapMetres,
@@ -44,7 +53,19 @@ public record DriverProfile(
             double gapAcceptanceSeconds,
             double speedFactor) {
         this(minimumGapMetres, reactionTimeSeconds, imperfection,
-                gapAcceptanceSeconds, speedFactor, 2.5, 0.35);
+                gapAcceptanceSeconds, speedFactor, 2.5, 0.35, DEFAULT_MAX_LATERAL_SPEED_MPS);
+    }
+
+    public DriverProfile(
+            double minimumGapMetres,
+            double reactionTimeSeconds,
+            double imperfection,
+            double gapAcceptanceSeconds,
+            double speedFactor,
+            double lateralAccelerationMps2,
+            double politeness) {
+        this(minimumGapMetres, reactionTimeSeconds, imperfection, gapAcceptanceSeconds,
+                speedFactor, lateralAccelerationMps2, politeness, DEFAULT_MAX_LATERAL_SPEED_MPS);
     }
 
     public DriverProfile {
@@ -59,6 +80,7 @@ public record DriverProfile(
         if (!Double.isFinite(politeness) || politeness < 0 || politeness > 1) {
             throw new IllegalArgumentException("Politeness must be between 0 and 1.");
         }
+        requirePositive("Maximum lateral speed", maxLateralSpeedMps);
     }
 
     /**
@@ -68,16 +90,20 @@ public record DriverProfile(
      * safe compact gaps more readily. Buses are more cautious and slower to
      * react than cars. Emergency vehicles react faster, accept smaller gaps,
      * and are permitted to exceed the posted limit.</p>
+     *
+     * <p>Lateral speeds follow the same ordering. A motorcycle crosses a lane
+     * line in roughly a second, a bus takes the best part of five, and a car
+     * sits at SUMO's published default in between.</p>
      */
     public static DriverProfile forType(VehicleType type) {
         if (type == null) {
             throw new IllegalArgumentException("Vehicle type is required.");
         }
         return switch (type) {
-            case CAR -> new DriverProfile(2.5, 1.0, 0.5, 3.0, 1.0, 2.5, 0.35);
-            case MOTORCYCLE -> new DriverProfile(0.8, 0.65, 0.35, 1.4, 1.05, 3.4, 0.15);
-            case BUS -> new DriverProfile(3.0, 1.4, 0.4, 4.5, 0.95, 2.0, 0.6);
-            case EMERGENCY -> new DriverProfile(2.0, 0.7, 0.1, 1.5, 1.3, 3.2, 0.0);
+            case CAR -> new DriverProfile(2.5, 1.0, 0.5, 3.0, 1.0, 2.5, 0.35, 1.0);
+            case MOTORCYCLE -> new DriverProfile(0.8, 0.65, 0.35, 1.4, 1.05, 3.4, 0.15, 1.6);
+            case BUS -> new DriverProfile(3.0, 1.4, 0.4, 4.5, 0.95, 2.0, 0.6, 0.7);
+            case EMERGENCY -> new DriverProfile(2.0, 0.7, 0.1, 1.5, 1.3, 3.2, 0.0, 1.4);
         };
     }
 
@@ -94,7 +120,8 @@ public record DriverProfile(
                 base.gapAcceptanceSeconds * factor(vehicleId, 4),
                 base.speedFactor * factor(vehicleId, 5),
                 base.lateralAccelerationMps2 * factor(vehicleId, 6),
-                clamp01(base.politeness * factor(vehicleId, 7)));
+                clamp01(base.politeness * factor(vehicleId, 7)),
+                base.maxLateralSpeedMps * factor(vehicleId, 8));
     }
 
     /**

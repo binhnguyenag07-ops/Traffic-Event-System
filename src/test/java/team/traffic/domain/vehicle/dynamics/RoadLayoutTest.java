@@ -29,4 +29,34 @@ class RoadLayoutTest {
 
         assertThat(new RoadClassRoadLayout().laneCountOf(road)).isEqualTo(3);
     }
+
+    @Test
+    void anOddLaneCountPutsTheMiddleLaneOnTheCentreline() {
+        assertThat(RoadLayout.laneCentreOffsetMetres(0, 3, 3.5)).isEqualTo(-3.5);
+        assertThat(RoadLayout.laneCentreOffsetMetres(1, 3, 3.5)).isEqualTo(0.0);
+        assertThat(RoadLayout.laneCentreOffsetMetres(2, 3, 3.5)).isEqualTo(3.5);
+    }
+
+    @Test
+    void anEvenLaneCountStraddlesTheCentreline() {
+        assertThat(RoadLayout.laneCentreOffsetMetres(0, 2, 3.5)).isEqualTo(-1.75);
+        assertThat(RoadLayout.laneCentreOffsetMetres(1, 2, 3.5)).isEqualTo(1.75);
+    }
+
+    @Test
+    void aSingleLaneSitsOnTheCentreline() {
+        assertThat(RoadLayout.laneCentreOffsetMetres(0, 1, 3.0)).isEqualTo(0.0);
+    }
+
+    @Test
+    void laneCentresSpanTheRoadWidth() {
+        Road road = new Road("R", "Road", "P", "A", "B", 1, 50, 100, 0,
+                4, 3.4, new RoadCondition(0, 0, RoadStatus.OPEN), List.of(), RoadClass.PRIMARY);
+        RoadLayout layout = new RoadDataRoadLayout();
+
+        double outermost = layout.laneCentreOffsetMetresOf(road, 3)
+                - layout.laneCentreOffsetMetresOf(road, 0);
+
+        assertThat(outermost).isEqualTo(layout.roadWidthMetresOf(road) - 3.4);
+    }
 }

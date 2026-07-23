@@ -16,16 +16,45 @@ package team.traffic.domain.vehicle.dynamics;
  * @param mayLeaveRoad  whether running off the end is permitted, which it is
  *                      not when the road beyond has no room
  * @param targetLaneIndex lane occupied during this movement
+ * @param lateralOffsetMetres where the vehicle sits across the road at the end
+ *                      of the step, which is the target only once the manoeuvre
+ *                      has finished
+ * @param targetLateralOffsetMetres where it is heading, carried between steps
+ *                      so a manoeuvre spanning several of them is not restarted
+ *                      or abandoned half way. It is not always a lane centre: a
+ *                      filtering rider aims at the gap between two lanes
  */
 public record MovementPlan(
         String roadId,
         double speedMps,
         double travelMetres,
         boolean mayLeaveRoad,
-        int targetLaneIndex) {
+        int targetLaneIndex,
+        double lateralOffsetMetres,
+        double targetLateralOffsetMetres) {
 
     public MovementPlan(String roadId, double speedMps, double travelMetres, boolean mayLeaveRoad) {
-        this(roadId, speedMps, travelMetres, mayLeaveRoad, 0);
+        this(roadId, speedMps, travelMetres, mayLeaveRoad, 0, 0.0, 0.0);
+    }
+
+    public MovementPlan(
+            String roadId,
+            double speedMps,
+            double travelMetres,
+            boolean mayLeaveRoad,
+            int targetLaneIndex) {
+        this(roadId, speedMps, travelMetres, mayLeaveRoad, targetLaneIndex, 0.0, 0.0);
+    }
+
+    public MovementPlan(
+            String roadId,
+            double speedMps,
+            double travelMetres,
+            boolean mayLeaveRoad,
+            int targetLaneIndex,
+            double lateralOffsetMetres) {
+        this(roadId, speedMps, travelMetres, mayLeaveRoad, targetLaneIndex,
+                lateralOffsetMetres, lateralOffsetMetres);
     }
 
     public MovementPlan {
@@ -40,6 +69,12 @@ public record MovementPlan(
         }
         if (targetLaneIndex < 0) {
             throw new IllegalArgumentException("Target lane index must not be negative.");
+        }
+        if (!Double.isFinite(lateralOffsetMetres)) {
+            throw new IllegalArgumentException("Planned lateral offset must be finite.");
+        }
+        if (!Double.isFinite(targetLateralOffsetMetres)) {
+            throw new IllegalArgumentException("Planned lateral target must be finite.");
         }
     }
 }
