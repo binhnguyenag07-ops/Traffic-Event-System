@@ -49,7 +49,7 @@ class SimulationSnapshotDtoTest {
 
         VehicleDto dto = new VehicleDto(vehicle);
 
-        assertThat(dto.getCurrentSpeed()).isEqualTo(50.0);
+        assertThat(dto.getCruisingSpeedKph()).isEqualTo(50.0);
         assertThat(dto.getInstantaneousSpeed()).isCloseTo(18.0, within(1e-9));
     }
 

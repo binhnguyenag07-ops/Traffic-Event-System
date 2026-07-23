@@ -62,7 +62,7 @@ public record VehicleProfile(
     /** Rejects a cruising speed the vehicle could not actually hold. */
     public void requireReachable(double speedKph) {
         if (!Double.isFinite(speedKph) || speedKph < 0 || speedKph > maxSpeedKph) {
-            throw new IllegalArgumentException("Current speed must be between zero and the maximum speed.");
+            throw new IllegalArgumentException("Cruising speed must be between zero and the maximum speed.");
         }
     }
 
