@@ -201,7 +201,8 @@ public final class LaneGeometryBuilder {
         return ordered;
     }
 
-    private List<GeoPoint> shapeOf(Road road) {
+    /** The road's drawable shape, package-visible so the scene assembler can range-check it. */
+    List<GeoPoint> shapeOf(Road road) {
         List<GeoPoint> stored = road.getGeometry();
         if (stored != null && stored.size() >= 2) {
             return stored;
