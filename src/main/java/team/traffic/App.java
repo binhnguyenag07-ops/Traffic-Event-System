@@ -11,6 +11,7 @@ import team.traffic.api.controller.TrafficEventController;
 import team.traffic.api.controller.VehicleController;
 import team.traffic.api.controller.ScenarioController;
 import team.traffic.api.controller.ExperimentController;
+import team.traffic.api.controller.PhysicalViewController;
 import team.traffic.experiment.ExperimentService;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.observer.TrafficEventBus;
@@ -81,12 +82,14 @@ public class App {
         StatisticsController statisticsController = new StatisticsController(statisticsService);
         ScenarioController scenarioController = new ScenarioController(networkService, simulationService);
         ExperimentController experimentController = new ExperimentController(new ExperimentService());
+        PhysicalViewController physicalViewController =
+                new PhysicalViewController(networkService, simulationService);
 
         // Wire API routes
         ApiRouteRegistry routeRegistry = new ApiRouteRegistry(
                 healthController, networkController, routingController, simulationController,
                 vehicleController, trafficEventController, statisticsController, scenarioController,
-                experimentController);
+                experimentController, physicalViewController);
 
         // Start Javalin server
         TrafficApiServer server = new TrafficApiServer(routeRegistry, PORT);

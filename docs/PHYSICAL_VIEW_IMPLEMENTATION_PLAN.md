@@ -89,7 +89,16 @@ junction of four roads yields four stop lines and the expected connector count.
 **This phase is independently valuable** and is the natural place to stop if the
 deadline bites: it makes lane geometry testable without any renderer.
 
-## Phase 2 — Region query
+## Phase 2 — Region query — DONE
+
+`PhysicalSceneAssembler` (in `domain/scene`, not `service/`, so it stays a pure
+domain step testable without the simulation). Given a centre and radius it
+returns the lanes, stop lines, connectors, junctions and vehicles in range,
+filtering roads, junctions and vehicles against the same radius. Vehicles are
+passed in rather than fetched, so the assembler does not depend on how the
+simulation is driven; the controller resolves the current frame into them.
+
+Original wording, kept for the record:
 
 - **`PhysicalSceneService`** — given a centre and radius in metres, returns the
   roads intersecting that circle, their lane geometry, junctions, stop lines,
@@ -102,7 +111,15 @@ Tests: a radius covering one junction returns only its roads; a radius covering
 nothing returns empty rather than throwing; vehicle filtering matches the road
 filtering.
 
-## Phase 3 — API contract
+## Phase 3 — API contract — DONE
+
+`GET /api/simulation/physical-view` is live, served by `PhysicalViewController`
+and wired through `ApiRouteRegistry` as an optional controller (the same
+nullable pattern the scenario and experiment controllers use, so existing
+constructors keep working). `PhysicalViewDto.of` performs the one geographic →
+local-metre projection. The contract is recorded in `API_CONTRACT.md`.
+
+Original sketch of the response, kept for the record:
 
 `GET /api/simulation/physical-view?lat=&lon=&radiusMetres=`
 
