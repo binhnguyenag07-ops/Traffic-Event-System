@@ -44,9 +44,23 @@ function MapCoordinatePicker({ active, onPick }) {
   return null
 }
 
-function MapZoomTracker({ onZoom }) {
-  const map = useMapEvents({ zoomend: () => onZoom(map.getZoom()) })
-  useEffect(() => onZoom(map.getZoom()), [map, onZoom])
+function MapZoomTracker({ onZoom, onCenter }) {
+  const map = useMapEvents({
+    zoomend: () => { onZoom(map.getZoom()); onCenter?.(map.getCenter()) },
+    moveend: () => onCenter?.(map.getCenter()),
+  })
+  useEffect(() => { onZoom(map.getZoom()); onCenter?.(map.getCenter()) }, [map, onZoom, onCenter])
+  return null
+}
+
+// Where the physical view should open: the selected junction if it carries
+// coordinates, otherwise the middle of what the user is looking at.
+function physicalTargetFrom(selected, mapCenter, radiusMetres = 160) {
+  const data = selected?.data
+  if (data && data.latitude != null && data.longitude != null) {
+    return { latitude: Number(data.latitude), longitude: Number(data.longitude), radiusMetres }
+  }
+  if (mapCenter) return { latitude: mapCenter.lat, longitude: mapCenter.lng, radiusMetres }
   return null
 }
 
@@ -99,9 +113,11 @@ function MapLegend() {
 }
 
 function TrafficMap({ intersections, roads, vehicles = [], events, route, selected, onSelect, onPickIntersection,
-  captureIntersection = false, draftIntersection = null, highlightedRoadIds = [], onMapCoordinate = () => {} }) {
+  captureIntersection = false, draftIntersection = null, highlightedRoadIds = [], onMapCoordinate = () => {},
+  onOpenPhysical = null }) {
   const [layers, setLayers] = useState({ traffic: true, vehicles: true, events: true, labels: true })
   const [zoom, setZoom] = useState(16)
+  const [mapCenter, setMapCenter] = useState(null)
   const intersectionById = useMemo(
     () => new Map(intersections.map((intersection) => [intersection.id, intersection])),
     [intersections],
@@ -129,6 +145,18 @@ function TrafficMap({ intersections, roads, vehicles = [], events, route, select
               {name}
             </button>
           ))}
+          {onOpenPhysical && (
+            <button
+              className="physical-open"
+              disabled={zoom < 18}
+              title={zoom < 18 ? 'Zoom in to lane level to open the physical view' : 'Open the lane-level physical view here'}
+              onClick={() => {
+                const target = physicalTargetFrom(selected, mapCenter)
+                if (target) onOpenPhysical(target)
+              }}>
+              Open physical view
+            </button>
+          )}
         </div>
       </div>
 
@@ -144,7 +172,7 @@ function TrafficMap({ intersections, roads, vehicles = [], events, route, select
       >
         <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
         <FitNetwork positions={positions} />
-        <MapZoomTracker onZoom={setZoom} />
+        <MapZoomTracker onZoom={setZoom} onCenter={setMapCenter} />
         <MapCoordinatePicker active={captureIntersection} onPick={onMapCoordinate} />
 
         <Pane name="roads" style={{ zIndex: 410 }}>
