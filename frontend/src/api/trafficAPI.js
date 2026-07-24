@@ -74,6 +74,10 @@ export const simulationApi = {
   setParameters: (simulationSecondsPerTick, playbackIntervalMs) =>
     put('/simulation/parameters', { simulationSecondsPerTick, playbackIntervalMs }),
   streamUrl: () => `${API_BASE}/simulation/stream`,
+  physicalView: (lat, lon, radiusMetres) => get(
+    `/simulation/physical-view?lat=${encodeURIComponent(lat)}`
+    + `&lon=${encodeURIComponent(lon)}&radiusMetres=${encodeURIComponent(radiusMetres)}`,
+  ),
 }
 
 export const routingApi = {
