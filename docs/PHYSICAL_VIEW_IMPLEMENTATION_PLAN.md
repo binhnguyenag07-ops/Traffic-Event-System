@@ -154,6 +154,31 @@ frame. Note that in the code rather than leaving it implied.
 
 Add the endpoint to `API_CONTRACT.md` in the same commit.
 
+## Phases 4-6 — Renderer, transition, filtering — DONE
+
+Built in `frontend/src/physical/` on `pixi.js` v8, verified end-to-end against the
+running backend on the District 1 map: lane centrelines, junction pavement and
+stop lines render, the scene polls live and interpolates between frames, scroll
+zooms, and a real vehicle projects into the scene at the origin.
+
+- `sceneTransform.js` — metres ↔ pixels and the vehicle-box corners. Pure,
+  unit-tested (origin at centre, north up, east right, round-trip).
+- `interpolate.js` — vehicle positions between two LIVE frames; a departed
+  vehicle is dropped, a fresh one drawn at its own position, exact frame at
+  t=0/1. Pure, unit-tested.
+- `layers/drawScene.js` — the draw order: pavement, road surface, markings and
+  stop lines, then vehicles, with a trail behind moving motorcycles.
+- `PhysicalScene.jsx` — owns the PixiJS application, polls the endpoint, and
+  runs the interpolate-and-draw ticker. Shows the frame it is given and never
+  fetches a frame of its own, so it stays on the backend's clock.
+- Transition: `TrafficMap` shows **Open physical view** at zoom ≥ 18, centred on
+  the selected junction or the map centre; `App` renders the overlay.
+
+The interpolation-honesty and coordinate-boundary rules from the sketch below
+are enforced in code and called out in each module's header comment.
+
+Original sketch, kept for the record:
+
 ## Phase 4 — Renderer skeleton
 
 `frontend/src/physical/`, added to `package.json` as `pixi.js`.

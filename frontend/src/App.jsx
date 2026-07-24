@@ -3,6 +3,7 @@ import TrafficMap from './components/TrafficMap'
 import NetworkEditor from './components/NetworkEditor'
 import ExperimentPanel from './components/ExperimentPanel'
 import TimelineScrubber from './components/TimelineScrubber'
+import PhysicalScene from './physical/PhysicalScene'
 import { useTrafficDashboard } from './hooks/useTrafficDashboard'
 
 const PREFERENCES = [
@@ -57,6 +58,7 @@ function Inspector({ selected }) {
 
 export default function App() {
   const dashboard = useTrafficDashboard()
+  const [physicalTarget, setPhysicalTarget] = useState(null)
   const {
     intersections, roads, viewRoads, scenarios, activeScenario, snapshot, viewFrame,
     timeline, viewingHistory, historyLoading, statistics, algorithms,
@@ -220,7 +222,11 @@ export default function App() {
               setDraftPoint(point)
               setCaptureIntersection(false)
             }}
+            onOpenPhysical={setPhysicalTarget}
           />
+          {physicalTarget && (
+            <PhysicalScene target={physicalTarget} onClose={() => setPhysicalTarget(null)} />
+          )}
           <div className="map-metrics" aria-label={viewingHistory ? 'Historical traffic summary' : 'Live traffic summary'}>
             <Metric label="Fleet" value={viewFrame.vehicles?.length || 0} />
             <Metric label={viewingHistory ? 'Frame time' : 'Average trip'}
