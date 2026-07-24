@@ -136,3 +136,44 @@ than the retained window returns `404`. Initialize, reset, scenario/map
 replacement, and any in-place network edit create a new `timelineId`. This is
 intentional: frames store dynamic road state but not a full historical copy of
 network geometry.
+
+## Physical view
+
+```text
+GET /api/simulation/physical-view?lat=<deg>&lon=<deg>&radiusMetres=<m>
+```
+
+Returns the lane-level scene within `radiusMetres` of the point, for the PixiJS
+renderer. All three query parameters are required and numeric; a missing or
+non-numeric one returns `400`, as does a non-positive radius. The radius is
+capped at 1000 m so one request cannot ask for the whole city.
+
+The scene is projected into **local metres** with the query point as the origin,
+x running east and y running north. This is deliberate: the renderer works in a
+single flat frame and never sees latitude or longitude, which keeps the three
+coordinate systems (geographic, local metres, screen pixels) from being mixed.
+
+```jsonc
+{
+  "origin": { "latitude": 10.0, "longitude": 106.0 },
+  "radiusMetres": 300.0,
+  "timelineId": "...",        // ties the scene to one frame; "none" before init
+  "frameId": 412,             // -1 before the first frame
+  "elapsedSeconds": 41.2,
+  "lanes":      [ { "roadId", "laneIndex", "widthMetres", "oneway", "centreline": [[x,y], ...] } ],
+  "stopLines":  [ { "roadId", "from": [x,y], "to": [x,y] } ],
+  "connectors": [ { "fromRoadId", "fromLane", "toRoadId", "toLane", "curve": [[x,y], ...] } ],
+  "junctions":  [ { "junctionId", "pavement": [[x,y], ...] } ],
+  "vehicles":   [ { "id", "type", "x", "y", "headingDegrees", "speedMps",
+                    "lengthMetres", "widthMetres", "laneIndex", "lateralOffsetMetres" } ]
+}
+```
+
+Geometry is derived from the network (`domain.scene.LaneGeometryBuilder`);
+vehicles come from the current authoritative frame. `timelineId` and `frameId`
+are that frame's, so the physical view and the macro map stay on one clock. A
+vehicle's `lateralOffsetMetres` is its real offset, so a filtering motorcycle is
+drawn between the lanes it is riding between rather than snapped to one.
+
+Static geometry and moving vehicles share one response for now; when the network
+grows, geometry (fetched once per region) and vehicles (fetched per frame) split.

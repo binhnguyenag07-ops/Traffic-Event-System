@@ -27,7 +27,8 @@ Work that is designed but not yet built. Each states its own status.
 | Document | Purpose |
 |---|---|
 | [PHYSICAL_VIEW_PLAN.md](PHYSICAL_VIEW_PLAN.md) | Macro/physical two-renderer split and the OSM ingestion decision. |
-| [MOTORCYCLE_FILTERING_PLAN.md](MOTORCYCLE_FILTERING_PLAN.md) | Sub-lane occupancy for genuine between-lane filtering. |
+| [PHYSICAL_VIEW_IMPLEMENTATION_PLAN.md](PHYSICAL_VIEW_IMPLEMENTATION_PLAN.md) | Six-phase build plan for the PixiJS renderer and its lane-geometry endpoint. |
+| [MOTORCYCLE_FILTERING_PLAN.md](MOTORCYCLE_FILTERING_PLAN.md) | Sub-lane occupancy for genuine between-lane filtering. Complete. |
 
 ## Change records
 
