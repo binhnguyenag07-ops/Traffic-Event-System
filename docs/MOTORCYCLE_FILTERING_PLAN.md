@@ -1,43 +1,24 @@
-# Motorcycle Filtering Plan
+# Motorcycle Filtering
 
-## Status
+Design record for sub-lane filtering. **Built**, in `domain/vehicle/**`.
 
-**Complete.** A motorcycle rides the gap between two lanes when both are blocked
-and the gap is wide enough, stays in a lane when filtering buys nothing, and a
-row of riders standing abreast now costs the queue one row rather than three.
-
-| Phase | State |
-|---|---|
-| 1. `LateralExtent`, `TrafficParticipant.getWidth()` | done |
-| 2. Overlap-based leader finding, with equivalence proof | done |
-| 3. `LateralTarget`, `LaneChangeModel.chooseTarget` | done |
-| 4. `FilteringLaneChangeModel`, `FilteringRules` | done |
-| 5. Leader finding switched to lateral overlap for every type | done |
-| 6. Width-aware queue length and jam ratio | done |
-
-Phase 6 was held back on the grounds that it would change every figure in
-`EXPERIMENT_RESULTS.md`. That was wrong: `ExperimentService` benchmarks routing
-on static networks and creates no vehicles at all, so a jam ratio computed from
-vehicles cannot reach it. The delay was unnecessary.
+A motorcycle rides the gap between two lanes when both are blocked and the gap
+is wide enough, stays in a lane when filtering buys nothing, and a row of riders
+standing abreast costs the queue one row rather than three.
 
 `Lane.abreastCapacityOf` divides the lane width by the vehicle's width plus its
 queueing clearance: one car or bus to a 3.5 m lane, three motorcycles, two on a
-3.0 m residential lane. Each vehicle then claims its standstill footprint
-divided by that number. Storage is shared between vehicles abreast; the gap at
-the lane entry is not, because a rider joining a queue still needs its own body
-length there whatever is beside it.
+3.0 m residential lane. Each vehicle claims its standstill footprint divided by
+that number. Storage is shared between vehicles abreast; the gap at the lane
+entry is not, because a rider joining a queue still needs its own body length
+there whatever is beside it.
 
-`LaneOccupancy` was deleted alongside this. It was the single-lane predecessor
-of `Lane`, superseded when lanes arrived, and nothing in `src/main` had
-constructed it since; only its own test kept it compiling.
-
-`MotorcycleLaneChangeModel` has been deleted. It was a delegate to
-`MobilLaneChangeModel` with a zero incentive threshold and never filtered
-anything, despite reporting its name as `MOTORCYCLE_FILTERING_MOBIL`. Its
-replacement reports `MOTORCYCLE_SUBLANE_FILTERING` and earns it.
-
-The rest of this document is the design as built. Everything lives in
-`domain/vehicle/**`.
+Two classes went with this work. `LaneOccupancy` was the single-lane predecessor
+of `Lane`, superseded when lanes arrived and unconstructed anywhere in
+`src/main`. `MotorcycleLaneChangeModel` delegated to `MobilLaneChangeModel` with
+a zero incentive threshold and never filtered anything, despite reporting its
+name as `MOTORCYCLE_FILTERING_MOBIL`; its replacement reports
+`MOTORCYCLE_SUBLANE_FILTERING` and earns it.
 
 ## What filtering actually is
 
@@ -49,13 +30,13 @@ that are themselves sitting on lane centres. Two properties define it:
    centres;
 2. what blocks it is decided by **lateral overlap**, not by a shared lane index.
 
-The lateral position is now expressible. The second property is what the model
-still cannot represent, and it is the whole of the remaining work.
+Both are now expressible: continuous lateral position came first, and lateral
+overlap replaced lane equality after it.
 
-## Why lane index cannot express it
+## Why lane index could not express it
 
-Three places in the current model assume that sharing a lane index is the same
-as being in each other's way.
+Three places in the model had assumed that sharing a lane index is the same as
+being in each other's way.
 
 | Location | Assumption | Consequence for a filtering motorcycle |
 |---|---|---|
@@ -85,38 +66,35 @@ leader-finding, without any of them being special-cased. A car keeps behaving
 exactly as it does now, because a car sitting on a lane centre overlaps only
 vehicles on the same lane centre.
 
-`Vehicle.getWidth()` already exists; `TrafficParticipant` exposes only
-`getLength()` and needs the matching accessor.
-
 ## Classes
 
-New, all in `domain/vehicle/dynamics`:
+Added, all in `domain/vehicle/dynamics`:
 
 - **`LateralExtent`** — record of `centreMetres` and `widthMetres`, with
   `overlaps(other, clearanceMetres)` and `clearGapTo(other)`. Pure value type,
   trivially testable, and the single definition of "in each other's way".
-- **`SubLaneOccupancy`** — the lateral counterpart to `RoadOccupancy`. Holds
-  every participant on one directed road with its extent, and answers
-  `findLeaderFor(participant)` by scanning those whose extents overlap rather
-  than those sharing an index.
-- **`FilteringLaneChangeModel`** — replaces `MotorcycleLaneChangeModel`. Chooses
+- **`FilteringLaneChangeModel`** — replaced `MotorcycleLaneChangeModel`. Chooses
   a continuous target offset: the fastest laterally-reachable corridor that is
   wide enough, safe, and not disallowed by the rules below.
 - **`FilteringRules`** — the speed and clearance limits, kept separate from the
   search so they can be tuned and tested without touching the geometry.
+- **`LateralTarget`** — an offset plus the lane index nearest to it, so
+  snapshots and statistics that still reason in lanes keep working.
 
 Changed:
 
+- **`RoadOccupancy`** — gained `findLeaderFor(follower, clearanceMetres)`, which
+  scans every lane for participants whose extents overlap rather than those
+  sharing an index. The design first called for a separate `SubLaneOccupancy`
+  beside it; putting the method on `RoadOccupancy` avoided a second class
+  holding the same vehicles for the same road.
 - **`LaneChangeModel`** — `int chooseTargetLane(...)` is the wrong return type
-  for a model that picks a position rather than a lane. Add
-  `LateralTarget chooseTarget(LaneChangeRequest)` returning an offset and the
-  lane index it corresponds to for reporting, and give the interface a default
-  implementation that adapts the existing `chooseTargetLane` so MOBIL is
-  unaffected.
-- **`Vehicle.planMovement`** — plans against the target offset. `laneIndex`
-  becomes derived: the nearest lane centre, kept for the API, snapshots, and
-  anything still reasoning in lanes.
-- **`TrafficParticipant`** — add `getWidth()`.
+  for a model that picks a position rather than a lane, so
+  `LateralTarget chooseTarget(LaneChangeRequest)` was added with a default
+  implementation adapting `chooseTargetLane`, leaving MOBIL unaffected.
+- **`Vehicle.planMovement`** — plans against the target offset; `laneIndex`
+  became derived from it.
+- **`TrafficParticipant`** — gained `getWidth()` and `lateralExtent()`.
 
 ## Safety rules
 
@@ -144,46 +122,20 @@ all in `FilteringRules`:
 Rules 2 and 4 are the ones that keep the result honest. Without them the model
 would report throughput gains that come from motorcycles behaving impossibly.
 
-## Delivery sequence
+## Where the behaviour is pinned
 
-Each phase leaves the suite green and is separately reviewable.
-
-1. **`LateralExtent` plus `TrafficParticipant.getWidth()`.** Pure value work, no
-   behaviour change. Unit tests for overlap and clearance arithmetic.
-2. **`SubLaneOccupancy` alongside `RoadOccupancy`,** not replacing it. Assert on
-   a fixture that for vehicles on lane centres it returns exactly the leaders
-   `Lane.findLeaderFor` returns today. This is the equivalence proof that makes
-   the swap safe.
-3. **`LateralTarget` and the `LaneChangeModel` extension,** with MOBIL adapted
-   through the default method. No behaviour change; existing lane-change tests
-   must pass untouched.
-4. **`FilteringLaneChangeModel` and `FilteringRules`,** wired to motorcycles
-   only. Cars, buses, and emergency vehicles keep MOBIL.
-5. **Switch leader-finding to `SubLaneOccupancy`** for motorcycles, then for all
-   types once phase 2's equivalence holds in the full simulation.
-6. **Queue length and jam ratio** — make `getOccupiedLengthMetres` width-aware so
-   a row of motorcycles no longer consumes a lane each.
-
-Phase 6 is deliberately last: it changes congestion numbers, and therefore every
-experiment result, so it should land only once the movement model is settled.
-
-## Tests
-
-- a motorcycle passes two stopped cars straddling a lane line, and a car in the
-  same position does not;
-- a motorcycle refuses a corridor 0.2 m too narrow;
-- two motorcycles travel side by side within one lane width;
-- a filtering motorcycle never exceeds the speed differential cap;
-- a corridor closing from the side aborts the manoeuvre and the motorcycle
-  returns to a lane centre;
-- the equivalence check from phase 2, as a permanent regression test;
-- a full-network run on `district1_network.json` finishes with no collision
-  reported by `CollisionDetector`.
-
-The last one matters most. `CollisionDetector` currently reasons per lane; it
-needs the same lateral-overlap treatment, or it will either miss real conflicts
-between filtering motorcycles or invent conflicts that the new model has already
-cleared.
+- `LateralExtentTest` — overlap and clearance arithmetic.
+- `SubLaneLeaderEquivalenceTest` — the proof that made the swap safe: vehicles on
+  lane centres get the same leader from the overlap rule as from the old
+  lane-index rule, and no pair of the widest vehicles can overlap on any road
+  class this project builds.
+- `FilteringLaneChangeModelTest` — a rider takes the gap between two stopped
+  cars, a car in the same position cannot, a corridor narrowed by a bus is
+  refused, and a rider holds position when a neighbour is still mid-manoeuvre.
+- `FilteringRulesTest` — the speed differential and absolute ceiling.
+- `LaneQueueCapacityTest` — three riders abreast cost one row, cars unaffected.
+- `CollisionDetectorLateralTest` — a filtering rider is not reported as colliding
+  with the car it is passing.
 
 ## What stays out of scope
 
@@ -198,7 +150,7 @@ cleared.
 
 ## Effect on the physical view
 
-`PHYSICAL_VIEW_PLAN.md` states that between-lane filtering must not be drawn
-before the domain can represent it. Phase 4 is the point at which that condition
-is met: from then on a motorcycle's reported offset is a real position it
-actually occupies, and the renderer may draw it there.
+`PHYSICAL_VIEW_PLAN.md` required that between-lane filtering not be drawn before
+the domain could represent it. That condition is met: a motorcycle's reported
+offset is a position it actually occupies, so the renderer draws it there and
+must not fall back to the lane centre implied by its index.
