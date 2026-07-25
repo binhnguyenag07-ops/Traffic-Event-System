@@ -14,9 +14,23 @@ public final class Building {
     private final Double latitude;
     private final Double longitude;
     private final List<BuildingAccessPoint> accessPoints;
+    private final List<GeoPoint> footprint;
 
     public Building(String id, String name, BuildingType type, double x, double y,
             Double latitude, Double longitude, List<BuildingAccessPoint> accessPoints) {
+        this(id, name, type, x, y, latitude, longitude, accessPoints, List.of());
+    }
+
+    /**
+     * A building with its ground outline, as OpenStreetMap records it.
+     *
+     * <p>The outline is carried for drawing only; routing reaches a building
+     * through its access points, not its walls. It is optional, so a map that
+     * knows only where a building stands still loads.</p>
+     */
+    public Building(String id, String name, BuildingType type, double x, double y,
+            Double latitude, Double longitude, List<BuildingAccessPoint> accessPoints,
+            List<GeoPoint> footprint) {
         if (id == null || id.isBlank()) throw new IllegalArgumentException("Building id is required");
         if (name == null || name.isBlank()) throw new IllegalArgumentException("Building name is required");
         if (type == null) throw new IllegalArgumentException("Building type is required");
@@ -45,6 +59,7 @@ public final class Building {
         this.latitude = latitude;
         this.longitude = longitude;
         this.accessPoints = List.copyOf(accessPoints);
+        this.footprint = footprint == null ? List.of() : List.copyOf(footprint);
     }
 
     public String getId() { return id; }
@@ -55,4 +70,7 @@ public final class Building {
     public Double getLatitude() { return latitude; }
     public Double getLongitude() { return longitude; }
     public List<BuildingAccessPoint> getAccessPoints() { return accessPoints; }
+
+    /** Ground outline for drawing, empty when the map carries only a position. */
+    public List<GeoPoint> getFootprint() { return footprint; }
 }

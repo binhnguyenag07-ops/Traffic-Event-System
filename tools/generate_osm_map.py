@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Generate the bounded District 1 demo network from OpenStreetMap ways."""
+"""Generate the bounded District 1 demo network from OpenStreetMap.
+
+Emits roads with lane data, and the buildings beside them with the access
+points that let a vehicle actually start or finish a trip at one.
+"""
 
 import argparse
 import hashlib
 import json
 import math
+import tempfile
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict, deque
@@ -21,6 +26,24 @@ SPEEDS = {"primary": 50, "secondary": 45, "tertiary": 40, "unclassified": 35,
           "residential": 30, "living_street": 20}
 CAPACITIES = {"primary": 100, "secondary": 80, "tertiary": 65, "unclassified": 50,
               "residential": 40, "living_street": 25}
+# Lane counts and widths used when OSM does not tag them, by road class.
+DEFAULT_LANES = {"primary": 3, "secondary": 2, "tertiary": 2, "unclassified": 1,
+                 "residential": 1, "living_street": 1}
+DEFAULT_LANE_WIDTH = {"primary": 3.5, "secondary": 3.25, "tertiary": 3.25,
+                      "unclassified": 3.0, "residential": 3.0, "living_street": 3.0}
+# OSM building/amenity tags to the domain BuildingType enum.
+BUILDING_TYPES = {
+    "house": "RESIDENTIAL", "apartments": "RESIDENTIAL", "residential": "RESIDENTIAL",
+    "detached": "RESIDENTIAL", "terrace": "RESIDENTIAL", "dormitory": "RESIDENTIAL",
+    "office": "OFFICE", "commercial": "COMMERCIAL", "retail": "COMMERCIAL",
+    "shop": "COMMERCIAL", "supermarket": "COMMERCIAL", "hotel": "COMMERCIAL",
+    "school": "SCHOOL", "university": "SCHOOL", "college": "SCHOOL",
+    "kindergarten": "SCHOOL", "hospital": "HOSPITAL", "clinic": "HOSPITAL",
+    "parking": "PARKING", "garage": "PARKING", "garages": "PARKING",
+    "industrial": "INDUSTRIAL", "warehouse": "INDUSTRIAL", "factory": "INDUSTRIAL",
+}
+# A building further than this from any junction has no plausible access.
+MAX_DRIVEWAY_METRES = 160.0
 
 
 def distance_km(first, second):
@@ -37,27 +60,42 @@ def geometry_distance(points):
     return sum(distance_km(points[index - 1], points[index]) for index in range(1, len(points)))
 
 
-def fetch_ways():
-    south, west, north, east = BOUNDS
-    query = f'''[out:json][timeout:90];
-way["highway"~"^({ROAD_CLASSES})$"]({south},{west},{north},{east});
-out body geom;'''
+def overpass(query, label):
+    """Runs one Overpass query, caching the response so reruns are offline."""
     cache_key = hashlib.sha256(query.encode()).hexdigest()[:12]
-    cache = Path(f"/tmp/traffic-event-system-osm-ways-{cache_key}.json")
+    cache_dir = Path(tempfile.gettempdir()) / "traffic-event-system-osm"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache = cache_dir / f"{label}-{cache_key}.json"
     if cache.exists():
         return json.loads(cache.read_text(encoding="utf-8"))
     body = urllib.parse.urlencode({"data": query}).encode()
     last_error = None
     for url in OVERPASS_URLS:
         try:
-            request = urllib.request.Request(url, data=body, headers={"User-Agent": "Traffic-Event-System/1.0"})
-            with urllib.request.urlopen(request, timeout=120) as response:
+            request = urllib.request.Request(
+                url, data=body, headers={"User-Agent": "Traffic-Event-System/1.0"})
+            with urllib.request.urlopen(request, timeout=180) as response:
                 elements = json.load(response)["elements"]
                 cache.write_text(json.dumps(elements), encoding="utf-8")
                 return elements
         except Exception as exception:  # Try the next public Overpass mirror.
             last_error = exception
-    raise RuntimeError(f"Unable to fetch OpenStreetMap data: {last_error}")
+    raise RuntimeError(f"Unable to fetch OpenStreetMap {label}: {last_error}")
+
+
+def fetch_ways():
+    south, west, north, east = BOUNDS
+    return overpass(f'''[out:json][timeout:180];
+way["highway"~"^({ROAD_CLASSES})$"]({south},{west},{north},{east});
+out body geom;''', "ways")
+
+
+def fetch_buildings():
+    """Building footprints. Without these the map has nowhere for a trip to begin."""
+    south, west, north, east = BOUNDS
+    return overpass(f'''[out:json][timeout:180];
+way["building"]({south},{west},{north},{east});
+out body geom;''', "buildings")
 
 
 def parse_speed(tags, road_class):
@@ -157,7 +195,107 @@ def largest_component(segments):
     return [segment for segment in segments if segment["start"] in keep and segment["end"] in keep]
 
 
-def build_map(ways):
+
+def tag_int(tags, key):
+    digits = "".join(character for character in tags.get(key, "") if character.isdigit())
+    return int(digits) if digits else None
+
+
+def parse_lane_count(tags, road_class, direction, split_both_ways):
+    """Lanes for one direction, and whether OSM said so or we inferred it."""
+    forward = tag_int(tags, "lanes:forward")
+    backward = tag_int(tags, "lanes:backward")
+    if direction == "F" and forward:
+        return max(1, forward), "OSM"
+    if direction == "R" and backward:
+        return max(1, backward), "OSM"
+    total = tag_int(tags, "lanes")
+    if total:
+        # A bidirectional way tags the total for both sides, so a directed half
+        # gets half of it.
+        return max(1, total // 2 if split_both_ways else total), "OSM"
+    return DEFAULT_LANES[road_class], "INFERRED"
+
+
+def parse_lane_width(tags, road_class, lane_count):
+    raw = "".join(c for c in tags.get("width", "") if c.isdigit() or c == ".")
+    try:
+        carriageway = float(raw) if raw else None
+    except ValueError:
+        carriageway = None
+    if carriageway and lane_count:
+        return round(max(2.5, min(5.0, carriageway / lane_count)), 2), "OSM"
+    return DEFAULT_LANE_WIDTH[road_class], "INFERRED"
+
+
+def building_type_of(tags):
+    for key in ("building", "amenity", "shop", "office"):
+        value = tags.get(key, "").lower()
+        if value in BUILDING_TYPES:
+            return BUILDING_TYPES[value]
+        if key == "shop" and value:
+            return "COMMERCIAL"
+        if key == "office" and value:
+            return "OFFICE"
+    return "OTHER"
+
+
+def build_buildings(building_ways, intersections, center_lat, center_lon):
+    """
+    Buildings snapped to the junction that serves them.
+
+    A building whose nearest junction is further than MAX_DRIVEWAY_METRES is
+    dropped rather than given an invented access point: the loader validates
+    that every access point names a real intersection, and a fabricated one
+    would put trips on roads that do not reach the building.
+    """
+    anchors = [(entry["id"], entry["latitude"], entry["longitude"]) for entry in intersections]
+    buildings = []
+    dropped = 0
+    for way in building_ways:
+        geometry = way.get("geometry") or []
+        points = [(point["lat"], point["lon"]) for point in geometry
+                  if point.get("lat") is not None]
+        if len(points) < 3:
+            continue
+        if points[0] == points[-1]:
+            points = points[:-1]
+        latitude = sum(point[0] for point in points) / len(points)
+        longitude = sum(point[1] for point in points) / len(points)
+        south, west, north, east = BOUNDS
+        if not (south <= latitude <= north and west <= longitude <= east):
+            continue
+
+        nearest_id, nearest_metres = None, None
+        for anchor_id, anchor_lat, anchor_lon in anchors:
+            metres = distance_km((latitude, longitude), (anchor_lat, anchor_lon)) * 1000.0
+            if nearest_metres is None or metres < nearest_metres:
+                nearest_id, nearest_metres = anchor_id, metres
+        if nearest_id is None or nearest_metres > MAX_DRIVEWAY_METRES:
+            dropped += 1
+            continue
+
+        tags = way.get("tags", {})
+        building_id = f"B{way['id']}"
+        buildings.append({
+            "id": building_id,
+            "name": tags.get("name") or f"Building {way['id']}",
+            "type": building_type_of(tags),
+            "x": round((longitude - center_lon) * 111.32 * math.cos(math.radians(center_lat)), 6),
+            "y": round((latitude - center_lat) * 110.574, 6),
+            "latitude": round(latitude, 7),
+            "longitude": round(longitude, 7),
+            "accessPoints": [{
+                "id": f"{building_id}-A0",
+                "intersectionId": nearest_id,
+                "drivewayDistanceMetres": round(max(1.0, nearest_metres), 1),
+            }],
+            "footprint": [[round(lat, 7), round(lon, 7)] for lat, lon in points],
+        })
+    return buildings, dropped
+
+
+def build_map(ways, building_ways):
     segments, node_positions, node_streets = split_ways(ways)
     segments = largest_component(segments)
     used_nodes = {segment[key] for segment in segments for key in ("start", "end")}
@@ -180,6 +318,8 @@ def build_map(ways):
         })
 
     roads = []
+    lane_provenance = Counter()
+    width_provenance = Counter()
     for segment in segments:
         way = segment["way"]
         tags = way.get("tags", {})
@@ -207,19 +347,41 @@ def build_map(ways):
             directions = [(segment["end"], segment["start"], list(reversed(geometry)), "R")]
         elif oneway not in {"yes", "1", "true"} and tags.get("junction") != "roundabout":
             directions.append((segment["end"], segment["start"], list(reversed(geometry)), "R"))
+        split_both_ways = len(directions) > 1
+        street = tags.get("name") or f"{road_class.replace('_', ' ').title()} way {way['id']}"
         for start, end, road_geometry, suffix in directions:
+            lane_count, lane_source = parse_lane_count(
+                tags, road_class, suffix, split_both_ways)
+            lane_width, width_source = parse_lane_width(tags, road_class, lane_count)
+            lane_provenance[lane_source] += 1
+            width_provenance[width_source] += 1
             roads.append({
                 "id": f"W{way['id']}-{segment['number']}{suffix}",
+                "name": street,
+                "physicalRoadId": f"W{way['id']}-{segment['number']}",
                 "startIntersectionId": f"N{start}",
                 "endIntersectionId": f"N{end}",
                 **common,
+                "laneCount": lane_count,
+                "laneWidthMetres": lane_width,
                 "geometry": road_geometry,
             })
 
     if len(intersections) > 600 or len(roads) > 1_200:
         raise RuntimeError(
             f"Generated network exceeds import limits: {len(intersections)} intersections, {len(roads)} roads")
-    return {"intersections": intersections, "roads": roads}
+
+    buildings, dropped = build_buildings(building_ways, intersections, center_lat, center_lon)
+    # Provenance is reported, not written into the map: the loader rejects
+    # fields it does not know, and a guessed lane count must still not be
+    # presented as a measured one.
+    print(f"  lane count   : {lane_provenance['OSM']} from OSM, {lane_provenance['INFERRED']} inferred")
+    print(f"  lane width   : {width_provenance['OSM']} from OSM, {width_provenance['INFERRED']} inferred")
+    print(f"  buildings    : {len(buildings)} kept, {dropped} dropped with no junction within "
+          f"{MAX_DRIVEWAY_METRES:.0f} m")
+    by_type = Counter(building["type"] for building in buildings)
+    print(f"  building mix : {dict(by_type.most_common())}")
+    return {"intersections": intersections, "roads": roads, "buildings": buildings}
 
 
 def main():
@@ -227,8 +389,9 @@ def main():
     parser.add_argument("output", nargs="?", default="data/district1_network.json")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    network = build_map(fetch_ways())
-    print(f"Generated {len(network['intersections'])} intersections and {len(network['roads'])} directed roads")
+    network = build_map(fetch_ways(), fetch_buildings())
+    print(f"Generated {len(network['intersections'])} intersections, "
+          f"{len(network['roads'])} directed roads, {len(network['buildings'])} buildings")
     if not args.dry_run:
         Path(args.output).write_text(json.dumps(network, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

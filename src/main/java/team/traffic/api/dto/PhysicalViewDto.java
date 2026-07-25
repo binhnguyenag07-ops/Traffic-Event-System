@@ -6,6 +6,8 @@ import team.traffic.domain.scene.JunctionGeometry;
 import team.traffic.domain.scene.LaneConnector;
 import team.traffic.domain.scene.LaneGeometry;
 import team.traffic.domain.scene.PhysicalScene;
+import team.traffic.domain.scene.SceneBuilding;
+import team.traffic.domain.scene.SceneSignal;
 import team.traffic.domain.scene.SceneVehicle;
 import team.traffic.domain.scene.StopLine;
 
@@ -32,6 +34,8 @@ public record PhysicalViewDto(
         List<StopLineDto> stopLines,
         List<ConnectorDto> connectors,
         List<JunctionDto> junctions,
+        List<BuildingDto> buildings,
+        List<SignalDto> signals,
         List<VehicleDto> vehicles) {
 
     /** Metres in one degree of latitude, matching {@code PolylineGeometry}. */
@@ -50,6 +54,8 @@ public record PhysicalViewDto(
                 scene.stopLines().stream().map(stopLine -> stopLine(stopLine, origin)).toList(),
                 scene.connectors().stream().map(connector -> connector(connector, origin)).toList(),
                 scene.junctions().stream().map(junction -> junction(junction, origin)).toList(),
+                scene.buildings().stream().map(building -> building(building, origin)).toList(),
+                scene.signals().stream().map(signal -> signal(signal, origin)).toList(),
                 scene.vehicles().stream().map(vehicle -> vehicle(vehicle, origin)).toList());
     }
 
@@ -73,6 +79,27 @@ public record PhysicalViewDto(
 
     private static JunctionDto junction(JunctionGeometry junction, GeoPoint origin) {
         return new JunctionDto(junction.junctionId(), project(junction.pavement(), origin));
+    }
+
+    private static BuildingDto building(SceneBuilding building, GeoPoint origin) {
+        return new BuildingDto(
+                building.id(),
+                building.name(),
+                building.type().name(),
+                project(building.centre(), origin),
+                project(building.footprint(), origin));
+    }
+
+    private static SignalDto signal(SceneSignal signal, GeoPoint origin) {
+        return new SignalDto(
+                signal.junctionId(),
+                signal.approaches().stream()
+                        .map(approach -> new ApproachDto(
+                                approach.roadId(),
+                                project(approach.head(), origin),
+                                approach.green(),
+                                approach.secondsRemaining()))
+                        .toList());
     }
 
     private static VehicleDto vehicle(SceneVehicle vehicle, GeoPoint origin) {
@@ -111,6 +138,17 @@ public record PhysicalViewDto(
     }
 
     public record JunctionDto(String junctionId, List<double[]> pavement) {
+    }
+
+    public record BuildingDto(
+            String id, String name, String type, double[] centre, List<double[]> footprint) {
+    }
+
+    public record SignalDto(String junctionId, List<ApproachDto> approaches) {
+    }
+
+    public record ApproachDto(
+            String roadId, double[] head, boolean green, double secondsRemaining) {
     }
 
     public record VehicleDto(

@@ -9,6 +9,7 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.scene.PhysicalScene;
 import team.traffic.domain.scene.PhysicalSceneAssembler;
 import team.traffic.domain.scene.SceneVehicle;
+import team.traffic.domain.scene.SignalSnapshot;
 import team.traffic.service.RoadNetworkService;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.history.SimulationFrame;
@@ -62,14 +63,32 @@ public class PhysicalViewController {
                 .map(currentFrame -> sceneVehicles(currentFrame))
                 .orElse(List.of());
 
+        List<SignalSnapshot> signals = frame
+                .map(PhysicalViewController::signalSnapshots)
+                .orElse(List.of());
+
         PhysicalScene scene = new PhysicalSceneAssembler(network)
-                .sceneAround(latitude, longitude, clampedRadius, vehicles);
+                .sceneAround(latitude, longitude, clampedRadius, vehicles, signals);
 
         ctx.json(PhysicalViewDto.of(
                 scene,
                 frame.map(SimulationFrame::timelineId).orElse("none"),
                 frame.map(SimulationFrame::frameId).orElse(-1L),
                 frame.map(SimulationFrame::elapsedSeconds).orElse(0.0)));
+    }
+
+    /**
+     * The frame already resolved which approach is green and for how long; this
+     * only carries it across, so the lights drawn cannot disagree with the
+     * lights the vehicles are obeying.
+     */
+    private static List<SignalSnapshot> signalSnapshots(SimulationFrame frame) {
+        return frame.trafficSignals().stream()
+                .map(signal -> new SignalSnapshot(
+                        signal.junctionId(),
+                        signal.greenIncomingRoadIds(),
+                        signal.phaseRemainingSeconds()))
+                .toList();
     }
 
     private static List<SceneVehicle> sceneVehicles(SimulationFrame frame) {

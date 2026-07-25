@@ -58,7 +58,8 @@ class PhysicalViewDtoTest {
         SceneVehicle rider = new SceneVehicle(
                 "V-1", "MOTORCYCLE", LAT, LON + 0.001, 90.0, 6.0, 2.1, 0.75, 1, 0.0);
         PhysicalScene scene = new PhysicalScene(
-                origin, 200, List.of(), List.of(), List.of(), List.of(), List.of(rider));
+                origin, 200, List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(rider));
 
         PhysicalViewDto dto = PhysicalViewDto.of(scene, "timeline-7", 42, 12.5);
 
@@ -82,6 +83,7 @@ class PhysicalViewDtoTest {
     private PhysicalScene sceneWithLaneFrom(GeoPoint a, GeoPoint b, GeoPoint origin) {
         LaneGeometry lane = new LaneGeometry("R", 0, 3.5, List.of(a, b), true);
         return new PhysicalScene(
-                origin, 200, List.of(lane), List.of(), List.of(), List.of(), List.of());
+                origin, 200, List.of(lane), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of());
     }
 }
