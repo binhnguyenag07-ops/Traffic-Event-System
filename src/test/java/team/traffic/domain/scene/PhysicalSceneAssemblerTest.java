@@ -4,7 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
+import team.traffic.domain.network.Building;
+import team.traffic.domain.network.BuildingAccessPoint;
+import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.LocationType;
@@ -104,6 +108,59 @@ class PhysicalSceneAssemblerTest {
         assertThatThrownBy(() -> assembler.sceneAround(Double.NaN, WEST_LON, 100, List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("centre");
+    }
+
+
+    @Test
+    void carriesTheBuildingsInRangeWithTheirOutlines() {
+        RoadNetwork network = twoRoadNetwork();
+        network.addBuilding(building("B-near", LAT, WEST_LON + 0.0002));
+        network.addBuilding(building("B-far", LAT, EAST_LON));
+        PhysicalSceneAssembler assembler = new PhysicalSceneAssembler(network);
+
+        PhysicalScene scene = assembler.sceneAround(LAT, WEST_LON, 120, List.of());
+
+        assertThat(scene.buildings()).extracting(SceneBuilding::id).containsExactly("B-near");
+        assertThat(scene.buildings().get(0).hasFootprint())
+                .as("an outlined building is drawn as its real shape")
+                .isTrue();
+    }
+
+    @Test
+    void placesASignalHeadOnEachControlledApproach() {
+        RoadNetwork network = twoRoadNetwork();
+        PhysicalSceneAssembler assembler = new PhysicalSceneAssembler(network);
+        // The junction "M" is where the west road ends and the east road starts.
+        SignalSnapshot snapshot = new SignalSnapshot("M", Set.of("WEST"), 7.5);
+
+        PhysicalScene scene = assembler.sceneAround(LAT, 106.005, 300, List.of(), List.of(snapshot));
+
+        assertThat(scene.signals()).hasSize(1);
+        SceneSignal signal = scene.signals().get(0);
+        assertThat(signal.approaches()).extracting(SceneSignal.Approach::roadId)
+                .as("only roads arriving at the junction are controlled")
+                .containsExactly("WEST");
+        assertThat(signal.approaches().get(0).green()).isTrue();
+        assertThat(signal.approaches().get(0).secondsRemaining()).isEqualTo(7.5);
+    }
+
+    @Test
+    void reportsNoSignalsForAJunctionTheFrameSaysNothingAbout() {
+        RoadNetwork network = twoRoadNetwork();
+
+        PhysicalScene scene = new PhysicalSceneAssembler(network)
+                .sceneAround(LAT, WEST_LON, 300, List.of(), List.of());
+
+        assertThat(scene.signals()).isEmpty();
+    }
+
+    private Building building(String id, double lat, double lon) {
+        return new Building(id, id, BuildingType.RESIDENTIAL, lon, lat, lat, lon,
+                List.of(new BuildingAccessPoint(id + "-A0", "W", 20.0)),
+                List.of(new GeoPoint(lat - 0.0001, lon - 0.0001),
+                        new GeoPoint(lat + 0.0001, lon - 0.0001),
+                        new GeoPoint(lat + 0.0001, lon + 0.0001),
+                        new GeoPoint(lat - 0.0001, lon + 0.0001)));
     }
 
     private RoadNetwork twoRoadNetwork() {

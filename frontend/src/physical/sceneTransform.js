@@ -1,51 +1,41 @@
-// Metres to screen pixels for the physical view, and back.
+// Coordinates for the physical view.
 //
 // The scene arrives in local metres with the region's origin at (0, 0), x east
-// and y north. The canvas measures pixels from its top-left with y running
-// down. This module is the single place those two frames meet: the renderer
-// draws only in pixels, the scene is only ever metres, and nothing in between
-// mixes them. Keeping it as pure functions means the arithmetic is testable
-// without a canvas.
+// and y north. Everything is drawn in those metres, with y negated so north is
+// up on a canvas whose y runs down. Zoom and pan are then a scale and a
+// translation on the PixiJS container that holds the drawing.
+//
+// That split matters. Baking zoom into the drawing meant every layer had to be
+// redrawn together to stay consistent, and when one was missed the geometry and
+// the vehicles sat at different scales until the next poll. With the transform
+// on the container, Pixi applies it to every layer at once and they cannot
+// disagree — and zooming costs no redraw at all.
 
-/**
- * A transform that fits a scene of the given radius into a canvas, centred, with
- * a little padding. Pan and zoom compose on top without re-fitting.
- */
-export function fitTransform(radiusMetres, width, height, { padding = 0.1, zoom = 1, panX = 0, panY = 0 } = {}) {
+/** Metres in one degree of latitude, matching the server's projection. */
+const METRES_PER_DEGREE_LATITUDE = 111320
+
+/** A world point in drawing space: metres, y flipped so north is up. */
+export function worldPoint(x, y) {
+  return [x, -y]
+}
+
+/** Pixels per metre that fits a scene of the given radius into the canvas. */
+export function fitScale(radiusMetres, width, height, padding = 0.08) {
   const usable = Math.min(width, height) * (1 - padding)
-  const baseScale = radiusMetres > 0 ? usable / (2 * radiusMetres) : 1
-  const scale = baseScale * zoom
-  return {
-    scale,
-    width,
-    height,
-    // World point (metres) -> screen point (pixels). North is up, so world y
-    // is negated against the canvas' downward y.
-    toScreen(x, y) {
-      return [width / 2 + (x - panX) * scale, height / 2 - (y - panY) * scale]
-    },
-    // Screen point (pixels) -> world point (metres), the inverse, for picking.
-    toWorld(px, py) {
-      return [(px - width / 2) / scale + panX, -(py - height / 2) / scale + panY]
-    },
-    // Length in metres -> length in pixels, for lane and vehicle widths.
-    lengthToScreen(metres) {
-      return metres * scale
-    },
-  }
+  return radiusMetres > 0 ? usable / (2 * radiusMetres) : 1
 }
 
 /**
- * The four corners of a vehicle box centred at a world point, facing a compass
- * heading, in screen pixels. Compass degrees run clockwise from north, so the
- * forward vector is (sin, cos) in world metres and (sin, -cos) on the canvas.
+ * The four corners of a vehicle box, in world metres.
+ *
+ * Compass degrees run clockwise from north, so the forward vector is
+ * (sin, -cos) once y is flipped, and right is 90 degrees clockwise from it.
  */
-export function vehicleCorners(transform, worldX, worldY, headingDegrees, lengthMetres, widthMetres) {
-  const [cx, cy] = transform.toScreen(worldX, worldY)
+export function vehicleCorners(x, y, headingDegrees, lengthMetres, widthMetres) {
+  const [cx, cy] = worldPoint(x, y)
   const rad = (headingDegrees * Math.PI) / 180
-  const halfLength = transform.lengthToScreen(lengthMetres) / 2
-  const halfWidth = transform.lengthToScreen(widthMetres) / 2
-  // Forward points the way the vehicle faces; right is 90 degrees clockwise.
+  const halfLength = lengthMetres / 2
+  const halfWidth = widthMetres / 2
   const forward = [Math.sin(rad), -Math.cos(rad)]
   const right = [Math.cos(rad), Math.sin(rad)]
   const corner = (alongForward, alongRight) => [
@@ -58,4 +48,18 @@ export function vehicleCorners(transform, worldX, worldY, headingDegrees, length
     corner(-halfLength, halfWidth),
     corner(-halfLength, -halfWidth),
   ]
+}
+
+/**
+ * The latitude and longitude a metre offset from the scene origin lands on.
+ *
+ * Panning moves the viewport in metres, but a fresh scene has to be requested
+ * for a geographic point, so this is how the two meet. It is the exact inverse
+ * of the projection the server applies.
+ */
+export function offsetToLatLon(origin, eastMetres, northMetres) {
+  const latitude = origin.latitude + northMetres / METRES_PER_DEGREE_LATITUDE
+  const eastScale = METRES_PER_DEGREE_LATITUDE * Math.cos((origin.latitude * Math.PI) / 180)
+  const longitude = origin.longitude + (eastScale === 0 ? 0 : eastMetres / eastScale)
+  return { latitude, longitude }
 }

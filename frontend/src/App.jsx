@@ -56,9 +56,21 @@ function Inspector({ selected }) {
   )
 }
 
+// `?physical=<lat>,<lon>[,<radiusMetres>]` opens the lane view straight away.
+// It makes a junction shareable as a link, and it is how the view is opened
+// for a demo without hunting for the right zoom first.
+function physicalTargetFromUrl() {
+  if (typeof window === 'undefined') return null
+  const raw = new URLSearchParams(window.location.search).get('physical')
+  if (!raw) return null
+  const [latitude, longitude, radiusMetres] = raw.split(',').map(Number)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+  return { latitude, longitude, radiusMetres: Number.isFinite(radiusMetres) ? radiusMetres : 220 }
+}
+
 export default function App() {
   const dashboard = useTrafficDashboard()
-  const [physicalTarget, setPhysicalTarget] = useState(null)
+  const [physicalTarget, setPhysicalTarget] = useState(physicalTargetFromUrl)
   const {
     intersections, roads, viewRoads, scenarios, activeScenario, snapshot, viewFrame,
     timeline, viewingHistory, historyLoading, statistics, algorithms,
