@@ -5,6 +5,7 @@ import { fitScale, offsetToLatLon } from './sceneTransform'
 import { interpolateVehicles } from './interpolate'
 import { drawSignals, drawStatic, drawTrails } from './layers/drawScene'
 import { VehicleLayer, buildVehicleTextures } from './vehicleSprites'
+import { assetCount, loadSceneAssets } from './assetLoader'
 
 // The lane-level renderer.
 //
@@ -49,7 +50,7 @@ export default function PhysicalScene({ target, onClose }) {
     fetching: false, drag: null,
   }).current
   const [status, setStatus] = useState('Loading scene…')
-  const [counts, setCounts] = useState({ vehicles: 0, buildings: 0 })
+  const [counts, setCounts] = useState({ vehicles: 0, buildings: 0, assets: 0 })
 
   useEffect(() => {
     let cancelled = false
@@ -63,12 +64,18 @@ export default function PhysicalScene({ target, onClose }) {
       store.app = app
       mount.appendChild(app.canvas)
 
+      // Whatever artwork is present; every missing slot falls back to a drawn
+      // shape, so an empty assets folder is a supported state rather than a fault.
+      const assets = await loadSceneAssets()
+      if (cancelled) { app.destroy(true); return }
+      store.assets = assets
+
       const world = new Container()
       const layers = {
         static: new Graphics(),
         trails: new Graphics(),
         signals: new Graphics(),
-        vehicles: new VehicleLayer(buildVehicleTextures(app.renderer)),
+        vehicles: new VehicleLayer(buildVehicleTextures(app.renderer, assets.vehicles)),
       }
       world.addChild(layers.static, layers.trails, layers.signals, layers.vehicles.container)
       app.stage.addChild(world)
@@ -128,7 +135,7 @@ export default function PhysicalScene({ target, onClose }) {
         <div>
           <strong>Physical view</strong>
           <span className="physical-note">
-            {status} · {counts.vehicles} vehicles · {counts.buildings} buildings · drag to move, scroll to zoom
+            {status} · {counts.vehicles} vehicles · {counts.buildings} buildings · {counts.assets} assets · drag to move, scroll to zoom
           </span>
         </div>
         <button type="button" onClick={onClose} className="physical-close">Close</button>
@@ -159,7 +166,7 @@ function tick(store, setCounts) {
   )
 
   if (store.dirty && store.current) {
-    drawStatic(layers.static, store.current)
+    drawStatic(layers.static, store.current, store.assets)
     drawSignals(layers.signals, store.current)
     store.dirty = false
   }
@@ -172,7 +179,7 @@ function tick(store, setCounts) {
   if (vehicles !== store.shownVehicles || buildings !== store.shownBuildings) {
     store.shownVehicles = vehicles
     store.shownBuildings = buildings
-    setCounts({ vehicles, buildings })
+    setCounts({ vehicles, buildings, assets: assetCount(store.assets) })
   }
 
   const elapsed = store.current ? (performance.now() - store.fetchedAt) / POLL_INTERVAL_MS : 0

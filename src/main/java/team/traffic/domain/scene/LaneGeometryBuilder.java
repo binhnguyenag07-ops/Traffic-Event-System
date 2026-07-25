@@ -67,13 +67,34 @@ public final class LaneGeometryBuilder {
         int laneCount = roadLayout.laneCountOf(road);
         double laneWidth = roadLayout.laneWidthMetresOf(road);
         boolean oneway = !hasOpposite(road);
+        double carriageway = carriagewayOffsetOf(road);
         List<LaneGeometry> lanes = new ArrayList<>(laneCount);
         for (int index = 0; index < laneCount; index++) {
-            double offset = RoadLayout.laneCentreOffsetMetres(index, laneCount, laneWidth);
+            double offset = RoadLayout.laneCentreOffsetMetres(index, laneCount, laneWidth) + carriageway;
             lanes.add(new LaneGeometry(
                     road.getId(), index, laneWidth, offsetPolyline(shape, offset), oneway));
         }
         return lanes;
+    }
+
+    /**
+     * How far a road's carriageway sits from the shared centreline.
+     *
+     * <p>A two-way street is two directed roads over one line of geometry. Left
+     * centred, both sides land on that line and their traffic is drawn on top of
+     * itself — vehicles going opposite ways appear to occupy the same tarmac.
+     * Each direction is therefore pushed to its own side, and since the offset
+     * convention is positive to the right of travel, that is also the side
+     * traffic here drives on.</p>
+     *
+     * <p>A one-way road keeps the centreline: there is no opposing carriageway
+     * to make room for.</p>
+     */
+    private double carriagewayOffsetOf(Road road) {
+        if (!hasOpposite(road)) {
+            return 0.0;
+        }
+        return roadLayout.roadWidthMetresOf(road) / 2.0;
     }
 
     /**
@@ -90,11 +111,14 @@ public final class LaneGeometryBuilder {
         double fraction = length <= 0 ? 1.0 : Math.max(0.0, 1.0 - STOP_LINE_SETBACK_METRES / length);
         GeoPoint at = PolylineGeometry.pointAt(shape, fraction);
         double heading = PolylineGeometry.bearingAt(shape, fraction);
+        // Centred on this direction's carriageway, not on the shared centreline,
+        // or a two-way street would be barred across both sides at once.
+        double carriageway = carriagewayOffsetOf(road);
         double halfWidth = roadLayout.roadWidthMetresOf(road) / 2.0;
         return new StopLine(
                 road.getId(),
-                PolylineGeometry.offsetMetres(at, heading, halfWidth),
-                PolylineGeometry.offsetMetres(at, heading, -halfWidth));
+                PolylineGeometry.offsetMetres(at, heading, carriageway + halfWidth),
+                PolylineGeometry.offsetMetres(at, heading, carriageway - halfWidth));
     }
 
     /**

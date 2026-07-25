@@ -13,6 +13,7 @@ Descriptions of what the system is now.
 | [API_CONTRACT.md](API_CONTRACT.md) | Seconds-based API, lane, event, signal, and trace contracts. |
 | [ALGORITHM_EXPLANATION.md](ALGORITHM_EXPLANATION.md) | BFS, Dijkstra, A\*, and dynamic rerouting. |
 | [DEMO_GUIDE.md](DEMO_GUIDE.md) | End-to-end demo flow and observable checks. |
+| [ASSETS.md](ASSETS.md) | Every artwork slot the physical view accepts, and where to download it. |
 
 ## Results
 
