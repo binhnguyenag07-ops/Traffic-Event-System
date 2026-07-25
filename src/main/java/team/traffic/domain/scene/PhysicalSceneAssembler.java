@@ -136,17 +136,21 @@ public final class PhysicalSceneAssembler {
             }
             approaches.add(new SceneSignal.Approach(
                     road.getId(),
-                    midpointOf(stopLine),
+                    kerbEndOf(stopLine),
                     snapshot.greenIncomingRoadIds().contains(road.getId()),
                     snapshot.secondsRemaining()));
         }
         return new SceneSignal(snapshot.junctionId(), approaches);
     }
 
-    private static GeoPoint midpointOf(StopLine stopLine) {
-        return new GeoPoint(
-                (stopLine.from().latitude() + stopLine.to().latitude()) / 2.0,
-                (stopLine.from().longitude() + stopLine.to().longitude()) / 2.0);
+    /**
+     * The kerbside end of a stop line, which is where a signal actually stands.
+     *
+     * <p>Placed at the midpoint it sat in the middle of the carriageway, reading
+     * as an obstruction across the road rather than a light beside it.</p>
+     */
+    private static GeoPoint kerbEndOf(StopLine stopLine) {
+        return stopLine.from();
     }
 
     private static SceneBuilding toSceneBuilding(Building building) {

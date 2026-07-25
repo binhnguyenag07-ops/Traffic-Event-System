@@ -107,6 +107,34 @@ class LaneGeometryBuilderTest {
     }
 
     @Test
+    void oppositeDirectionsOfOneStreetDoNotShareTheSameTarmac() {
+        RoadNetwork twoWay = eastWestNetwork(1);
+        twoWay.addRoad(new Road("BA", "Back", "AB", "B", "A", 1.1, 50, 100, 0,
+                1, LANE_WIDTH, new RoadCondition(0, 0, RoadStatus.OPEN),
+                List.of(new GeoPoint(10.0, 106.010), new GeoPoint(10.0, 106.000)),
+                RoadClass.SECONDARY));
+        LaneGeometryBuilder builder = new LaneGeometryBuilder(twoWay);
+
+        GeoPoint forward = builder.lanesOf(twoWay.getRoad("AB")).get(0).centreline().get(0);
+        GeoPoint back = builder.lanesOf(twoWay.getRoad("BA")).get(0).centreline().get(1);
+
+        // Both directions run over one line of geometry. Centred, their traffic
+        // would be drawn on top of itself; each side takes its own carriageway.
+        double apart = PolylineGeometry.lengthMetres(List.of(forward, back));
+        assertThat(apart).isCloseTo(LANE_WIDTH, within(0.1));
+    }
+
+    @Test
+    void aOneWayRoadKeepsTheCentrelineBecauseNothingOpposesIt() {
+        RoadNetwork oneWay = eastWestNetwork(1);
+
+        GeoPoint only = new LaneGeometryBuilder(oneWay)
+                .lanesOf(oneWay.getRoad("AB")).get(0).centreline().get(0);
+
+        assertThat(only.latitude()).isCloseTo(10.0, within(1e-9));
+    }
+
+    @Test
     void aFourWayJunctionConnectsEveryApproachToEveryExitButTheUTurn() {
         RoadNetwork network = crossroads();
         LaneGeometryBuilder builder = new LaneGeometryBuilder(network);

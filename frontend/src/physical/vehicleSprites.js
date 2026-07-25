@@ -11,8 +11,11 @@
 
 import { Container, Graphics, Sprite } from 'pixi.js'
 
-/** Texture resolution. Enough to stay crisp when zoomed well past 1:1. */
-const PIXELS_PER_METRE = 32
+/**
+ * Texture resolution. The physical view zooms well past one pixel per metre, so
+ * a texture baked at screen scale turns to mush; this is deliberately generous.
+ */
+const PIXELS_PER_METRE = 128
 
 const BODY = {
   CAR: 0x2f7fd4,
@@ -92,13 +95,20 @@ const DRAW = {
   EMERGENCY: emergencyTexture,
 }
 
-/** Bakes one texture per vehicle type. Called once, when the scene starts. */
-export function buildVehicleTextures(renderer) {
+/**
+ * One texture per vehicle type: the downloaded artwork where a slot is filled,
+ * and a drawn stand-in everywhere else. Called once, when the scene starts.
+ */
+export function buildVehicleTextures(renderer, supplied = {}) {
   const textures = {}
   Object.keys(SIZE).forEach((type) => {
+    if (supplied[type]) {
+      textures[type] = supplied[type]
+      return
+    }
     const { length, width } = SIZE[type]
     const graphics = DRAW[type](BODY[type], length, width)
-    textures[type] = renderer.generateTexture({ target: graphics })
+    textures[type] = renderer.generateTexture({ target: graphics, resolution: 1 })
     graphics.destroy()
   })
   return textures
@@ -113,12 +123,21 @@ export function buildVehicleTextures(renderer) {
  * every vehicle drives sideways.
  */
 export function vehicleTransform(vehicle) {
+  const length = Math.max(vehicle.lengthMetres, 1.5)
+  const radians = (vehicle.headingDegrees * Math.PI) / 180
+  // The simulation reports a vehicle by its front bumper: road progress is
+  // where its nose is, and following distances are measured from it. Drawing
+  // the body centred on that point pushed half a car past every stop line and
+  // made a queue look like it overlapped itself, so the body is set back along
+  // its own heading by half its length.
+  const centreX = vehicle.x - Math.sin(radians) * (length / 2)
+  const centreY = vehicle.y - Math.cos(radians) * (length / 2)
   return {
-    x: vehicle.x,
-    y: -vehicle.y,
-    rotation: (vehicle.headingDegrees * Math.PI) / 180,
+    x: centreX,
+    y: -centreY,
+    rotation: radians,
     width: Math.max(vehicle.widthMetres, 0.7),
-    height: Math.max(vehicle.lengthMetres, 1.5),
+    height: length,
   }
 }
 

@@ -52,9 +52,11 @@ function strokePath(graphics, points, style) {
   graphics.stroke(style)
 }
 
-function fillPolygon(graphics, points, colour, alpha = 1) {
+function fillPolygon(graphics, points, colour, alpha = 1, texture = null) {
   if (!points || points.length < 3) return
-  graphics.poly(points.flatMap(([x, y]) => worldPoint(x, y))).fill({ color: colour, alpha })
+  const style = { color: colour, alpha }
+  if (texture) style.texture = texture
+  graphics.poly(points.flatMap(([x, y]) => worldPoint(x, y))).fill(style)
 }
 
 /** Dashes along a polyline, so a lane divider reads as paint rather than a line. */
@@ -91,18 +93,29 @@ function strokeDashed(graphics, points, style) {
   graphics.stroke(style)
 }
 
-/** Ground, buildings, pavement, road surface and markings. Redrawn per scene. */
-export function drawStatic(graphics, scene) {
+/**
+ * Ground, buildings, pavement, road surface and markings. Redrawn per scene.
+ *
+ * `assets` is optional and partial. Any surface with a texture loaded is filled
+ * with it; the rest keep their flat colour, so the scene renders whether the
+ * assets folder is empty, half full, or complete.
+ */
+export function drawStatic(graphics, scene, assets = {}) {
   graphics.clear()
   if (!scene) return
   const radius = scene.radiusMetres || 200
+  const surfaces = assets.surfaces || {}
+  const roofs = assets.buildings || {}
 
-  graphics.rect(-radius * 3, -radius * 3, radius * 6, radius * 6).fill({ color: GROUND })
+  const ground = { color: GROUND }
+  if (surfaces.GROUND) ground.texture = surfaces.GROUND
+  graphics.rect(-radius * 3, -radius * 3, radius * 6, radius * 6).fill(ground)
 
   scene.buildings?.forEach((building) => {
     const colour = colourFor(BUILDING_COLOUR, building.type, BUILDING_COLOUR.OTHER)
+    const roof = roofs[String(building.type || '').toUpperCase()]
     if (building.footprint && building.footprint.length >= 3) {
-      fillPolygon(graphics, building.footprint, colour)
+      fillPolygon(graphics, building.footprint, colour, 1, roof)
       strokePath(graphics, [...building.footprint, building.footprint[0]],
         { width: 0.4, color: BUILDING_EDGE, alpha: 0.7 })
     } else if (building.centre) {
@@ -119,10 +132,13 @@ export function drawStatic(graphics, scene) {
   }))
   scene.junctions?.forEach((junction) => fillPolygon(graphics, junction.pavement, ROAD_CASING))
 
+  const roadStyle = { color: ROAD, cap: 'round', join: 'round' }
+  if (surfaces.ROAD) roadStyle.texture = surfaces.ROAD
   scene.lanes?.forEach((lane) => strokePath(graphics, lane.centreline, {
-    width: lane.widthMetres, color: ROAD, cap: 'round', join: 'round',
+    ...roadStyle, width: lane.widthMetres,
   }))
-  scene.junctions?.forEach((junction) => fillPolygon(graphics, junction.pavement, PAVEMENT, 0.92))
+  scene.junctions?.forEach((junction) =>
+    fillPolygon(graphics, junction.pavement, PAVEMENT, 0.92, surfaces.JUNCTION))
   scene.connectors?.forEach((connector) => strokePath(graphics, connector.curve, {
     width: 2.8, color: CONNECTOR, cap: 'round', join: 'round',
   }))
@@ -136,16 +152,23 @@ export function drawStatic(graphics, scene) {
   }))
 }
 
-/** Signal heads at the stop lines they control. */
+/**
+ * Signal lamps, as a small glow beside the kerb.
+ *
+ * They were a 1.7 m disc across the middle of the carriageway, which read as
+ * something dumped in the road rather than a light controlling it. A real lamp
+ * is a few centimetres; this is a little larger so it stays visible when zoomed
+ * out, and no bigger.
+ */
 export function drawSignals(graphics, scene) {
   graphics.clear()
   if (!scene?.signals) return
   scene.signals.forEach((signal) => {
     signal.approaches?.forEach((approach) => {
       const [x, y] = worldPoint(approach.head[0], approach.head[1])
-      const colour = approach.green ? 0x35d07f : 0xff4d4d
-      graphics.circle(x, y, 1.5).fill({ color: colour, alpha: 0.22 })
-      graphics.circle(x, y, 0.85).fill({ color: colour })
+      const colour = approach.green ? 0x2fbf62 : 0xe03b3b
+      graphics.circle(x, y, 0.85).fill({ color: colour, alpha: 0.18 })
+      graphics.circle(x, y, 0.32).fill({ color: colour })
     })
   })
 }
