@@ -6,33 +6,32 @@
 // lane marking painted 0.15 m wide stays 0.15 m wide at every zoom, like real
 // paint, instead of needing to be recomputed.
 
-import { vehicleCorners, worldPoint } from '../sceneTransform'
+import { worldPoint } from '../sceneTransform'
 
-const GROUND = 0x12151a
-const PAVEMENT = 0x333942
-const ROAD = 0x3a4048
-const CONNECTOR = 0x363c44
-const LANE_DASH = 0xc8ccd4
-const ROAD_EDGE = 0x8a9099
-const STOP_LINE = 0xeef0f3
+// A daytime map palette. The first attempt kept everything in the bottom
+// quarter of the luminance range -- ground 21, road 63, buildings 68 out of 255
+// -- which is a set of near-identical darks, and reads as a black screen. Land,
+// blocks and carriageway now sit far enough apart to tell apart at a glance.
+const GROUND = 0xe7e3da
+const BUILDING_EDGE = 0x9aa0aa
+const ROAD_CASING = 0xa8aeb8
+const ROAD = 0xfbfbfc
+const PAVEMENT = 0xf2f3f5
+const CONNECTOR = 0xf5f6f8
+const LANE_DASH = 0xb9bec7
+const STOP_LINE = 0x4a5059
+const TRAIL = 0xe0a415
 
 // Buildings by what they are for, so a hospital does not look like a house.
 const BUILDING_COLOUR = {
-  RESIDENTIAL: 0x4a4740,
-  COMMERCIAL: 0x4b4553,
-  OFFICE: 0x3f4a58,
-  SCHOOL: 0x4a5240,
-  HOSPITAL: 0x5a4242,
-  PARKING: 0x3b3f44,
-  INDUSTRIAL: 0x494440,
-  OTHER: 0x40444b,
-}
-
-const VEHICLE_COLOUR = {
-  CAR: 0x53a8ff,
-  MOTORCYCLE: 0xffd23f,
-  BUS: 0xff8c42,
-  EMERGENCY: 0xff4747,
+  RESIDENTIAL: 0xd8cfc0,
+  COMMERCIAL: 0xd6c8d8,
+  OFFICE: 0xc6d2e2,
+  SCHOOL: 0xcadcc4,
+  HOSPITAL: 0xecc8c8,
+  PARKING: 0xd9dde2,
+  INDUSTRIAL: 0xd3cec6,
+  OTHER: 0xd5d7db,
 }
 
 const LANE_DASH_LENGTH_METRES = 3
@@ -104,6 +103,8 @@ export function drawStatic(graphics, scene) {
     const colour = colourFor(BUILDING_COLOUR, building.type, BUILDING_COLOUR.OTHER)
     if (building.footprint && building.footprint.length >= 3) {
       fillPolygon(graphics, building.footprint, colour)
+      strokePath(graphics, [...building.footprint, building.footprint[0]],
+        { width: 0.4, color: BUILDING_EDGE, alpha: 0.7 })
     } else if (building.centre) {
       // A map that knows only where a building stands still gets a block.
       const [x, y] = worldPoint(building.centre[0], building.centre[1])
@@ -111,26 +112,27 @@ export function drawStatic(graphics, scene) {
     }
   })
 
-  scene.junctions?.forEach((junction) => fillPolygon(graphics, junction.pavement, PAVEMENT))
+  // Every carriageway gets its casing before any surface is laid, so a road
+  // running beside another is not outlined on top of its neighbour's tarmac.
+  scene.lanes?.forEach((lane) => strokePath(graphics, lane.centreline, {
+    width: lane.widthMetres + 0.7, color: ROAD_CASING, cap: 'round', join: 'round',
+  }))
+  scene.junctions?.forEach((junction) => fillPolygon(graphics, junction.pavement, ROAD_CASING))
 
+  scene.lanes?.forEach((lane) => strokePath(graphics, lane.centreline, {
+    width: lane.widthMetres, color: ROAD, cap: 'round', join: 'round',
+  }))
+  scene.junctions?.forEach((junction) => fillPolygon(graphics, junction.pavement, PAVEMENT, 0.92))
   scene.connectors?.forEach((connector) => strokePath(graphics, connector.curve, {
     width: 2.8, color: CONNECTOR, cap: 'round', join: 'round',
   }))
 
-  // Surface first, then its edge lines, then the dashed divider down the middle.
-  scene.lanes?.forEach((lane) => strokePath(graphics, lane.centreline, {
-    width: lane.widthMetres, color: ROAD, cap: 'round', join: 'round',
-  }))
   scene.lanes?.forEach((lane) => {
-    strokeDashed(graphics, lane.centreline, { width: 0.14, color: LANE_DASH, alpha: 0.55 })
+    strokeDashed(graphics, lane.centreline, { width: 0.16, color: LANE_DASH, alpha: 0.9 })
   })
 
   scene.stopLines?.forEach((stopLine) => strokePath(graphics, [stopLine.from, stopLine.to], {
-    width: 0.5, color: STOP_LINE, alpha: 0.85,
-  }))
-
-  scene.stopLines?.forEach((stopLine) => strokePath(graphics, [stopLine.from, stopLine.to], {
-    width: 0.12, color: ROAD_EDGE, alpha: 0.35,
+    width: 0.5, color: STOP_LINE, alpha: 0.8,
   }))
 }
 
@@ -148,34 +150,24 @@ export function drawSignals(graphics, scene) {
   })
 }
 
-/** Every vehicle at its interpolated position and heading. */
-export function drawVehicles(graphics, vehicles) {
+/**
+ * Trails behind moving motorcycles.
+ *
+ * The bodies are sprites; this is the one thing they cannot show. A short tail
+ * makes filtering legible, so a rider threading between two lanes reads as a
+ * manoeuvre rather than a vehicle in the wrong place.
+ */
+export function drawTrails(graphics, vehicles) {
   graphics.clear()
   if (!vehicles) return
   vehicles.forEach((vehicle) => {
-    const colour = colourFor(VEHICLE_COLOUR, vehicle.type, VEHICLE_COLOUR.CAR)
-    const length = Math.max(vehicle.lengthMetres, 1.5)
-    const width = Math.max(vehicle.widthMetres, 0.7)
-
-    // A trail behind a moving rider makes filtering legible: you can see it
-    // threading between the lanes rather than sitting in one.
-    if (String(vehicle.type).toUpperCase() === 'MOTORCYCLE' && vehicle.speedMps > 1.5) {
-      const rad = (vehicle.headingDegrees * Math.PI) / 180
-      const back = length * 2.2
-      const [cx, cy] = worldPoint(vehicle.x, vehicle.y)
-      graphics.moveTo(cx, cy)
-      graphics.lineTo(cx - Math.sin(rad) * back, cy + Math.cos(rad) * back)
-      graphics.stroke({ width: width * 0.5, color: colour, alpha: 0.22 })
-    }
-
-    const corners = vehicleCorners(
-      vehicle.x, vehicle.y, vehicle.headingDegrees, length, width,
-    )
-    graphics.poly(corners.flat()).fill({ color: colour })
-    // A lighter nose so the direction of travel reads at a glance.
-    const nose = [corners[0], corners[1],
-      [(corners[1][0] + corners[2][0]) / 2, (corners[1][1] + corners[2][1]) / 2],
-      [(corners[0][0] + corners[3][0]) / 2, (corners[0][1] + corners[3][1]) / 2]]
-    graphics.poly(nose.flat()).fill({ color: 0xffffff, alpha: 0.22 })
+    if (String(vehicle.type).toUpperCase() !== 'MOTORCYCLE') return
+    if (!(vehicle.speedMps > 1.5)) return
+    const rad = (vehicle.headingDegrees * Math.PI) / 180
+    const back = Math.max(vehicle.lengthMetres, 1.5) * 2.2
+    const [cx, cy] = worldPoint(vehicle.x, vehicle.y)
+    graphics.moveTo(cx, cy)
+    graphics.lineTo(cx - Math.sin(rad) * back, cy + Math.cos(rad) * back)
+    graphics.stroke({ width: 0.35, color: TRAIL, alpha: 0.35 })
   })
 }
