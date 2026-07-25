@@ -3,7 +3,8 @@ import { Application, Container, Graphics } from 'pixi.js'
 import { simulationApi } from '../api/trafficAPI'
 import { fitScale, offsetToLatLon } from './sceneTransform'
 import { interpolateVehicles } from './interpolate'
-import { drawSignals, drawStatic, drawVehicles } from './layers/drawScene'
+import { drawSignals, drawStatic, drawTrails } from './layers/drawScene'
+import { VehicleLayer, buildVehicleTextures } from './vehicleSprites'
 
 // The lane-level renderer.
 //
@@ -19,11 +20,24 @@ import { drawSignals, drawStatic, drawVehicles } from './layers/drawScene'
 // reachable without closing and reopening.
 
 const POLL_INTERVAL_MS = 600
-const BACKGROUND = 0x0d1014
+const BACKGROUND = 0xe7e3da
 // Refetch once the camera has moved this share of the loaded radius.
 const REFETCH_AT_FRACTION = 0.35
 const MIN_RADIUS_METRES = 90
 const MAX_RADIUS_METRES = 1000
+// How much map a wheel notch is worth. Scroll deltas differ wildly between a
+// mouse and a trackpad, so the step is clamped and applied exponentially rather
+// than multiplied per event, which is what made one flick jump several levels.
+const ZOOM_PER_DELTA = 0.0012
+const MAX_DELTA_PER_EVENT = 120
+// The on-screen scale is anchored to this, never to the radius that happens to
+// be loaded. Tying it to the fetched radius meant zooming out shrank the view
+// twice: once through the camera, and again as the wider request fed back in.
+const REFERENCE_RADIUS_METRES = 220
+
+function screenScale(store, app) {
+  return fitScale(REFERENCE_RADIUS_METRES, app.screen.width, app.screen.height) * store.camera.zoom
+}
 
 export default function PhysicalScene({ target, onClose }) {
   const mountRef = useRef(null)
@@ -52,10 +66,11 @@ export default function PhysicalScene({ target, onClose }) {
       const world = new Container()
       const layers = {
         static: new Graphics(),
+        trails: new Graphics(),
         signals: new Graphics(),
-        vehicles: new Graphics(),
+        vehicles: new VehicleLayer(buildVehicleTextures(app.renderer)),
       }
-      world.addChild(layers.static, layers.signals, layers.vehicles)
+      world.addChild(layers.static, layers.trails, layers.signals, layers.vehicles.container)
       app.stage.addChild(world)
       store.world = world
       store.layers = layers
@@ -87,8 +102,9 @@ export default function PhysicalScene({ target, onClose }) {
 
   const onWheel = (event) => {
     event.preventDefault()
-    const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12
-    store.camera.zoom = Math.max(0.25, Math.min(8, store.camera.zoom * factor))
+    const step = Math.max(-MAX_DELTA_PER_EVENT, Math.min(MAX_DELTA_PER_EVENT, event.deltaY))
+    const factor = Math.exp(-step * ZOOM_PER_DELTA)
+    store.camera.zoom = Math.max(0.2, Math.min(10, store.camera.zoom * factor))
   }
 
   const onPointerDown = (event) => {
@@ -98,8 +114,7 @@ export default function PhysicalScene({ target, onClose }) {
 
   const onPointerMove = (event) => {
     if (!store.drag || !store.app) return
-    const scale = fitScale(store.radius, store.app.screen.width, store.app.screen.height)
-      * store.camera.zoom
+    const scale = screenScale(store, store.app)
     store.camera.x -= (event.clientX - store.drag.x) / scale
     store.camera.y += (event.clientY - store.drag.y) / scale
     store.drag = { x: event.clientX, y: event.clientY }
@@ -136,7 +151,7 @@ function tick(store, setCounts) {
   const { app, world, layers } = store
   if (!app || !world || !layers) return
 
-  const scale = fitScale(store.radius, app.screen.width, app.screen.height) * store.camera.zoom
+  const scale = screenScale(store, app)
   world.scale.set(scale)
   world.position.set(
     app.screen.width / 2 - store.camera.x * scale,
@@ -161,10 +176,9 @@ function tick(store, setCounts) {
   }
 
   const elapsed = store.current ? (performance.now() - store.fetchedAt) / POLL_INTERVAL_MS : 0
-  drawVehicles(
-    layers.vehicles,
-    interpolateVehicles(store.previous?.vehicles, store.current?.vehicles, elapsed),
-  )
+  const drawn = interpolateVehicles(store.previous?.vehicles, store.current?.vehicles, elapsed)
+  drawTrails(layers.trails, drawn)
+  layers.vehicles.update(drawn)
 }
 
 /**
@@ -186,11 +200,17 @@ async function load(store, target, setStatus, isCancelled) {
       store.camera.y = 0
       Object.assign(target, moved)
     }
-    // Zooming out asks for more map rather than showing the same patch smaller.
-    const wanted = Math.max(MIN_RADIUS_METRES,
-      Math.min(MAX_RADIUS_METRES, Math.round(220 / store.camera.zoom)))
-    if (Math.abs(wanted - store.radius) > store.radius * 0.3) {
-      request.radiusMetres = wanted
+    // Ask for as much map as is actually on screen, with a margin so panning
+    // does not stutter at the edge. This only decides how much is fetched; the
+    // scale it is drawn at is fixed by the camera alone.
+    if (store.app) {
+      const scale = screenScale(store, store.app)
+      const visible = Math.hypot(store.app.screen.width, store.app.screen.height) / 2 / scale
+      const wanted = Math.max(MIN_RADIUS_METRES,
+        Math.min(MAX_RADIUS_METRES, Math.round(visible * 1.3)))
+      if (Math.abs(wanted - store.radius) > store.radius * 0.25) {
+        request.radiusMetres = wanted
+      }
     }
 
     const scene = await simulationApi.physicalView(

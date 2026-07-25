@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { drawSignals, drawStatic, drawVehicles } from './drawScene'
+import { drawSignals, drawStatic, drawTrails } from './drawScene'
 
 // A stand-in for a PixiJS Graphics that records what was asked of it. The real
 // one needs WebGL; what matters here is that the draw pass completes over
@@ -93,33 +93,33 @@ describe('drawSignals', () => {
   })
 })
 
-describe('drawVehicles', () => {
+describe('drawTrails', () => {
   const rider = {
     id: 'V1', type: 'MOTORCYCLE', x: 10, y: 0, headingDegrees: 90,
     speedMps: 8, lengthMetres: 2.1, widthMetres: 0.75,
   }
 
-  it('draws a body and a nose for each vehicle', () => {
+  it('draws a trail behind a moving motorcycle so filtering reads', () => {
     const graphics = fakeGraphics()
-    drawVehicles(graphics, [{ ...rider, type: 'CAR', speedMps: 0 }])
-    expect(graphics.calls.poly).toBe(2)
-  })
-
-  it('adds a trail behind a moving motorcycle so filtering reads', () => {
-    const graphics = fakeGraphics()
-    drawVehicles(graphics, [rider])
+    drawTrails(graphics, [rider])
     expect(graphics.calls.stroke).toBe(1)
   })
 
   it('leaves out the trail for a stopped motorcycle', () => {
     const graphics = fakeGraphics()
-    drawVehicles(graphics, [{ ...rider, speedMps: 0 }])
+    drawTrails(graphics, [{ ...rider, speedMps: 0 }])
+    expect(graphics.calls.stroke).toBe(0)
+  })
+
+  it('draws nothing for other vehicle types, which are sprites', () => {
+    const graphics = fakeGraphics()
+    drawTrails(graphics, [{ ...rider, type: 'CAR' }, { ...rider, type: 'BUS' }])
     expect(graphics.calls.stroke).toBe(0)
   })
 
   it('handles an empty or missing list', () => {
     const graphics = fakeGraphics()
-    expect(() => drawVehicles(graphics, undefined)).not.toThrow()
-    expect(graphics.calls.poly).toBe(0)
+    expect(() => drawTrails(graphics, undefined)).not.toThrow()
+    expect(graphics.calls.stroke).toBe(0)
   })
 })
