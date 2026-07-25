@@ -55,7 +55,7 @@ function MapZoomTracker({ onZoom, onCenter }) {
 
 // Where the physical view should open: the selected junction if it carries
 // coordinates, otherwise the middle of what the user is looking at.
-function physicalTargetFrom(selected, mapCenter, radiusMetres = 160) {
+function physicalTargetFrom(selected, mapCenter, radiusMetres = 220) {
   const data = selected?.data
   if (data && data.latitude != null && data.longitude != null) {
     return { latitude: Number(data.latitude), longitude: Number(data.longitude), radiusMetres }

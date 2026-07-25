@@ -1,16 +1,9 @@
-# Macro and Physical Map Plan
+# Macro and Physical Views
 
-## Status
+Design record for the two-renderer split, and what of it is built.
 
-The Leaflet screen is the implemented **macro view**. It renders the road
-network, pressure, incidents, selected routes, editing controls, and small
-glowing type-coloured vehicle dots. The dots come directly from the selected
-authoritative frame and use CSS/Leaflet markers rather than sprite assets. Its
-footer scrubs retained frames and can return explicitly to LIVE mode.
-
-The **physical view** described below is a target design, not an implemented
-feature. It should be built as a separate renderer instead of adding thousands
-of animated markers back to Leaflet.
+Outstanding work on the physical view is in `SIMULATION_REALISM_PLAN.md`; this
+document is the design it rests on.
 
 ## Two-view boundary
 
@@ -19,142 +12,92 @@ of animated markers back to Leaflet.
 | Macro | React Leaflet | Browse the full network, inspect pressure/incidents/routes, view lightweight vehicle dots, and select an area |
 | Physical | PixiJS/WebGL canvas | Animate lane-level vehicles, stop lines, traffic lights, and junction movements |
 
-At a high Leaflet zoom (initially zoom 18 or 19), show an **Open physical
-view** action for the selected junction or road. Do not replace Leaflet
-automatically on the first zoom event: an explicit transition preserves the
-user's selection and avoids a disorienting renderer switch.
+At a high Leaflet zoom (18 or above) an **Open physical view** action appears
+for the selected junction, or the map centre when nothing is selected. Leaflet is
+never replaced automatically on a zoom event: an explicit transition preserves
+the user's selection and avoids a disorienting renderer switch.
 
-Both views must consume the same `{timelineId, frameId}` rather than maintaining
+Both views consume the same `{timelineId, frameId}` rather than maintaining
 independent clocks. The macro view uses aggregate road state; the physical view
-requests only the geometry and moving objects within its selected region.
+requests only the geometry and moving objects within its region.
 
-Continuous lateral pose is now part of the domain contract: a vehicle carries a
-signed offset in metres from the road centreline and crosses to a new lane at a
-bounded lateral speed, so a vehicle part-way through a lane change reports a
-position it genuinely occupies. The renderer may interpolate between those
-offsets and should not derive lateral position from the lane index.
+## The interpolation contract
 
-Sub-lane occupancy has since landed too. A motorcycle can now ride the gap
-between two lanes, and the offset it reports is a position it genuinely
-occupies, so the physical renderer may draw filtering as it happens. See
-`MOTORCYCLE_FILTERING_PLAN.md` for the model and its limits.
-
-## Implemented replay contract
-
-The backend already records one immutable `SimulationFrame` after every
-microscopic sub-step (at most one simulated second) and exact event boundary.
-It contains `tick`, `elapsedSeconds`, vehicle poses, event states, road states,
-and traffic-signal phase state. The current frame is sent through SSE; retained
-frames are listed and queried through:
+The backend records one immutable `SimulationFrame` after every microscopic
+sub-step (at most one simulated second) and at every exact event boundary. It
+carries `tick`, `elapsedSeconds`, vehicle poses, event states, road states, and
+traffic-signal phase state. The current frame goes out over SSE; retained frames
+are queried through:
 
 ```text
 GET /api/simulation/trace/frames
 GET /api/simulation/trace/frames/at?elapsedSeconds=...
 ```
 
-The physical renderer must receive the exact frame object selected by the
-shared cursor. It may interpolate pixels between adjacent LIVE frames for
-smoothness, but interpolation must never create authoritative event, signal,
-road, or vehicle state. On pause or history scrub it must draw the selected
-frame exactly. This makes logical synchronization enforceable even though two
-renderers cannot paint pixels in the same nanosecond.
+The physical renderer draws the exact frame the shared cursor selects. It may
+interpolate **pixels** between two adjacent LIVE frames for smoothness, but
+interpolation must never create authoritative event, signal, road, or vehicle
+state. On pause or a history scrub it draws the selected frame exactly.
 
-The history retains 900 timestamps in memory. Reset/initialize and every
-network-geometry edit start a new timeline; the client discards a selected
-history frame when its timeline changes or the frame leaves the retained
-window.
+That rule is what makes synchronisation enforceable even though two renderers
+cannot paint pixels in the same nanosecond. It is enforced in
+`frontend/src/physical/interpolate.js`: a departed vehicle is dropped rather
+than coasted onward, a newly appeared one is drawn at its own position, and
+everything but position and heading comes from the newer frame unchanged.
 
-## OSM ingestion decision
+History retains 900 timestamps in memory. Initialize, reset, scenario or map
+replacement, and any in-place network edit start a new timeline; the client
+discards a selected history frame when its timeline changes or the frame leaves
+the retained window.
 
-`tools/generate_osm_map.py` currently sends raw Overpass requests with
-`urllib`. That is suitable for rebuilding the present centreline network, but
-it is not a reliable physical-view pipeline: it depends on public mirrors and
-does not preserve enough lane, signal, turn, building, or land-use data.
+## Lateral position
 
-Use this reproducible pipeline instead:
+A vehicle carries a signed offset in metres from the road centreline and crosses
+towards a new lane at a bounded lateral speed, so one part-way through a lane
+change reports a position it genuinely occupies. Sub-lane occupancy landed after
+that, so a motorcycle can ride the gap between two lanes and report an offset
+that is really where it is.
 
-```text
-pinned city .osm.pbf
-  -> osmium extract (project bounding box/polygon)
-  -> Pyrosm feature extraction and projection
-  -> project normalizer/validator
-  -> simulation JSON + physical-scene JSON
-```
+The renderer therefore places vehicles from `lateralOffsetMetres` and **must not**
+derive lateral position from the lane index. See `MOTORCYCLE_FILTERING_PLAN.md`
+for the model behind it.
 
-- **Osmium** makes a small geographic extract and can pre-filter tags while
-  retaining referenced nodes and relation members.
-- **Pyrosm** reads the local PBF, returns driving roads and other layers as
-  GeoDataFrames, and avoids a live Overpass dependency during generation.
-- The project normalizer remains repository-owned. It converts OSM's partial
-  tagging into stable domain fields and records whether every value came from
-  OSM or from an explicit fallback rule.
+## What is built
 
-OSMnx is useful for graph analysis, but its normal `graph_from_*` download
-functions still query Overpass. It is therefore not the preferred replacement
-when reproducible offline extraction is the primary requirement.
+Backend, in `domain/scene` and served by `GET /api/simulation/physical-view`
+(contract in `API_CONTRACT.md`):
 
-### Required source tags
+- `LaneGeometryBuilder` derives each lane's centreline by offsetting the road
+  shape along its local normal, using the same
+  `RoadLayout.laneCentreOffsetMetres` the simulation places vehicles with, so
+  what is drawn and what is simulated cannot disagree.
+- Stop lines across each approach, quadratic turning curves between lanes across
+  a junction, and a junction pavement polygon.
+- `PhysicalSceneAssembler` filters roads, junctions and vehicles against one
+  radius.
+- `PhysicalViewDto` performs the single geographic → local-metre projection, so
+  the browser never sees a latitude.
 
-| Feature | Preserve when present |
-|---|---|
-| Road way | `highway`, `name`, `oneway`, `junction`, `maxspeed`, `width`, `surface` |
-| Lane model | `lanes`, `lanes:forward`, `lanes:backward`, `turn:lanes`, `change:lanes` |
-| Signal node | `highway=traffic_signals`, `traffic_signals:direction` |
-| Junction detail | `type=restriction`, crossings, stop/give-way nodes |
-| Scene context | `building`, `landuse`, `natural`, and relevant amenity polygons |
+Frontend, in `frontend/src/physical` on PixiJS v8:
 
-OSM coverage is incomplete, especially for `lanes`, `width`, and signal
-direction. Missing values must use deterministic road-class defaults, with
-metadata such as `laneCountSource: "OSM"` or `"INFERRED"`; absence must not be
-silently presented as measured data.
+- `sceneTransform.js` — metres ↔ pixels, and the corners of a vehicle box for a
+  heading. Pure and unit-tested.
+- `interpolate.js` — the contract above. Pure and unit-tested.
+- `layers/drawScene.js` — draw order: junction pavement, road surface, lane
+  markings and stop lines, then vehicles.
+- `PhysicalScene.jsx` — owns the PixiJS application, polls the endpoint, draws
+  on a ticker.
 
-## Physical scene contract
+The package lives in `domain/scene` rather than `domain/network/geometry`
+because the two tools it builds on, `RoadLayout` and `PolylineGeometry`, are
+both in `domain/vehicle`, and `domain/network` is otherwise independent of
+`domain/vehicle`. A geometry package under `network` reaching up into `vehicle`
+would invert the layering; a sibling consuming both does not.
 
-The physical renderer should use local metre coordinates around the selected
-area, not latitude/longitude for every frame. A first API boundary can be:
+## Known gaps
 
-```text
-GET /api/simulation/physical-view?lat=...&lon=...&radiusMetres=...
-```
-
-Its response should contain:
-
-- lane centre lines or polygons, lane direction, and permitted turns;
-- junction pavement, stop-line positions, and lane-to-lane connector curves;
-- signal head position, controlled approaches, phase, and remaining time;
-- vehicles in the region with `id`, `type`, `laneId`, metre position, heading,
-  speed, and status;
-- optional building, green-space, and water polygons for the stylised scene.
-
-The authoritative frame stream carries the time sequence. Initially the client
-may filter its vehicle list; once the network grows, publish a
-region-scoped physical stream so the browser does not receive every vehicle.
-
-## Renderer layers
-
-Build the PixiJS scene in a stable draw order:
-
-1. ground, buildings, water, and vegetation;
-2. road pavement, medians, sidewalks, and lane markings;
-3. stop lines and traffic-signal heads;
-4. vehicle sprites, positioned from simulation state and interpolated between
-   authoritative ticks;
-5. selection and optional debug overlays.
-
-The reference artwork is a useful visual direction, not a ready map source.
-OSM supplies geometry and tags; the application still needs a style system,
-texture atlas, lane/junction geometry builder, and sprite interpolation.
-
-## Delivery sequence
-
-1. Replace the legacy generator with a pinned-PBF Pyrosm normalizer and add
-   fixture tests for lane/signal tag parsing.
-2. Add lane, stop-line, signal-association, and local-coordinate DTOs without
-   changing routing behaviour.
-3. Implement one junction in a standalone PixiJS physical-view component.
-4. Connect the component to the existing shared frame cursor and interpolate
-   only visual poses between adjacent LIVE frames.
-5. Add the high-zoom Leaflet action while preserving the selected
-   `{timelineId, frameId}` across the renderer transition.
-6. Add buildings/land use, culling, texture atlases, and region-scoped streams
-   only after the lane/signal geometry is correct.
+The renderer draws a fixed region, has no sprites, no signal heads, and a
+palette too dark to read. The map it draws carries no buildings and no measured
+lane counts, so every lane shown for District 1 is inferred from `RoadClass`
+defaults. All of that, and the demand model that would give the vehicles
+somewhere real to go, is planned in `SIMULATION_REALISM_PLAN.md`.

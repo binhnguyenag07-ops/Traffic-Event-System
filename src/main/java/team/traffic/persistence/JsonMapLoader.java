@@ -142,6 +142,7 @@ public class JsonMapLoader implements MapLoader {
         public Double latitude;
         public Double longitude;
         public List<BuildingAccessData> accessPoints;
+        public List<List<Double>> footprint;
 
         public Building toBuilding() {
             if (accessPoints == null) throw new IllegalArgumentException("Building accessPoints are required");
@@ -153,7 +154,19 @@ public class JsonMapLoader implements MapLoader {
                     requireField(y, "y"),
                     latitude,
                     longitude,
-                    accessPoints.stream().map(BuildingAccessData::toAccessPoint).toList());
+                    accessPoints.stream().map(BuildingAccessData::toAccessPoint).toList(),
+                    toFootprint(footprint));
+        }
+
+        /** Optional outline; a map that carries only a position still loads. */
+        private static List<GeoPoint> toFootprint(List<List<Double>> coordinates) {
+            if (coordinates == null) return List.of();
+            return coordinates.stream().map(point -> {
+                if (point == null || point.size() < 2) {
+                    throw new IllegalArgumentException("Building footprint points require latitude and longitude");
+                }
+                return new GeoPoint(point.get(0), point.get(1));
+            }).toList();
         }
     }
 
