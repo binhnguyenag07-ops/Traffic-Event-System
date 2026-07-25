@@ -6,8 +6,13 @@ between randomly chosen junctions at no particular time of day. This plan closes
 that gap.
 
 Seven problems, verified in the code rather than assumed, grouped into three
-workstreams. `PHYSICAL_VIEW_PLAN.md` holds the two-view design; this document is
-what remains to build.
+workstreams. `PHYSICAL_VIEW_PLAN.md` holds the two-view design.
+
+**Status.** Workstream A and B are built: the zoom desync is fixed, the view
+follows the camera and refetches as it moves, signals and buildings render, and
+the map now carries real lane counts and 1162 buildings. Workstream C — the
+clock and the demand model — is still to do, and is the only part that remains
+blocked on nothing.
 
 ## Verified findings
 

@@ -2,7 +2,10 @@ package team.traffic.domain.scene;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import team.traffic.domain.network.Building;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
@@ -51,6 +54,19 @@ public final class PhysicalSceneAssembler {
      */
     public PhysicalScene sceneAround(
             double latitude, double longitude, double radiusMetres, Collection<SceneVehicle> vehicles) {
+        return sceneAround(latitude, longitude, radiusMetres, vehicles, List.of());
+    }
+
+    /**
+     * The scene within {@code radiusMetres} of the given point, including the
+     * traffic lights the frame resolved for the junctions in range.
+     */
+    public PhysicalScene sceneAround(
+            double latitude,
+            double longitude,
+            double radiusMetres,
+            Collection<SceneVehicle> vehicles,
+            Collection<SignalSnapshot> signals) {
         if (!Double.isFinite(latitude) || !Double.isFinite(longitude)) {
             throw new IllegalArgumentException("Scene centre must be finite.");
         }
@@ -72,15 +88,30 @@ public final class PhysicalSceneAssembler {
             }
         }
 
+        Map<String, SignalSnapshot> signalByJunction = new LinkedHashMap<>();
+        if (signals != null) {
+            signals.forEach(signal -> signalByJunction.put(signal.junctionId(), signal));
+        }
+
         List<LaneConnector> connectors = new ArrayList<>();
         List<JunctionGeometry> junctions = new ArrayList<>();
+        List<SceneSignal> sceneSignals = new ArrayList<>();
         for (Intersection intersection : network.getIntersections().values()) {
             if (!intersectionInRange(intersection, origin, radiusMetres)) {
                 continue;
             }
             connectors.addAll(geometry.connectorsAt(intersection.getId()));
             junctions.add(geometry.junctionGeometryOf(intersection.getId()));
+            SignalSnapshot snapshot = signalByJunction.get(intersection.getId());
+            if (snapshot != null) {
+                sceneSignals.add(signalAt(snapshot));
+            }
         }
+
+        List<SceneBuilding> buildings = network.getBuildings().values().stream()
+                .filter(building -> buildingInRange(building, origin, radiusMetres))
+                .map(PhysicalSceneAssembler::toSceneBuilding)
+                .toList();
 
         List<SceneVehicle> inRange = vehicles == null ? List.of() : vehicles.stream()
                 .filter(vehicle -> withinRadius(
@@ -88,7 +119,56 @@ public final class PhysicalSceneAssembler {
                 .toList();
 
         return new PhysicalScene(
-                origin, radiusMetres, lanes, stopLines, connectors, junctions, inRange);
+                origin, radiusMetres, lanes, stopLines, connectors, junctions,
+                buildings, sceneSignals, inRange);
+    }
+
+    /** Places one head per controlled approach, on that approach's stop line. */
+    private SceneSignal signalAt(SignalSnapshot snapshot) {
+        List<SceneSignal.Approach> approaches = new ArrayList<>();
+        for (Road road : network.getRoads().values()) {
+            if (!snapshot.junctionId().equals(road.getEndIntersectionId())) {
+                continue;
+            }
+            StopLine stopLine = geometry.stopLineOf(road);
+            if (stopLine == null) {
+                continue;
+            }
+            approaches.add(new SceneSignal.Approach(
+                    road.getId(),
+                    midpointOf(stopLine),
+                    snapshot.greenIncomingRoadIds().contains(road.getId()),
+                    snapshot.secondsRemaining()));
+        }
+        return new SceneSignal(snapshot.junctionId(), approaches);
+    }
+
+    private static GeoPoint midpointOf(StopLine stopLine) {
+        return new GeoPoint(
+                (stopLine.from().latitude() + stopLine.to().latitude()) / 2.0,
+                (stopLine.from().longitude() + stopLine.to().longitude()) / 2.0);
+    }
+
+    private static SceneBuilding toSceneBuilding(Building building) {
+        return new SceneBuilding(
+                building.getId(),
+                building.getName(),
+                building.getType(),
+                new GeoPoint(building.getLatitude(), building.getLongitude()),
+                building.getFootprint());
+    }
+
+    private static boolean buildingInRange(Building building, GeoPoint origin, double radiusMetres) {
+        if (building.getLatitude() == null || building.getLongitude() == null) {
+            return false;
+        }
+        GeoPoint centre = new GeoPoint(building.getLatitude(), building.getLongitude());
+        if (withinRadius(origin, centre, radiusMetres)) {
+            return true;
+        }
+        // A large block whose centre sits outside still shows if a wall reaches in.
+        return building.getFootprint().stream()
+                .anyMatch(point -> withinRadius(origin, point, radiusMetres));
     }
 
     private boolean roadInRange(Road road, GeoPoint origin, double radiusMetres) {
