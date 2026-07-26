@@ -58,8 +58,8 @@ does not mutate the live simulation.
 ```text
 Traffic-Event-System/
 |-- data/
-|   |-- maps/                     road networks (input)
-|   |-- scenarios/                vehicle and event scripts (input)
+|   |-- maps/                     the District 1 road network (input)
+|   |-- scenarios/                run scripts (input) -- being redesigned
 |   `-- results/                  generated output; traces land here
 |-- docs/                         architecture, class diagram, algorithms, API, demo, results
 |-- frontend/
