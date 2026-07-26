@@ -15,6 +15,7 @@ public class RoadNetwork {
     private final Map<String, List<Road>> outgoingRoads;
     private final Map<String, List<Road>> incomingRoads;
     private final Map<String, Building> buildings;
+    private final List<LandCover> landCovers;
 
     public RoadNetwork() {
         this.intersections = new LinkedHashMap<>();
@@ -22,6 +23,7 @@ public class RoadNetwork {
         this.outgoingRoads = new LinkedHashMap<>();
         this.incomingRoads = new LinkedHashMap<>();
         this.buildings = new LinkedHashMap<>();
+        this.landCovers = new ArrayList<>();
     }
 
     // Adds an intersection while preserving the graph-wide unique-id invariant.
@@ -285,6 +287,21 @@ public class RoadNetwork {
 
     public Map<String, Building> getBuildings() {
         return Collections.unmodifiableMap(buildings);
+    }
+
+    /**
+     * Adds a patch of ground. Land cover is drawn, never routed over, so it is
+     * kept as a plain list: nothing looks one up by id.
+     */
+    public void addLandCover(LandCover landCover) {
+        if (landCover == null) {
+            throw new IllegalArgumentException("Land cover is required");
+        }
+        landCovers.add(landCover);
+    }
+
+    public List<LandCover> getLandCovers() {
+        return Collections.unmodifiableList(landCovers);
     }
 
     private Road requireRoad(String roadId) {

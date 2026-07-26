@@ -21,8 +21,13 @@ frontend/public/assets/
 │   └── emergency.png
 ├── surfaces/
 │   ├── asphalt.png
-│   ├── ground.png
 │   └── junction.png
+├── land/
+│   ├── normal.png          ordinary urban fabric — the base everything sits on
+│   ├── park.png
+│   ├── water.png
+│   ├── grass.png
+│   └── … one per LandCoverType
 └── buildings/
     ├── residential.png
     ├── commercial.png
@@ -76,8 +81,27 @@ shows as a visible grid across the whole map. 512 × 512 px is plenty.
 | File | Used for |
 |---|---|
 | `asphalt.png` | The carriageway |
-| `ground.png` | Land between the roads |
 | `junction.png` | Paved area inside a junction |
+
+## Land cover — 12 files
+
+The ground between the roads, one texture per `LandCoverType`. `normal.png` is
+the base the whole scene is drawn on; the rest fill mapped polygons on top.
+
+| File | What it covers | Polygons in the current map |
+|---|---|---|
+| `normal.png` | Ordinary urban fabric — everywhere nothing else is mapped | the background |
+| `grass.png` | Verges and yards | 136 |
+| `commercial.png` | Commercial blocks | 25 |
+| `water.png` | Saigon river, Ben Nghe canal | 21 |
+| `park.png` | Tao Dan and the rest | 18 |
+| `construction.png` | Sites | 17 |
+| `other.png` | Mapped, but not a type this model distinguishes | 20 |
+| `residential.png`, `industrial.png`, `forest.png`, `religious.png`, `recreation.png` | as named | few or none |
+
+`normal.png` is the one that matters most: it is the majority of the screen.
+Something quiet and slightly textured — dry concrete, packed earth, a pale
+render — reads as city without pretending to be buildings.
 
 Where to look:
 

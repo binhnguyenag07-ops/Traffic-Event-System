@@ -11,6 +11,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.GeoPoint;
+import team.traffic.domain.network.LandCover;
+import team.traffic.domain.network.LandCoverType;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
@@ -68,6 +70,7 @@ public class JsonMapLoader implements MapLoader {
         addIntersections(roadNetwork, mapData.intersections);
         addRoads(roadNetwork, mapData.roads == null ? Collections.emptyList() : mapData.roads);
         addBuildings(roadNetwork, mapData.buildings == null ? Collections.emptyList() : mapData.buildings);
+        addLandCovers(roadNetwork, mapData.landCovers == null ? Collections.emptyList() : mapData.landCovers);
         return roadNetwork;
     }
 
@@ -131,6 +134,7 @@ public class JsonMapLoader implements MapLoader {
         public List<IntersectionData> intersections;
         public List<RoadData> roads;
         public List<BuildingData> buildings;
+        public List<LandCoverData> landCovers;
     }
 
     static class BuildingData {
@@ -291,5 +295,34 @@ public class JsonMapLoader implements MapLoader {
             throw new IllegalArgumentException("Required field is missing: " + fieldName);
         }
         return value;
+    }
+
+    /** Land cover is optional; a map without it simply has no parks or water drawn. */
+    private void addLandCovers(RoadNetwork roadNetwork, List<LandCoverData> covers) {
+        for (int index = 0; index < covers.size(); index++) {
+            try {
+                LandCoverData data = requireEntry(covers.get(index), "landCover", index);
+                roadNetwork.addLandCover(data.toLandCover());
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalArgumentException(
+                        "Invalid land cover at index " + index + ": " + exception.getMessage(), exception);
+            }
+        }
+    }
+
+    static class LandCoverData {
+        public String id;
+        public LandCoverType type;
+        public List<List<Double>> polygon;
+
+        public LandCover toLandCover() {
+            if (polygon == null) throw new IllegalArgumentException("Land cover polygon is required");
+            return new LandCover(id, requireField(type, "type"), polygon.stream().map(point -> {
+                if (point == null || point.size() < 2) {
+                    throw new IllegalArgumentException("Land cover points require latitude and longitude");
+                }
+                return new GeoPoint(point.get(0), point.get(1));
+            }).toList());
+        }
     }
 }

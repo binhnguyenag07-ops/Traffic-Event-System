@@ -42,6 +42,20 @@ BUILDING_TYPES = {
     "parking": "PARKING", "garage": "PARKING", "garages": "PARKING",
     "industrial": "INDUSTRIAL", "warehouse": "INDUSTRIAL", "factory": "INDUSTRIAL",
 }
+# OSM landuse/leisure/natural tags to the domain LandCoverType. Anything the
+# map does not classify stays unmapped and is drawn as ordinary urban fabric --
+# OSM has only about a fifth of District 1's buildings, so most ground genuinely
+# has nothing recorded on it and must not be dressed up as something.
+LAND_COVER_TYPES = {
+    "park": "PARK", "garden": "PARK", "water": "WATER", "reservoir": "WATER",
+    "grass": "GRASS", "meadow": "GRASS", "forest": "FOREST", "wood": "FOREST",
+    "commercial": "COMMERCIAL", "retail": "COMMERCIAL",
+    "residential": "RESIDENTIAL", "industrial": "INDUSTRIAL",
+    "construction": "CONSTRUCTION", "brownfield": "CONSTRUCTION",
+    "religious": "RELIGIOUS", "cemetery": "RELIGIOUS",
+    "recreation_ground": "RECREATION", "pitch": "RECREATION",
+}
+
 # A building further than this from any junction has no plausible access.
 MAX_DRIVEWAY_METRES = 160.0
 
@@ -88,6 +102,52 @@ def fetch_ways():
     return overpass(f'''[out:json][timeout:180];
 way["highway"~"^({ROAD_CLASSES})$"]({south},{west},{north},{east});
 out body geom;''', "ways")
+
+
+def fetch_land_cover():
+    """Parks, water and yards. Without these the river and Tao Dan read as bare land."""
+    south, west, north, east = BOUNDS
+    return overpass(f'''[out:json][timeout:180];
+(way["leisure"="park"]({south},{west},{north},{east});
+ way["landuse"]({south},{west},{north},{east});
+ way["natural"="water"]({south},{west},{north},{east});
+ way["waterway"="riverbank"]({south},{west},{north},{east}););
+out body geom;''', "landcover")
+
+
+def land_cover_type_of(tags):
+    for key in ("leisure", "landuse", "natural", "waterway"):
+        value = tags.get(key, "").lower()
+        if value in LAND_COVER_TYPES:
+            return LAND_COVER_TYPES[value]
+        if key == "waterway" and value:
+            return "WATER"
+    return "OTHER"
+
+
+def build_land_cover(elements):
+    """Closed ways with at least three points, clipped to the bounds by centroid."""
+    south, west, north, east = BOUNDS
+    covers = []
+    counts = Counter()
+    for way in elements:
+        points = [(p["lat"], p["lon"]) for p in (way.get("geometry") or [])]
+        if len(points) >= 2 and points[0] == points[-1]:
+            points = points[:-1]
+        if len(points) < 3:
+            continue
+        latitude = sum(p[0] for p in points) / len(points)
+        longitude = sum(p[1] for p in points) / len(points)
+        if not (south <= latitude <= north and west <= longitude <= east):
+            continue
+        kind = land_cover_type_of(way.get("tags", {}))
+        counts[kind] += 1
+        covers.append({
+            "id": f"L{way['id']}",
+            "type": kind,
+            "polygon": [[round(lat, 7), round(lon, 7)] for lat, lon in points],
+        })
+    return covers, counts
 
 
 def fetch_buildings():
@@ -295,7 +355,7 @@ def build_buildings(building_ways, intersections, center_lat, center_lon):
     return buildings, dropped
 
 
-def build_map(ways, building_ways):
+def build_map(ways, building_ways, land_cover_ways):
     segments, node_positions, node_streets = split_ways(ways)
     segments = largest_component(segments)
     used_nodes = {segment[key] for segment in segments for key in ("start", "end")}
@@ -372,6 +432,7 @@ def build_map(ways, building_ways):
             f"Generated network exceeds import limits: {len(intersections)} intersections, {len(roads)} roads")
 
     buildings, dropped = build_buildings(building_ways, intersections, center_lat, center_lon)
+    land_covers, cover_counts = build_land_cover(land_cover_ways)
     # Provenance is reported, not written into the map: the loader rejects
     # fields it does not know, and a guessed lane count must still not be
     # presented as a measured one.
@@ -381,7 +442,9 @@ def build_map(ways, building_ways):
           f"{MAX_DRIVEWAY_METRES:.0f} m")
     by_type = Counter(building["type"] for building in buildings)
     print(f"  building mix : {dict(by_type.most_common())}")
-    return {"intersections": intersections, "roads": roads, "buildings": buildings}
+    print(f"  land cover   : {len(land_covers)} polygons {dict(cover_counts.most_common(6))}")
+    return {"intersections": intersections, "roads": roads,
+            "buildings": buildings, "landCovers": land_covers}
 
 
 def main():
@@ -389,9 +452,10 @@ def main():
     parser.add_argument("output", nargs="?", default="data/maps/district1_network.json")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    network = build_map(fetch_ways(), fetch_buildings())
+    network = build_map(fetch_ways(), fetch_buildings(), fetch_land_cover())
     print(f"Generated {len(network['intersections'])} intersections, "
-          f"{len(network['roads'])} directed roads, {len(network['buildings'])} buildings")
+          f"{len(network['roads'])} directed roads, {len(network['buildings'])} buildings, "
+          f"{len(network['landCovers'])} land-cover polygons")
     if not args.dry_run:
         Path(args.output).write_text(json.dumps(network, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
