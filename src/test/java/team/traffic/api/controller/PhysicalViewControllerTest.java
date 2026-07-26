@@ -64,6 +64,34 @@ class PhysicalViewControllerTest {
     }
 
     @Test
+    void servesTheFullLoadedMapWithoutAClientRadius() throws Exception {
+        start();
+
+        HttpResponse<String> response = get("/api/simulation/physical-view"
+                + "?lat=10.0&lon=106.000&fullMap=true");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("\"roadId\":\"AB\"")
+                .contains("\"radiusMetres\":");
+    }
+
+    @Test
+    void servesDynamicPhysicalStateWithoutRepeatingStaticGeometry() throws Exception {
+        start();
+
+        HttpResponse<String> response = get("/api/simulation/physical-view/state"
+                + "?lat=10.0&lon=106.000&radiusMetres=300");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("\"playbackIntervalMs\":1000")
+                .contains("\"signals\":[]")
+                .contains("\"vehicles\":[]")
+                .doesNotContain("\"lanes\"");
+    }
+
+    @Test
     void rejectsAMissingParameterWith400() throws Exception {
         start();
 

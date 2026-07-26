@@ -20,17 +20,12 @@ import { assetCount, loadSceneAssets } from './assetLoader'
 // defect that made zooming feel like the road and the traffic were racing each
 // other — and zooming costs no redraw.
 //
-// The view is not tied to the patch it opened on. Dragging moves the camera,
-// and when it has travelled far enough from the loaded centre the scene is
-// refetched around where the user is now looking, so the whole map is
-// reachable without closing and reopening.
+// The complete static map is loaded once. Polls carry only the current vehicles
+// and signals, so panning never crosses a region boundary and buildings cannot
+// pop in and out as a radius-based LOD request catches up.
 
-const POLL_INTERVAL_MS = 600
+const POLL_INTERVAL_MS = 250
 const BACKGROUND = 0xe7e3da
-// Refetch once the camera has moved this share of the loaded radius.
-const REFETCH_AT_FRACTION = 0.35
-const MIN_RADIUS_METRES = 90
-const MAX_RADIUS_METRES = 1000
 const WHEEL_PIXELS_PER_ZOOM_LEVEL = 240
 const MAX_WHEEL_DELTA_PIXELS = 240
 const INERTIA_DECAY_MS = 220
@@ -50,6 +45,7 @@ function createStore(viewport) {
     previous: null,
     current: null,
     fetchedAt: 0,
+    animationDurationMs: 1000,
     origin: null,
     viewport: {
       latitude: Number(viewport.latitude),
@@ -58,6 +54,9 @@ function createStore(viewport) {
     radius: Number(viewport.radiusMetres) || 220,
     camera: { x: 0, y: 0, zoom: clampMapZoom(viewport.zoom) },
     fetching: false,
+    needsGeometry: true,
+    staticDirty: false,
+    signalsDirty: false,
     drag: null,
     inertia: { x: 0, y: 0 },
     lastTickAt: 0,
@@ -159,8 +158,13 @@ export default function PhysicalScene({ viewport, onViewportChange, onClose }) {
         }
       })
 
-      await load(store, setStatus, () => cancelled)
-      poll = window.setInterval(() => load(store, setStatus, () => cancelled), POLL_INTERVAL_MS)
+      await loadGeometry(store, setStatus, () => cancelled)
+      poll = window.setInterval(
+        () => (store.needsGeometry
+          ? loadGeometry(store, setStatus, () => cancelled)
+          : loadState(store, setStatus, () => cancelled)),
+        POLL_INTERVAL_MS,
+      )
     }
 
     boot()
@@ -253,8 +257,8 @@ export default function PhysicalScene({ viewport, onViewportChange, onClose }) {
 
   const close = () => {
     const store = storeRef.current
-    if (store) reportViewport(store)
-    onClose()
+    const finalViewport = store ? currentViewport(store) : viewport
+    onClose(finalViewport)
   }
 
   const onKeyDown = (event) => {
@@ -356,10 +360,13 @@ function tick(store, setCounts) {
     app.screen.height / 2 + store.camera.y * scale,
   )
 
-  if (store.dirty && store.current) {
+  if (store.staticDirty && store.current) {
     drawStatic(layers.static, store.current, store.assets)
+    store.staticDirty = false
+  }
+  if (store.signalsDirty && store.current) {
     drawSignals(layers.signals, store.current)
-    store.dirty = false
+    store.signalsDirty = false
   }
 
   // Reported every tick from whatever scene is current, rather than only when
@@ -373,46 +380,27 @@ function tick(store, setCounts) {
     setCounts({ vehicles, buildings, assets: assetCount(store.assets) })
   }
 
-  const elapsed = store.current ? (performance.now() - store.fetchedAt) / POLL_INTERVAL_MS : 0
-  const drawn = interpolateVehicles(store.previous?.vehicles, store.current?.vehicles, elapsed)
+  const elapsed = store.current
+    ? (performance.now() - store.fetchedAt) / store.animationDurationMs
+    : 0
+  const drawn = interpolateVehicles(
+    store.previous?.vehicles,
+    store.current?.vehicles,
+    elapsed,
+    store.current,
+  )
   drawTrails(layers.trails, drawn)
   layers.vehicles.update(drawn)
 }
 
-/**
- * Fetches the scene the camera is looking at, re-centring the request when the
- * camera has wandered far enough from the last one.
- */
-async function load(store, setStatus, isCancelled) {
+/** Loads the complete static network once for the current simulation timeline. */
+async function loadGeometry(store, setStatus, isCancelled) {
   if (store.fetching) return
   store.fetching = true
   try {
-    let request = {
-      ...(store.origin ?? store.viewport),
-      radiusMetres: store.radius,
-    }
-    const travelled = Math.hypot(store.camera.x, store.camera.y)
-    let recenterOffset = null
-    if (store.origin && travelled > store.radius * REFETCH_AT_FRACTION) {
-      const moved = offsetToLatLon(store.origin, store.camera.x, store.camera.y)
-      request = { ...moved, radiusMetres: store.radius }
-      recenterOffset = { x: store.camera.x, y: store.camera.y }
-    }
-    // Ask for as much map as is actually on screen, with a margin so panning
-    // does not stutter at the edge. This only decides how much is fetched; the
-    // scale it is drawn at is fixed by the camera alone.
-    if (store.app) {
-      const scale = screenScale(store)
-      const visible = Math.hypot(store.app.screen.width, store.app.screen.height) / 2 / scale
-      const wanted = Math.max(MIN_RADIUS_METRES,
-        Math.min(MAX_RADIUS_METRES, Math.round(visible * 1.3)))
-      if (Math.abs(wanted - store.radius) > store.radius * 0.25) {
-        request.radiusMetres = wanted
-      }
-    }
-
+    const request = store.origin ?? store.viewport
     const scene = await simulationApi.physicalView(
-      request.latitude, request.longitude, request.radiusMetres,
+      request.latitude, request.longitude, store.radius, { fullMap: true },
     )
     if (isCancelled()) return
     store.previous = store.current
@@ -423,20 +411,53 @@ async function load(store, setStatus, isCancelled) {
       longitude: scene.origin.longitude,
     }
     store.radius = scene.radiusMetres
-    if (recenterOffset) {
-      // Camera offsets are relative to the scene origin. Once the server has
-      // accepted the requested centre as its new origin, remove only the offset
-      // included in that request. Any movement made while the request was in
-      // flight remains, so a slow response cannot snap the map backwards.
-      store.camera.x -= recenterOffset.x
-      store.camera.y -= recenterOffset.y
-      reportViewport(store)
-    }
     store.fetchedAt = performance.now()
-    store.dirty = true
-    setStatus(scene.frameId >= 0 ? `Live · frame ${scene.frameId}` : 'Live · geometry only')
+    store.staticDirty = true
+    store.signalsDirty = true
+    store.needsGeometry = false
+    setStatus(scene.frameId >= 0
+      ? `Live · full map · frame ${scene.frameId}`
+      : 'Live · full map geometry')
   } catch (error) {
     if (!isCancelled()) setStatus(`Could not load scene: ${error.message}`)
+  } finally {
+    store.fetching = false
+  }
+}
+
+/** Polls only moving state and merges it onto the retained static scene. */
+async function loadState(store, setStatus, isCancelled) {
+  if (store.fetching || !store.origin || !store.current) return
+  store.fetching = true
+  try {
+    const state = await simulationApi.physicalViewState(
+      store.origin.latitude, store.origin.longitude, store.radius,
+    )
+    if (isCancelled()) return
+    if (state.timelineId !== store.current.timelineId) {
+      store.needsGeometry = true
+      setStatus('Refreshing full map…')
+      return
+    }
+    if (state.frameId === store.current.frameId) return
+    store.previous = store.current
+    store.current = {
+      ...store.current,
+      ...state,
+      signals: state.signals || [],
+      vehicles: state.vehicles || [],
+    }
+    store.fetchedAt = performance.now()
+    store.animationDurationMs = Math.max(
+      POLL_INTERVAL_MS,
+      Number(state.playbackIntervalMs) || store.animationDurationMs,
+    )
+    store.signalsDirty = true
+    setStatus(state.frameId >= 0
+      ? `Live · full map · frame ${state.frameId}`
+      : 'Live · full map geometry')
+  } catch (error) {
+    if (!isCancelled()) setStatus(`Could not update scene: ${error.message}`)
   } finally {
     store.fetching = false
   }

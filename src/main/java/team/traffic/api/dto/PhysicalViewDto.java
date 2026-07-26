@@ -114,7 +114,9 @@ public record PhysicalViewDto(
                 vehicle.id(), vehicle.type(), point[0], point[1],
                 vehicle.headingDegrees(), vehicle.speedMps(),
                 vehicle.lengthMetres(), vehicle.widthMetres(),
-                vehicle.laneIndex(), vehicle.lateralOffsetMetres());
+                vehicle.laneIndex(), vehicle.lateralOffsetMetres(),
+                vehicle.roadId(), vehicle.roadProgress(), vehicle.inJunction(),
+                vehicle.junctionFromRoadId(), vehicle.junctionToRoadId());
     }
 
     private static List<double[]> project(List<GeoPoint> points, GeoPoint origin) {
@@ -164,6 +166,8 @@ public record PhysicalViewDto(
             String id, String type, double x, double y,
             double headingDegrees, double speedMps,
             double lengthMetres, double widthMetres,
-            int laneIndex, double lateralOffsetMetres) {
+            int laneIndex, double lateralOffsetMetres,
+            String roadId, double roadProgress, boolean inJunction,
+            String junctionFromRoadId, String junctionToRoadId) {
     }
 }

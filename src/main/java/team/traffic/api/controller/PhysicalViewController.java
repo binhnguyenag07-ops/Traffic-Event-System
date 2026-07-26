@@ -5,9 +5,11 @@ import io.javalin.http.Context;
 import java.util.List;
 import java.util.Optional;
 import team.traffic.api.dto.PhysicalViewDto;
+import team.traffic.api.dto.PhysicalViewStateDto;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.scene.PhysicalScene;
 import team.traffic.domain.scene.PhysicalSceneAssembler;
+import team.traffic.domain.scene.PhysicalSceneState;
 import team.traffic.domain.scene.SceneVehicle;
 import team.traffic.domain.scene.SignalSnapshot;
 import team.traffic.service.RoadNetworkService;
@@ -26,7 +28,7 @@ import team.traffic.domain.vehicle.VehicleStatus;
  */
 public class PhysicalViewController {
 
-    /** Largest region served, so a careless request cannot ask for the whole city. */
+    /** Largest ad-hoc region; explicit full-map requests are bounded by the loaded network. */
     private static final double MAX_RADIUS_METRES = 1_000.0;
     /** Metres per second in one kilometre per hour, for the speed the frame reports in kph. */
     private static final double KPH_TO_MPS = 3.6;
@@ -42,21 +44,25 @@ public class PhysicalViewController {
 
     public void registerRoutes(Javalin app) {
         app.get("/api/simulation/physical-view", this::getPhysicalView);
+        app.get("/api/simulation/physical-view/state", this::getPhysicalViewState);
     }
 
     private void getPhysicalView(Context ctx) {
         Double latitude = parse(ctx, "lat");
         Double longitude = parse(ctx, "lon");
         Double radius = parse(ctx, "radiusMetres");
-        if (latitude == null || longitude == null || radius == null) {
-            ctx.status(400).json(error("lat, lon and radiusMetres are all required and numeric."));
+        boolean fullMap = Boolean.parseBoolean(ctx.queryParam("fullMap"));
+        if (latitude == null || longitude == null || (!fullMap && radius == null)) {
+            ctx.status(400).json(error(
+                    fullMap
+                            ? "lat and lon are required and numeric."
+                            : "lat, lon and radiusMetres are all required and numeric."));
             return;
         }
-        if (radius <= 0) {
+        if (!fullMap && radius <= 0) {
             ctx.status(400).json(error("radiusMetres must be positive."));
             return;
         }
-        double clampedRadius = Math.min(radius, MAX_RADIUS_METRES);
 
         RoadNetwork network = networkService.getNetwork();
         Optional<SimulationFrame> frame = simulationService.getCurrentFrame();
@@ -68,14 +74,52 @@ public class PhysicalViewController {
                 .map(PhysicalViewController::signalSnapshots)
                 .orElse(List.of());
 
-        PhysicalScene scene = new PhysicalSceneAssembler(network)
-                .sceneAround(latitude, longitude, clampedRadius, vehicles, signals);
+        PhysicalSceneAssembler assembler = new PhysicalSceneAssembler(network);
+        PhysicalScene scene = fullMap
+                ? assembler.sceneAll(latitude, longitude, vehicles, signals)
+                : assembler.sceneAround(
+                        latitude,
+                        longitude,
+                        Math.min(radius, MAX_RADIUS_METRES),
+                        vehicles,
+                        signals);
 
         ctx.json(PhysicalViewDto.of(
                 scene,
                 frame.map(SimulationFrame::timelineId).orElse("none"),
                 frame.map(SimulationFrame::frameId).orElse(-1L),
                 frame.map(SimulationFrame::elapsedSeconds).orElse(0.0)));
+    }
+
+    private void getPhysicalViewState(Context ctx) {
+        Double latitude = parse(ctx, "lat");
+        Double longitude = parse(ctx, "lon");
+        Double radius = parse(ctx, "radiusMetres");
+        if (latitude == null || longitude == null || radius == null) {
+            ctx.status(400).json(error("lat, lon and radiusMetres are all required and numeric."));
+            return;
+        }
+        if (radius <= 0) {
+            ctx.status(400).json(error("radiusMetres must be positive."));
+            return;
+        }
+
+        Optional<SimulationFrame> frame = simulationService.getCurrentFrame();
+        List<SceneVehicle> vehicles = frame
+                .map(PhysicalViewController::sceneVehicles)
+                .orElse(List.of());
+        List<SignalSnapshot> signals = frame
+                .map(PhysicalViewController::signalSnapshots)
+                .orElse(List.of());
+        PhysicalSceneState state = new PhysicalSceneAssembler(networkService.getNetwork())
+                .stateAround(latitude, longitude, radius, vehicles, signals);
+
+        ctx.json(PhysicalViewStateDto.of(
+                state,
+                frame.map(SimulationFrame::timelineId).orElse("none"),
+                frame.map(SimulationFrame::frameId).orElse(-1L),
+                frame.map(SimulationFrame::elapsedSeconds).orElse(0.0),
+                simulationService.getPlaybackIntervalMillis()));
     }
 
     /**
@@ -112,7 +156,12 @@ public class PhysicalViewController {
                 vehicle.length(),
                 vehicle.width(),
                 vehicle.laneIndex(),
-                vehicle.lateralOffsetMetres());
+                vehicle.lateralOffsetMetres(),
+                vehicle.occupiedRoadId(),
+                vehicle.roadProgress(),
+                vehicle.inJunction(),
+                vehicle.junctionFromRoadId(),
+                vehicle.junctionToRoadId());
     }
 
     private static Double parse(Context ctx, String name) {
