@@ -73,9 +73,16 @@ export const simulationApi = {
   timeSpaceDiagram: (roadId) => get(`/simulation/trace/roads/${encodeURIComponent(roadId)}/time-space`),
   setParameters: (simulationSecondsPerTick, playbackIntervalMs) =>
     put('/simulation/parameters', { simulationSecondsPerTick, playbackIntervalMs }),
+  setPlaybackInterval: (playbackIntervalMs) =>
+    put('/simulation/parameters', { playbackIntervalMs }),
   streamUrl: () => `${API_BASE}/simulation/stream`,
-  physicalView: (lat, lon, radiusMetres) => get(
+  physicalView: (lat, lon, radiusMetres, { fullMap = false } = {}) => get(
     `/simulation/physical-view?lat=${encodeURIComponent(lat)}`
+    + `&lon=${encodeURIComponent(lon)}&radiusMetres=${encodeURIComponent(radiusMetres)}`
+    + (fullMap ? '&fullMap=true' : ''),
+  ),
+  physicalViewState: (lat, lon, radiusMetres) => get(
+    `/simulation/physical-view/state?lat=${encodeURIComponent(lat)}`
     + `&lon=${encodeURIComponent(lon)}&radiusMetres=${encodeURIComponent(radiusMetres)}`,
   ),
 }

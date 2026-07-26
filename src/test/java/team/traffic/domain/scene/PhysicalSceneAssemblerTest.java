@@ -57,6 +57,16 @@ class PhysicalSceneAssemblerTest {
     }
 
     @Test
+    void fullSceneUsesTheNetworkExtentInsteadOfAViewportRadius() {
+        PhysicalScene scene = new PhysicalSceneAssembler(twoRoadNetwork())
+                .sceneAll(LAT, WEST_LON, List.of(), List.of());
+
+        assertThat(scene.lanes().stream().map(LaneGeometry::roadId).distinct())
+                .containsExactlyInAnyOrder("WEST", "EAST");
+        assertThat(scene.radiusMetres()).isGreaterThan(1_000);
+    }
+
+    @Test
     void keepsVehiclesInsideTheRadiusAndDropsThoseOutside() {
         RoadNetwork network = twoRoadNetwork();
         PhysicalSceneAssembler assembler = new PhysicalSceneAssembler(network);
@@ -144,6 +154,22 @@ class PhysicalSceneAssemblerTest {
                 .containsExactly("WEST");
         assertThat(signal.approaches().get(0).green()).isTrue();
         assertThat(signal.approaches().get(0).secondsRemaining()).isEqualTo(7.5);
+    }
+
+    @Test
+    void dynamicStateCarriesSignalsAndVehiclesWithoutRebuildingGeometry() {
+        PhysicalSceneAssembler assembler = new PhysicalSceneAssembler(twoRoadNetwork());
+        SceneVehicle vehicle = vehicle("moving", LAT, 106.005);
+        SignalSnapshot signal = new SignalSnapshot("M", Set.of("WEST"), 5.0);
+
+        PhysicalSceneState state = assembler.stateAround(
+                LAT, 106.005, 300, List.of(vehicle), List.of(signal));
+
+        assertThat(state.vehicles()).extracting(SceneVehicle::id).containsExactly("moving");
+        assertThat(state.signals()).hasSize(1);
+        assertThat(state.signals().get(0).approaches())
+                .extracting(SceneSignal.Approach::roadId)
+                .containsExactly("WEST");
     }
 
     @Test

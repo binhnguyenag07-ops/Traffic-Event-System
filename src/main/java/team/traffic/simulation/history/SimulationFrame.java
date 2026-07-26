@@ -95,9 +95,12 @@ public record SimulationFrame(
             Double longitude,
             Double headingDegrees,
             boolean inJunction,
-            double lateralOffsetMetres) {
+            double lateralOffsetMetres,
+            String junctionFromRoadId,
+            String junctionToRoadId) {
 
         static VehicleState from(Vehicle vehicle, VehiclePose pose) {
+            boolean inJunction = pose != null && pose.inJunction();
             return new VehicleState(
                     vehicle.getId(),
                     vehicle.getType(),
@@ -116,8 +119,19 @@ public record SimulationFrame(
                     pose == null ? null : pose.latitude(),
                     pose == null ? null : pose.longitude(),
                     pose == null ? null : pose.headingDegrees(),
-                    pose != null && pose.inJunction(),
-                    pose == null ? 0.0 : pose.lateralOffsetMetres());
+                    inJunction,
+                    pose == null ? 0.0 : pose.lateralOffsetMetres(),
+                    inJunction ? routeRoadIdAt(vehicle, -1) : null,
+                    inJunction ? routeRoadIdAt(vehicle, 0) : null);
+        }
+
+        private static String routeRoadIdAt(Vehicle vehicle, int offset) {
+            var route = vehicle.getCurrentRoute();
+            int index = vehicle.getNextRouteStepIndex() + offset;
+            if (route == null || index < 0 || index >= route.getStepCount()) {
+                return null;
+            }
+            return route.getSteps().get(index).getRoadId();
         }
     }
 

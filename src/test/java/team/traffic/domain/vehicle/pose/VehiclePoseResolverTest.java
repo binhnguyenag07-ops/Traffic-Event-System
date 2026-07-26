@@ -18,6 +18,8 @@ import team.traffic.domain.routing.Route;
 import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
+import team.traffic.simulation.SimulationStatus;
+import team.traffic.simulation.history.SimulationFrame;
 
 /**
  * A corner: the vehicle runs north along AB, then turns east along BC.
@@ -109,6 +111,19 @@ class VehiclePoseResolverTest {
 
         assertThat(pose.roadId()).isEqualTo("BC");
         assertThat(pose.headingDegrees()).isCloseTo(90.0, within(1.0));
+    }
+
+    @Test
+    void aJunctionFrameIdentifiesTheConnectorUsedForRendering() {
+        driveUntilWaitingAt("B");
+
+        SimulationFrame.VehicleState state = SimulationFrame.capture(
+                "timeline", 1, 1, 1.0, SimulationStatus.RUNNING,
+                network, List.of(car), List.of(), List.of()).vehicles().get(0);
+
+        assertThat(state.inJunction()).isTrue();
+        assertThat(state.junctionFromRoadId()).isEqualTo("AB");
+        assertThat(state.junctionToRoadId()).isEqualTo("BC");
     }
 
     @Test

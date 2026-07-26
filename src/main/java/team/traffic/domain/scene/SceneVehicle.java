@@ -20,6 +20,11 @@ package team.traffic.domain.scene;
  * @param widthMetres         drawn width
  * @param laneIndex           lane it is nearest to
  * @param lateralOffsetMetres signed offset from the road centreline
+ * @param roadId              occupied road, or null while crossing a junction
+ * @param roadProgress        progress along the occupied road
+ * @param inJunction          whether the vehicle is between two roads
+ * @param junctionFromRoadId  approach road for the current junction crossing
+ * @param junctionToRoadId    exit road for the current junction crossing
  */
 public record SceneVehicle(
         String id,
@@ -31,7 +36,29 @@ public record SceneVehicle(
         double lengthMetres,
         double widthMetres,
         int laneIndex,
-        double lateralOffsetMetres) {
+        double lateralOffsetMetres,
+        String roadId,
+        double roadProgress,
+        boolean inJunction,
+        String junctionFromRoadId,
+        String junctionToRoadId) {
+
+    public SceneVehicle(
+            String id,
+            String type,
+            double latitude,
+            double longitude,
+            double headingDegrees,
+            double speedMps,
+            double lengthMetres,
+            double widthMetres,
+            int laneIndex,
+            double lateralOffsetMetres) {
+        this(
+                id, type, latitude, longitude, headingDegrees, speedMps,
+                lengthMetres, widthMetres, laneIndex, lateralOffsetMetres,
+                null, 0.0, false, null, null);
+    }
 
     public SceneVehicle {
         if (id == null || id.isBlank()) {
@@ -39,6 +66,9 @@ public record SceneVehicle(
         }
         if (!Double.isFinite(latitude) || !Double.isFinite(longitude)) {
             throw new IllegalArgumentException("Vehicle position must be finite.");
+        }
+        if (!Double.isFinite(roadProgress) || roadProgress < 0 || roadProgress > 1) {
+            throw new IllegalArgumentException("Road progress must be between zero and one.");
         }
     }
 }

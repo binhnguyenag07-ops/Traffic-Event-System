@@ -40,6 +40,39 @@ describe('extended traffic API', () => {
     )
   })
 
+  it('loads full physical geometry once and polls its light frame state separately', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      origin: { latitude: 10.77, longitude: 106.69 },
+      radiusMetres: 1500,
+      vehicles: [],
+      signals: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await simulationApi.physicalView(10.77, 106.69, 220, { fullMap: true })
+    await simulationApi.physicalViewState(10.77, 106.69, 1500)
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/simulation/physical-view?lat=10.77&lon=106.69&radiusMetres=220&fullMap=true',
+    )
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      '/api/simulation/physical-view/state?lat=10.77&lon=106.69&radiusMetres=1500',
+    )
+  })
+
+  it('changes playback cadence without changing the simulation step size', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      status: 'RUNNING',
+      simulationSecondsPerTick: 3,
+      playbackIntervalMs: 250,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await simulationApi.setPlaybackInterval(250)
+
+    const [, options] = fetchMock.mock.calls[0]
+    expect(options.method).toBe('PUT')
+    expect(JSON.parse(options.body)).toEqual({ playbackIntervalMs: 250 })
+  })
+
   it('preserves the HTTP status on API errors', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       error: 'Vehicle not found: EMS-01',
