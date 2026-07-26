@@ -8,11 +8,15 @@ that gap.
 Seven problems, verified in the code rather than assumed, grouped into three
 workstreams. `PHYSICAL_VIEW_PLAN.md` holds the two-view design.
 
-**Status.** Workstream A and B are built: the zoom desync is fixed, the view
+**Status.** Workstreams A and B are built: the zoom desync is fixed, the view
 follows the camera and refetches as it moves, signals and buildings render, and
-the map now carries real lane counts and 1162 buildings. Workstream C — the
-clock and the demand model — is still to do, and is the only part that remains
-blocked on nothing.
+the map carries real lane counts and 1162 buildings.
+
+Workstream C is half done. **C1, the clock, is built** — `SimulationClock`
+carries a time of day, wraps at midnight, and is published on the status
+endpoint. **C2, the demand model, is not**, and is now blocked on nothing:
+the map has classified buildings and the clock can say what hour it is. The
+design is in `VEHICLE_FLOW.md`, next to the vehicle life-cycle it feeds.
 
 ## Verified findings
 

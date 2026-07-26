@@ -5,6 +5,7 @@ import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.simulation.EventConfig;
+import team.traffic.simulation.SimulationClock;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.VehicleConfig;
@@ -32,6 +33,20 @@ public interface SimulationService {
     SimulationStatus getStatus();
     long getCurrentTick();
     default double getElapsedSeconds() { return getCurrentTick(); }
+
+    /**
+     * Seconds since midnight the run starts at. Published so a client can label
+     * any recorded frame with its clock time from that frame's elapsed seconds,
+     * rather than every frame carrying a copy of a derived value.
+     */
+    default double getStartTimeOfDaySeconds() {
+        return SimulationClock.DEFAULT_START_TIME_OF_DAY_SECONDS;
+    }
+
+    /** Seconds since midnight right now. */
+    default double getTimeOfDaySeconds() {
+        return SimulationClock.timeOfDayAt(getStartTimeOfDaySeconds(), getElapsedSeconds());
+    }
     SimulationSnapshot getSnapshot();
     List<Vehicle> getVehicles();
     List<TrafficEvent> getEvents();

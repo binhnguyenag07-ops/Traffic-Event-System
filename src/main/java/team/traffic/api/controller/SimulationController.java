@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import team.traffic.simulation.SimulationClock;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 
@@ -153,6 +154,9 @@ public class SimulationController {
         response.put("elapsedSeconds", simulationService.getElapsedSeconds());
         response.put("simulationSecondsPerTick", simulationService.getSimulationSecondsPerTick());
         response.put("playbackIntervalMs", simulationService.getPlaybackIntervalMillis());
+        response.put("startTimeOfDaySeconds", simulationService.getStartTimeOfDaySeconds());
+        response.put("timeOfDaySeconds", simulationService.getTimeOfDaySeconds());
+        response.put("timeOfDay", SimulationClock.formatTimeOfDay(simulationService.getTimeOfDaySeconds()));
         return response;
     }
 

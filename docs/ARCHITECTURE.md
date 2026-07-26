@@ -57,10 +57,13 @@ does not mutate the live simulation.
 
 ```text
 Traffic-Event-System/
-|-- data/                         JSON/CSV maps, simulation config, experiment baseline
+|-- data/
+|   |-- maps/                     road networks (input)
+|   |-- scenarios/                vehicle and event scripts (input)
+|   `-- results/                  generated output; traces land here
 |-- docs/                         architecture, class diagram, algorithms, API, demo, results
 |-- frontend/
-|   |-- public/vehicles/          top-view SVG assets reserved for the physical view
+|   |-- public/assets/            artwork slots: vehicles, surfaces, buildings (see ASSETS.md)
 |   `-- src/
 |       |-- api/trafficAPI.js     REST/SSE client
 |       |-- components/
@@ -68,6 +71,13 @@ Traffic-Event-System/
 |       |   |-- NetworkEditor.jsx
 |       |   |-- TimelineScrubber.jsx
 |       |   `-- ExperimentPanel.jsx
+|       |-- physical/                 PixiJS lane-level renderer
+|       |   |-- PhysicalScene.jsx      owns the app, polls, follows the camera
+|       |   |-- sceneTransform.js      metres <-> world units
+|       |   |-- interpolate.js         smoothing between two live frames
+|       |   |-- vehicleSprites.js      textures, baked or loaded
+|       |   |-- assetManifest.js       every artwork slot
+|       |   `-- layers/drawScene.js    ground, blocks, road, markings, signals
 |       |-- hooks/useTrafficDashboard.js
 |       |-- demoTraffic.js
 |       |-- spawnPolicies.js             pluggable vehicle-request planning
@@ -75,7 +85,11 @@ Traffic-Event-System/
 |       `-- styles.css
 |-- src/main/java/team/traffic/
 |   |-- api/                      server, routes, controllers, DTOs
-|   |-- domain/                   network, vehicle/dynamics, signal, route, event, statistics
+|   |-- domain/
+|   |   |-- network/              roads, intersections, buildings, geo points
+|   |   |-- vehicle/              hierarchy, dynamics, pose
+|   |   |-- scene/                lane geometry derived for the physical view
+|   |   |-- signal/ event/ routing/ statistics/
 |   |-- experiment/               deterministic comparison runner
 |   |-- observer/                 traffic event bus and listener
 |   |-- persistence/              JSON/CSV loaders, saver, synthetic maps
