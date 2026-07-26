@@ -5,6 +5,7 @@ import ExperimentPanel from './components/ExperimentPanel'
 import TimelineScrubber from './components/TimelineScrubber'
 import PhysicalScene from './physical/PhysicalScene'
 import { useTrafficDashboard } from './hooks/useTrafficDashboard'
+import { DEFAULT_PHYSICAL_ZOOM } from './mapViewport'
 
 const PREFERENCES = [
   ['CONGESTION_AWARE', 'Traffic aware'],
@@ -63,14 +64,28 @@ function physicalTargetFromUrl() {
   if (typeof window === 'undefined') return null
   const raw = new URLSearchParams(window.location.search).get('physical')
   if (!raw) return null
-  const [latitude, longitude, radiusMetres] = raw.split(',').map(Number)
+  const [latitude, longitude, radiusMetres, zoom] = raw.split(',').map(Number)
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
-  return { latitude, longitude, radiusMetres: Number.isFinite(radiusMetres) ? radiusMetres : 220 }
+  return {
+    latitude,
+    longitude,
+    radiusMetres: Number.isFinite(radiusMetres) ? radiusMetres : 220,
+    zoom: Number.isFinite(zoom) ? zoom : DEFAULT_PHYSICAL_ZOOM,
+  }
 }
 
 export default function App() {
   const dashboard = useTrafficDashboard()
-  const [physicalTarget, setPhysicalTarget] = useState(physicalTargetFromUrl)
+  const [initialPhysical] = useState(physicalTargetFromUrl)
+  const [physicalOpen, setPhysicalOpen] = useState(Boolean(initialPhysical))
+  const [mapViewport, setMapViewport] = useState(() => initialPhysical
+    ? {
+        latitude: initialPhysical.latitude,
+        longitude: initialPhysical.longitude,
+        zoom: initialPhysical.zoom,
+        radiusMetres: initialPhysical.radiusMetres,
+      }
+    : null)
   const {
     intersections, roads, viewRoads, scenarios, activeScenario, snapshot, viewFrame,
     timeline, viewingHistory, historyLoading, statistics, algorithms,
@@ -230,14 +245,24 @@ export default function App() {
             captureIntersection={captureIntersection}
             draftIntersection={draftPoint}
             highlightedRoadIds={highlightedRoadIds}
+            viewport={mapViewport}
+            onViewportChange={setMapViewport}
+            fitNetwork={!initialPhysical}
             onMapCoordinate={(point) => {
               setDraftPoint(point)
               setCaptureIntersection(false)
             }}
-            onOpenPhysical={setPhysicalTarget}
+            onOpenPhysical={(viewport) => {
+              setMapViewport(viewport)
+              setPhysicalOpen(true)
+            }}
           />
-          {physicalTarget && (
-            <PhysicalScene target={physicalTarget} onClose={() => setPhysicalTarget(null)} />
+          {physicalOpen && mapViewport && (
+            <PhysicalScene
+              viewport={mapViewport}
+              onViewportChange={setMapViewport}
+              onClose={() => setPhysicalOpen(false)}
+            />
           )}
           <div className="map-metrics" aria-label={viewingHistory ? 'Historical traffic summary' : 'Live traffic summary'}>
             <Metric label="Fleet" value={viewFrame.vehicles?.length || 0} />

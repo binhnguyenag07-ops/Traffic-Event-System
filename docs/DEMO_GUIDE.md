@@ -24,7 +24,7 @@
 7. Schedule an accident or breakdown with duration in seconds, road position,
    and an optional zero-based lane. Confirm that unaffected lanes remain usable.
 8. At a degree-three-or-more junction, use `GET /api/simulation/signals` to show
-   cyclic phases. A red approach remains on its incoming road at the stop line;
+   cyclic phases. A red approach remains on its incoming road at the junction;
    an emergency vehicle receives preemption.
 9. Pause playback, close a road on a planned route, and resume to demonstrate
    Observer-driven dynamic rerouting. Overlapping events can be resolved in any
@@ -41,11 +41,11 @@
 
 11. Zoom the map to lane level and press **Open physical view**. The junction is
     drawn as it is: each lane on its own centreline, buildings coloured by what
-    they are for, stop lines, and a lamp beside each controlled approach that
-    matches the signal the vehicles are obeying. Drag to move — the scene
-    refetches around wherever you are looking, so the whole map is reachable
-    without closing it — and scroll to zoom. A motorcycle riding between two
-    lanes is drawn between them, with a short trail behind it.
+    they are for, and one red/green dot beside each controlled approach. Drag
+    and zoom the physical map, close it, and show that the macro map resumes at
+    the same centre and zoom. The scene refetches around wherever you are
+    looking, so the whole map is reachable without closing it. A motorcycle
+    riding between two lanes is drawn between them, with a short trail behind it.
 
     `?physical=<lat>,<lon>` on the URL opens it straight away, which is the
     quickest way into a specific junction during a demo.

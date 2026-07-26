@@ -8,7 +8,8 @@
 //
 // Files live under `frontend/public/assets/...`, so they are served as-is and
 // need no build step. See `docs/ASSETS.md` for what to download and the sizes
-// each slot expects.
+// each slot expects. Vehicles use transparent PNGs; opaque tiled textures use
+// JPEGs to avoid paying PNG's much larger transfer cost.
 
 const BASE = 'assets'
 
@@ -31,8 +32,8 @@ export const VEHICLE_ASSETS = {
  * edge that does not meet its opposite side will show as a visible grid.
  */
 export const SURFACE_ASSETS = {
-  ROAD: `${BASE}/surfaces/asphalt.png`,
-  JUNCTION: `${BASE}/surfaces/junction.png`,
+  ROAD: `${BASE}/surfaces/asphalt.jpg`,
+  JUNCTION: `${BASE}/surfaces/junction.jpg`,
 }
 
 /**
@@ -40,14 +41,14 @@ export const SURFACE_ASSETS = {
  * building is for. A missing entry falls back to the flat tint for that type.
  */
 export const BUILDING_ASSETS = {
-  RESIDENTIAL: `${BASE}/buildings/residential.png`,
-  COMMERCIAL: `${BASE}/buildings/commercial.png`,
-  OFFICE: `${BASE}/buildings/office.png`,
-  SCHOOL: `${BASE}/buildings/school.png`,
-  HOSPITAL: `${BASE}/buildings/hospital.png`,
-  INDUSTRIAL: `${BASE}/buildings/industrial.png`,
-  PARKING: `${BASE}/buildings/parking.png`,
-  OTHER: `${BASE}/buildings/other.png`,
+  RESIDENTIAL: `${BASE}/buildings/residential.jpg`,
+  COMMERCIAL: `${BASE}/buildings/commercial.jpg`,
+  OFFICE: `${BASE}/buildings/office.jpg`,
+  SCHOOL: `${BASE}/buildings/school.jpg`,
+  HOSPITAL: `${BASE}/buildings/hospital.jpg`,
+  INDUSTRIAL: `${BASE}/buildings/industrial.jpg`,
+  PARKING: `${BASE}/buildings/parking.jpg`,
+  OTHER: `${BASE}/buildings/other.jpg`,
 }
 
 /**
@@ -56,18 +57,18 @@ export const BUILDING_ASSETS = {
  * recorded on it — so it takes the place the old `ground` slot held.
  */
 export const LAND_ASSETS = {
-  NORMAL: `${BASE}/land/normal.png`,
-  PARK: `${BASE}/land/park.png`,
-  WATER: `${BASE}/land/water.png`,
-  GRASS: `${BASE}/land/grass.png`,
-  FOREST: `${BASE}/land/forest.png`,
-  COMMERCIAL: `${BASE}/land/commercial.png`,
-  RESIDENTIAL: `${BASE}/land/residential.png`,
-  INDUSTRIAL: `${BASE}/land/industrial.png`,
-  CONSTRUCTION: `${BASE}/land/construction.png`,
-  RELIGIOUS: `${BASE}/land/religious.png`,
-  RECREATION: `${BASE}/land/recreation.png`,
-  OTHER: `${BASE}/land/other.png`,
+  NORMAL: `${BASE}/land/normal.jpg`,
+  PARK: `${BASE}/land/park.jpg`,
+  WATER: `${BASE}/land/water.jpg`,
+  GRASS: `${BASE}/land/grass.jpg`,
+  FOREST: `${BASE}/land/forest.jpg`,
+  COMMERCIAL: `${BASE}/land/commercial.jpg`,
+  RESIDENTIAL: `${BASE}/land/residential.jpg`,
+  INDUSTRIAL: `${BASE}/land/industrial.jpg`,
+  CONSTRUCTION: `${BASE}/land/construction.jpg`,
+  RELIGIOUS: `${BASE}/land/religious.jpg`,
+  RECREATION: `${BASE}/land/recreation.jpg`,
+  OTHER: `${BASE}/land/other.jpg`,
 }
 
 /** Every slot, flattened, for the loader to attempt in one pass. */
