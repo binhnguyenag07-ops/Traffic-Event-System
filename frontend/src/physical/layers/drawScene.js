@@ -52,10 +52,9 @@ function strokePath(graphics, points, style) {
   graphics.stroke(style)
 }
 
-function fillPolygon(graphics, points, colour, alpha = 1, texture = null) {
+function fillPolygon(graphics, points, colour, alpha = 1, fill = null) {
   if (!points || points.length < 3) return
-  const style = { color: colour, alpha }
-  if (texture) style.texture = texture
+  const style = fill ? { ...fill, alpha } : { color: colour, alpha }
   graphics.poly(points.flatMap(([x, y]) => worldPoint(x, y))).fill(style)
 }
 
@@ -107,9 +106,8 @@ export function drawStatic(graphics, scene, assets = {}) {
   const surfaces = assets.surfaces || {}
   const roofs = assets.buildings || {}
 
-  const ground = { color: GROUND }
-  if (surfaces.GROUND) ground.texture = surfaces.GROUND
-  graphics.rect(-radius * 3, -radius * 3, radius * 6, radius * 6).fill(ground)
+  graphics.rect(-radius * 3, -radius * 3, radius * 6, radius * 6)
+    .fill(surfaces.GROUND ? { ...surfaces.GROUND } : { color: GROUND })
 
   scene.buildings?.forEach((building) => {
     const colour = colourFor(BUILDING_COLOUR, building.type, BUILDING_COLOUR.OTHER)
@@ -132,8 +130,9 @@ export function drawStatic(graphics, scene, assets = {}) {
   }))
   scene.junctions?.forEach((junction) => fillPolygon(graphics, junction.pavement, ROAD_CASING))
 
-  const roadStyle = { color: ROAD, cap: 'round', join: 'round' }
-  if (surfaces.ROAD) roadStyle.texture = surfaces.ROAD
+  const roadStyle = surfaces.ROAD
+    ? { ...surfaces.ROAD, cap: 'round', join: 'round' }
+    : { color: ROAD, cap: 'round', join: 'round' }
   scene.lanes?.forEach((lane) => strokePath(graphics, lane.centreline, {
     ...roadStyle, width: lane.widthMetres,
   }))
