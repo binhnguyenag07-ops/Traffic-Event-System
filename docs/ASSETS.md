@@ -21,8 +21,13 @@ frontend/public/assets/
 │   └── emergency.png
 ├── surfaces/
 │   ├── asphalt.png
-│   ├── ground.png
 │   └── junction.png
+├── land/
+│   ├── normal.png          ordinary urban fabric — the base everything sits on
+│   ├── park.png
+│   ├── water.png
+│   ├── grass.png
+│   └── … one per LandCoverType
 └── buildings/
     ├── residential.png
     ├── commercial.png
@@ -76,8 +81,27 @@ shows as a visible grid across the whole map. 512 × 512 px is plenty.
 | File | Used for |
 |---|---|
 | `asphalt.png` | The carriageway |
-| `ground.png` | Land between the roads |
 | `junction.png` | Paved area inside a junction |
+
+## Land cover — 12 files
+
+The ground between the roads, one texture per `LandCoverType`. `normal.png` is
+the base the whole scene is drawn on; the rest fill mapped polygons on top.
+
+| File | What it covers | Polygons in the current map |
+|---|---|---|
+| `normal.png` | Ordinary urban fabric — everywhere nothing else is mapped | the background |
+| `grass.png` | Verges and yards | 136 |
+| `commercial.png` | Commercial blocks | 25 |
+| `water.png` | Saigon river, Ben Nghe canal | 21 |
+| `park.png` | Tao Dan and the rest | 18 |
+| `construction.png` | Sites | 17 |
+| `other.png` | Mapped, but not a type this model distinguishes | 20 |
+| `residential.png`, `industrial.png`, `forest.png`, `religious.png`, `recreation.png` | as named | few or none |
+
+`normal.png` is the one that matters most: it is the majority of the screen.
+Something quiet and slightly textured — dry concrete, packed earth, a pale
+render — reads as city without pretending to be buildings.
 
 Where to look:
 
@@ -111,6 +135,36 @@ Roof textures, seen from directly above: tiles, corrugated metal, flat concrete
 with rooftop plant. Same CC0 sources as the surfaces above; ambientCG has
 `RoofingTiles` and `Metal` sets.
 
+## What does not work — learned the hard way
+
+The first round of downloads filled **1 slot out of 5 attempts**. These are the
+traps, all of which look right on the download page.
+
+**Side-view sprite packs.** Kenney's *Pixel Vehicle Pack* is drawn from the
+side: you can see the wheels below the body and the rider in profile. It is
+excellent art and completely unusable here — this view looks straight down. The
+give-away is not the aspect ratio, because a top-down car is about 2.5:1 and so
+is a side-on one. Open one and look. Kenney's **Racing Pack** and **Top-down
+Tanks** are the top-down ones.
+
+**Road textures that already have markings painted on.** ambientCG's `Road007`
+is a complete two-lane carriageway: solid white edge lines, dashed centre line,
+baked in. The renderer strokes each **lane** separately and draws its own
+markings as vectors, so a marked texture would repeat a full set of lines inside
+every single lane, under a second set drawn on top.
+
+What is wanted is plain asphalt with no paint: ambientCG `Road012A`, or anything
+in their **Asphalt** or **Concrete** sets.
+
+**`RoadLines*` sets.** These are decals for 3D authoring. The colour map is flat
+yellow or white; the actual line shape lives in the **Opacity** map, which only
+means something to a material system. Nothing usable here.
+
+**Everything except `_Color.png`.** An ambientCG download is ten to twelve files
+— normal, roughness, displacement, ambient occlusion, plus `.blend` and `.usdc`
+scene files. This renderer is 2D and uses the colour map alone. A 1K set is
+around 15 MB of which roughly 1.3 MB is wanted.
+
 ## Priority, if you only download a few
 
 1. **The four vehicles.** They are the moving thing on screen and the current
@@ -137,3 +191,16 @@ Live · frame 412 · 126 vehicles · 68 buildings · 7 assets · drag to move, s
 
 `0 assets` means nothing was found — check the filenames and that the files sit
 under `frontend/public/assets/`, not `frontend/src/`.
+
+## Filled so far
+
+| Slot | Source | Licence |
+|---|---|---|
+| `surfaces/asphalt.png` | ambientCG `Road012A` colour map | CC0 |
+
+The other fourteen slots fall back to drawn shapes, which is why the view still
+renders.
+
+A surface texture is tiled to cover six metres of ground per repeat. Mapped one
+pixel to one metre a 1024-pixel tile would span a kilometre and read as a flat
+smear, so the scale is set where the grain stays visible.

@@ -84,10 +84,6 @@ public class ScenarioController {
         Map<String, Scenario> result = new LinkedHashMap<>();
         result.put("district-1", new Scenario("district-1", "District 1 Live",
                 "Full visible-area arterial network", "data/maps/district1_network.json"));
-        result.put("small-city", new Scenario("small-city", "Small City", "Balanced traffic and alternative routes", "data/maps/small_city.json"));
-        result.put("congestion", new Scenario("congestion", "Rush Hour", "Heavy congestion with viable detours", "data/maps/congestion_demo.json"));
-        result.put("accident", new Scenario("accident", "Accident Response", "Blocked central road and emergency rerouting", "data/maps/accident_demo.json"));
-        result.put("density", new Scenario("density", "Density Stress", "Roads from low load to full capacity", "data/maps/density_demo.json"));
         return Map.copyOf(result);
     }
 

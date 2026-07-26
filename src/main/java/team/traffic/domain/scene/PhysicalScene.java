@@ -19,6 +19,7 @@ import team.traffic.domain.network.GeoPoint;
  * @param stopLines    stop lines of every road in range
  * @param connectors   turning curves of every junction in range
  * @param junctions    paved areas of every junction in range
+ * @param landCovers   parks, water and yards, so the ground is not one colour
  * @param buildings    blocks between the roads, which is most of a street scene
  * @param signals      traffic lights, so a stopped queue has a visible cause
  * @param vehicles     vehicles currently within the region
@@ -30,6 +31,7 @@ public record PhysicalScene(
         List<StopLine> stopLines,
         List<LaneConnector> connectors,
         List<JunctionGeometry> junctions,
+        List<SceneLandCover> landCovers,
         List<SceneBuilding> buildings,
         List<SceneSignal> signals,
         List<SceneVehicle> vehicles) {
@@ -45,6 +47,7 @@ public record PhysicalScene(
         stopLines = List.copyOf(stopLines);
         connectors = List.copyOf(connectors);
         junctions = List.copyOf(junctions);
+        landCovers = landCovers == null ? List.of() : List.copyOf(landCovers);
         buildings = buildings == null ? List.of() : List.copyOf(buildings);
         signals = signals == null ? List.of() : List.copyOf(signals);
         vehicles = List.copyOf(vehicles);

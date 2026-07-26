@@ -14,8 +14,8 @@ class MapLoaderConsistencyTest {
 
     @Test
     void csvAndJsonSamplesCreateEquivalentNetworks() throws IOException {
-        RoadNetwork csvNetwork = new CsvMapLoader().load("data/maps/sample_map.csv");
-        RoadNetwork jsonNetwork = new JsonMapLoader().load("data/maps/sample_map.json");
+        RoadNetwork csvNetwork = new CsvMapLoader().load("src/test/resources/maps/sample_map.csv");
+        RoadNetwork jsonNetwork = new JsonMapLoader().load("src/test/resources/maps/sample_map.json");
 
         assertThat(csvNetwork.getIntersections().keySet())
                 .containsExactlyElementsOf(jsonNetwork.getIntersections().keySet());
