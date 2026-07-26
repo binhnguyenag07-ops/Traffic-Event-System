@@ -21,7 +21,7 @@ class JsonMapLoaderTest {
 
     @Test
     void loadsProjectSampleMap() throws IOException {
-        RoadNetwork network = loader.load("data/sample_map.json");
+        RoadNetwork network = loader.load("data/maps/sample_map.json");
 
         assertThat(network.getIntersectionCount()).isEqualTo(3);
         assertThat(network.getRoadCount()).isEqualTo(3);

@@ -39,9 +39,20 @@
    GET /api/simulation/trace/roads/{roadId}/time-space
    ```
 
-11. Let a vehicle arrive. It remains in the frame state briefly, then disappears
+11. Zoom the map to lane level and press **Open physical view**. The junction is
+    drawn as it is: each lane on its own centreline, buildings coloured by what
+    they are for, stop lines, and a lamp beside each controlled approach that
+    matches the signal the vehicles are obeying. Drag to move — the scene
+    refetches around wherever you are looking, so the whole map is reachable
+    without closing it — and scroll to zoom. A motorcycle riding between two
+    lanes is drawn between them, with a short trail behind it.
+
+    `?physical=<lat>,<lon>` on the URL opens it straight away, which is the
+    quickest way into a specific junction during a demo.
+
+12. Let a vehicle arrive. It remains in the frame state briefly, then disappears
     while the completed-trip statistics stay available.
-12. Compare routing algorithms and open Experiments for the deterministic
+13. Compare routing algorithms and open Experiments for the deterministic
     scenarios and large-grid A* search reduction.
 
 During questions, relate routing to Strategy, events to Observer, vehicles to

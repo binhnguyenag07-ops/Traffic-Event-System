@@ -386,7 +386,7 @@ def build_map(ways, building_ways):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("output", nargs="?", default="data/district1_network.json")
+    parser.add_argument("output", nargs="?", default="data/maps/district1_network.json")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     network = build_map(fetch_ways(), fetch_buildings())

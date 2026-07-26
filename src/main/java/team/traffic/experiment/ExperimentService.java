@@ -33,7 +33,7 @@ public class ExperimentService {
 
     public synchronized ExperimentReport getLatest() {
         if (latest == null) {
-            Path baseline = Path.of("data/experiment_results.json");
+            Path baseline = Path.of("data/results/experiment_results.json");
             if (Files.isRegularFile(baseline)) {
                 try {
                     latest = new ObjectMapper().readValue(baseline.toFile(), ExperimentReport.class);
@@ -48,8 +48,8 @@ public class ExperimentService {
     public synchronized ExperimentReport run() {
         try {
             List<ScenarioInput> inputs = List.of(
-                    new ScenarioInput("normal", "Normal traffic", loader.load("data/small_city.json")),
-                    new ScenarioInput("heavy-congestion", "Heavy congestion", loader.load("data/congestion_demo.json")),
+                    new ScenarioInput("normal", "Normal traffic", loader.load("data/maps/small_city.json")),
+                    new ScenarioInput("heavy-congestion", "Heavy congestion", loader.load("data/maps/congestion_demo.json")),
                     new ScenarioInput("random-events", "Seeded random events", randomEventNetwork()),
                     new ScenarioInput("large-network", "20×20 synthetic grid",
                             new SyntheticMapGenerator().generateGridMap(20, 20)));
@@ -66,7 +66,7 @@ public class ExperimentService {
     }
 
     private RoadNetwork randomEventNetwork() throws IOException {
-        RoadNetwork network = loader.load("data/small_city.json");
+        RoadNetwork network = loader.load("data/maps/small_city.json");
         List<Road> roads = new ArrayList<>(network.getRoads().values());
         Collections.shuffle(roads, new Random(SEED));
         int eventCount = Math.max(1, roads.size() / 4);
