@@ -9,19 +9,23 @@ import { Assets, Matrix } from 'pixi.js'
 import { allAssetSlots } from './assetManifest'
 
 /**
- * How much ground one tile of a surface texture covers, in metres.
+ * How much world space one texture tile covers.
  *
- * Without this a 1024-pixel texture would be mapped one pixel to one metre and
- * a single tile would span a kilometre, which reads as a flat smear rather than
- * as tarmac. Six metres is about two lane widths, so the grain stays visible at
- * the zoom the view is usually at.
+ * One six-metre repeat for every category made roof tiles, parks and the base
+ * ground compete with lane markings. Each family now uses the scale at which
+ * it is meant to be read: road grain is compact, roof patterns span a normal
+ * building, and land cover changes slowly across a block.
  */
-const TEXTURE_TILE_METRES = 6
+const TEXTURE_TILE_METRES = {
+  surfaces: 12,
+  buildings: 24,
+  land: 42,
+}
 
 /** A fill style that repeats the texture at a sensible ground scale. */
-function tiledFill(texture) {
+function tiledFill(texture, group) {
   const size = texture.width || texture.source?.width || 1024
-  const scale = TEXTURE_TILE_METRES / size
+  const scale = TEXTURE_TILE_METRES[group] / size
   return { texture, matrix: new Matrix().scale(scale, scale) }
 }
 
@@ -42,7 +46,7 @@ export async function loadSceneAssets() {
     try {
       const texture = await Assets.load(url)
       if (!texture) return
-      loaded[group][key] = group === 'vehicles' ? texture : tiledFill(texture)
+      loaded[group][key] = group === 'vehicles' ? texture : tiledFill(texture, group)
     } catch {
       // Slot not filled yet. The fallback drawing covers it.
     }

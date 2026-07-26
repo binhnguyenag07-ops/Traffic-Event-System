@@ -109,6 +109,11 @@ public final class LaneGeometryBuilder {
         }
         double length = PolylineGeometry.lengthMetres(shape);
         double fraction = length <= 0 ? 1.0 : Math.max(0.0, 1.0 - STOP_LINE_SETBACK_METRES / length);
+        return crossSectionAt(road, shape, fraction);
+    }
+
+    /** A line across one carriageway at a fraction of its stored geometry. */
+    private StopLine crossSectionAt(Road road, List<GeoPoint> shape, double fraction) {
         GeoPoint at = PolylineGeometry.pointAt(shape, fraction);
         double heading = PolylineGeometry.bearingAt(shape, fraction);
         // Centred on this direction's carriageway, not on the shared centreline,
@@ -161,13 +166,42 @@ public final class LaneGeometryBuilder {
         }
         List<GeoPoint> corners = new ArrayList<>();
         for (Road road : roadsTouching(junctionId)) {
-            StopLine stopLine = stopLineOf(road);
-            if (stopLine != null) {
-                corners.add(stopLine.from());
-                corners.add(stopLine.to());
+            StopLine edge = junctionEdgeOf(road, junctionId);
+            if (edge != null) {
+                corners.add(edge.from());
+                corners.add(edge.to());
             }
         }
         return new JunctionGeometry(junctionId, orderAround(centre, corners));
+    }
+
+    /**
+     * The road cross-section beside the requested junction.
+     *
+     * A normal stop line is always measured back from the road's end. That is
+     * correct for an incoming approach, but an outgoing road touches this
+     * junction at the start of its geometry. Reusing {@link #stopLineOf(Road)}
+     * for both ends pulled the far end of every outgoing road into the pavement
+     * polygon, creating junctions hundreds of metres wide.
+     */
+    private StopLine junctionEdgeOf(Road road, String junctionId) {
+        List<GeoPoint> shape = shapeOf(road);
+        if (shape.size() < 2) {
+            return null;
+        }
+        double length = PolylineGeometry.lengthMetres(shape);
+        double setback = length <= 0
+                ? 0.0
+                : Math.min(1.0, STOP_LINE_SETBACK_METRES / length);
+        double fraction;
+        if (junctionId.equals(road.getStartIntersectionId())) {
+            fraction = setback;
+        } else if (junctionId.equals(road.getEndIntersectionId())) {
+            fraction = 1.0 - setback;
+        } else {
+            return null;
+        }
+        return crossSectionAt(road, shape, fraction);
     }
 
     private LaneConnector connector(LaneGeometry from, LaneGeometry to, GeoPoint control) {

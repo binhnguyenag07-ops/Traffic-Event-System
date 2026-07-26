@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Application, Container, Graphics } from 'pixi.js'
 import { simulationApi } from '../api/trafficAPI'
-import { fitScale, offsetToLatLon } from './sceneTransform'
+import {
+  cameraAfterZoom,
+  clampMapZoom,
+  pixelsPerMetreAtZoom,
+} from '../mapViewport'
+import { offsetToLatLon } from './sceneTransform'
 import { interpolateVehicles } from './interpolate'
 import { drawSignals, drawStatic, drawTrails } from './layers/drawScene'
 import { VehicleLayer, buildVehicleTextures } from './vehicleSprites'
@@ -26,36 +31,95 @@ const BACKGROUND = 0xe7e3da
 const REFETCH_AT_FRACTION = 0.35
 const MIN_RADIUS_METRES = 90
 const MAX_RADIUS_METRES = 1000
-// How much map a wheel notch is worth. Scroll deltas differ wildly between a
-// mouse and a trackpad, so the step is clamped and applied exponentially rather
-// than multiplied per event, which is what made one flick jump several levels.
-const ZOOM_PER_DELTA = 0.0012
-const MAX_DELTA_PER_EVENT = 120
-// The on-screen scale is anchored to this, never to the radius that happens to
-// be loaded. Tying it to the fetched radius meant zooming out shrank the view
-// twice: once through the camera, and again as the wider request fed back in.
-const REFERENCE_RADIUS_METRES = 220
+const WHEEL_PIXELS_PER_ZOOM_LEVEL = 240
+const MAX_WHEEL_DELTA_PIXELS = 240
+const INERTIA_DECAY_MS = 220
+const INERTIA_STOP_METRES_PER_MS = 0.002
+const KEYBOARD_PAN_PIXELS = 80
 
-function screenScale(store, app) {
-  return fitScale(REFERENCE_RADIUS_METRES, app.screen.width, app.screen.height) * store.camera.zoom
+function screenScale(store) {
+  const latitude = store.origin?.latitude ?? store.viewport.latitude
+  return pixelsPerMetreAtZoom(latitude, store.camera.zoom)
 }
 
-export default function PhysicalScene({ target, onClose }) {
+function createStore(viewport) {
+  return {
+    app: null,
+    world: null,
+    layers: null,
+    previous: null,
+    current: null,
+    fetchedAt: 0,
+    origin: null,
+    viewport: {
+      latitude: Number(viewport.latitude),
+      longitude: Number(viewport.longitude),
+    },
+    radius: Number(viewport.radiusMetres) || 220,
+    camera: { x: 0, y: 0, zoom: clampMapZoom(viewport.zoom) },
+    fetching: false,
+    drag: null,
+    inertia: { x: 0, y: 0 },
+    lastTickAt: 0,
+    onViewportChange: null,
+  }
+}
+
+function currentViewport(store) {
+  const origin = store.origin ?? store.viewport
+  const centre = offsetToLatLon(origin, store.camera.x, store.camera.y)
+  return {
+    ...centre,
+    zoom: store.camera.zoom,
+    radiusMetres: store.radius,
+  }
+}
+
+function reportViewport(store) {
+  store.onViewportChange?.(currentViewport(store))
+}
+
+function changeZoom(store, zoomDelta, screenX = 0, screenY = 0) {
+  const nextZoom = clampMapZoom(store.camera.zoom + zoomDelta)
+  if (Math.abs(nextZoom - store.camera.zoom) < 1e-6) return
+  const oldScale = screenScale(store)
+  const latitude = currentViewport(store).latitude
+  const nextScale = pixelsPerMetreAtZoom(latitude, nextZoom)
+  const moved = cameraAfterZoom(store.camera, screenX, screenY, oldScale, nextScale)
+  store.camera.x = moved.x
+  store.camera.y = moved.y
+  store.camera.zoom = nextZoom
+  store.inertia = { x: 0, y: 0 }
+  reportViewport(store)
+}
+
+function panByPixels(store, screenX, screenY) {
+  const scale = screenScale(store)
+  store.camera.x += screenX / scale
+  store.camera.y -= screenY / scale
+  store.inertia = { x: 0, y: 0 }
+  reportViewport(store)
+}
+
+export default function PhysicalScene({ viewport, onViewportChange, onClose }) {
   const mountRef = useRef(null)
-  const store = useRef({
-    app: null, world: null, layers: null,
-    previous: null, current: null, fetchedAt: 0,
-    origin: null, radius: target?.radiusMetres ?? 220,
-    camera: { x: 0, y: 0, zoom: 1 },
-    fetching: false, drag: null,
-  }).current
+  const storeRef = useRef(null)
+  const initialViewportRef = useRef(viewport)
+  const onViewportChangeRef = useRef(onViewportChange)
   const [status, setStatus] = useState('Loading scene…')
   const [counts, setCounts] = useState({ vehicles: 0, buildings: 0, assets: 0 })
+
+  useEffect(() => {
+    onViewportChangeRef.current = onViewportChange
+  }, [onViewportChange])
 
   useEffect(() => {
     let cancelled = false
     let poll = null
     const mount = mountRef.current
+    const store = createStore(initialViewportRef.current)
+    store.onViewportChange = (next) => onViewportChangeRef.current?.(next)
+    storeRef.current = store
 
     async function boot() {
       const app = new Application()
@@ -95,8 +159,8 @@ export default function PhysicalScene({ target, onClose }) {
         }
       })
 
-      await load(store, target, setStatus, () => cancelled)
-      poll = window.setInterval(() => load(store, target, setStatus, () => cancelled), POLL_INTERVAL_MS)
+      await load(store, setStatus, () => cancelled)
+      poll = window.setInterval(() => load(store, setStatus, () => cancelled), POLL_INTERVAL_MS)
     }
 
     boot()
@@ -104,30 +168,127 @@ export default function PhysicalScene({ target, onClose }) {
       cancelled = true
       if (poll) window.clearInterval(poll)
       if (store.app) { store.app.destroy(true, { children: true }); store.app = null }
+      if (storeRef.current === store) storeRef.current = null
     }
-  }, [target, store])
+  }, [])
 
   const onWheel = (event) => {
+    const store = storeRef.current
+    if (!store) return
     event.preventDefault()
-    const step = Math.max(-MAX_DELTA_PER_EVENT, Math.min(MAX_DELTA_PER_EVENT, event.deltaY))
-    const factor = Math.exp(-step * ZOOM_PER_DELTA)
-    store.camera.zoom = Math.max(0.2, Math.min(10, store.camera.zoom * factor))
+    const rect = event.currentTarget.getBoundingClientRect()
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1
+    const pixels = Math.max(-MAX_WHEEL_DELTA_PIXELS,
+      Math.min(MAX_WHEEL_DELTA_PIXELS, event.deltaY * unit))
+    changeZoom(
+      store,
+      -pixels / WHEEL_PIXELS_PER_ZOOM_LEVEL,
+      event.clientX - rect.left - rect.width / 2,
+      event.clientY - rect.top - rect.height / 2,
+    )
   }
 
   const onPointerDown = (event) => {
-    store.drag = { x: event.clientX, y: event.clientY }
+    const store = storeRef.current
+    if (!store) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    event.currentTarget.focus({ preventScroll: true })
+    store.inertia = { x: 0, y: 0 }
+    store.drag = {
+      x: event.clientX,
+      y: event.clientY,
+      at: performance.now(),
+      pointerId: event.pointerId,
+    }
+    event.currentTarget.classList.add('dragging')
     event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
   const onPointerMove = (event) => {
-    if (!store.drag || !store.app) return
-    const scale = screenScale(store, store.app)
-    store.camera.x -= (event.clientX - store.drag.x) / scale
-    store.camera.y += (event.clientY - store.drag.y) / scale
-    store.drag = { x: event.clientX, y: event.clientY }
+    const store = storeRef.current
+    if (!store) return
+    if (!store.drag || store.drag.pointerId !== event.pointerId || !store.app) return
+    const now = performance.now()
+    const elapsed = Math.max(1, now - store.drag.at)
+    const scale = screenScale(store)
+    const moveEast = -(event.clientX - store.drag.x) / scale
+    const moveNorth = (event.clientY - store.drag.y) / scale
+    store.camera.x += moveEast
+    store.camera.y += moveNorth
+    // Blend samples so one noisy pointer event cannot launch the map.
+    store.inertia.x = store.inertia.x * 0.35 + (moveEast / elapsed) * 0.65
+    store.inertia.y = store.inertia.y * 0.35 + (moveNorth / elapsed) * 0.65
+    store.drag = {
+      x: event.clientX,
+      y: event.clientY,
+      at: now,
+      pointerId: event.pointerId,
+    }
   }
 
-  const onPointerUp = () => { store.drag = null }
+  const onPointerUp = (event) => {
+    const store = storeRef.current
+    if (!store) return
+    if (store.drag?.pointerId !== event.pointerId) return
+    store.drag = null
+    event.currentTarget.classList.remove('dragging')
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    reportViewport(store)
+  }
+
+  const onDoubleClick = (event) => {
+    const store = storeRef.current
+    if (!store) return
+    event.preventDefault()
+    const rect = event.currentTarget.getBoundingClientRect()
+    changeZoom(
+      store,
+      1,
+      event.clientX - rect.left - rect.width / 2,
+      event.clientY - rect.top - rect.height / 2,
+    )
+  }
+
+  const close = () => {
+    const store = storeRef.current
+    if (store) reportViewport(store)
+    onClose()
+  }
+
+  const onKeyDown = (event) => {
+    const store = storeRef.current
+    if (!store) return
+    if (event.key === 'Escape') {
+      close()
+      return
+    }
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault()
+      changeZoom(store, 1)
+    } else if (event.key === '-' || event.key === '_') {
+      event.preventDefault()
+      changeZoom(store, -1)
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      panByPixels(store, -KEYBOARD_PAN_PIXELS, 0)
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      panByPixels(store, KEYBOARD_PAN_PIXELS, 0)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      panByPixels(store, 0, -KEYBOARD_PAN_PIXELS)
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      panByPixels(store, 0, KEYBOARD_PAN_PIXELS)
+    }
+  }
+
+  const zoomBy = (delta) => {
+    const store = storeRef.current
+    if (store) changeZoom(store, delta)
+  }
 
   return (
     <div className="physical-overlay" role="dialog" aria-label="Physical lane view">
@@ -135,20 +296,33 @@ export default function PhysicalScene({ target, onClose }) {
         <div>
           <strong>Physical view</strong>
           <span className="physical-note">
-            {status} · {counts.vehicles} vehicles · {counts.buildings} buildings · {counts.assets} assets · drag to move, scroll to zoom
+            {status} · {counts.vehicles} vehicles · {counts.buildings} buildings · {counts.assets} assets · drag · wheel or double-click to zoom
           </span>
         </div>
-        <button type="button" onClick={onClose} className="physical-close">Close</button>
+        <button type="button" onClick={close} className="physical-close">Close</button>
       </div>
-      <div
-        className="physical-canvas"
-        ref={mountRef}
-        onWheel={onWheel}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerLeave={onPointerUp}
-      />
+      <div className="physical-map">
+        <div
+          className="physical-canvas"
+          ref={mountRef}
+          role="application"
+          aria-label="Interactive physical traffic map"
+          tabIndex={0}
+          onWheel={onWheel}
+          onDoubleClick={onDoubleClick}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onKeyDown={onKeyDown}
+        />
+        <div className="physical-zoom-controls" aria-label="Physical map zoom">
+          <button type="button" aria-label="Zoom in" title="Zoom in"
+            onClick={() => zoomBy(1)}>+</button>
+          <button type="button" aria-label="Zoom out" title="Zoom out"
+            onClick={() => zoomBy(-1)}>−</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -158,11 +332,28 @@ function tick(store, setCounts) {
   const { app, world, layers } = store
   if (!app || !world || !layers) return
 
-  const scale = screenScale(store, app)
+  const now = performance.now()
+  const elapsedMs = store.lastTickAt ? Math.min(40, now - store.lastTickAt) : 0
+  store.lastTickAt = now
+  if (!store.drag && elapsedMs > 0) {
+    const speed = Math.hypot(store.inertia.x, store.inertia.y)
+    if (speed > INERTIA_STOP_METRES_PER_MS) {
+      store.camera.x += store.inertia.x * elapsedMs
+      store.camera.y += store.inertia.y * elapsedMs
+      const decay = Math.exp(-elapsedMs / INERTIA_DECAY_MS)
+      store.inertia.x *= decay
+      store.inertia.y *= decay
+    } else if (speed > 0) {
+      store.inertia = { x: 0, y: 0 }
+      reportViewport(store)
+    }
+  }
+
+  const scale = screenScale(store)
   world.scale.set(scale)
   world.position.set(
     app.screen.width / 2 - store.camera.x * scale,
-    app.screen.height / 2 - store.camera.y * scale,
+    app.screen.height / 2 + store.camera.y * scale,
   )
 
   if (store.dirty && store.current) {
@@ -192,26 +383,26 @@ function tick(store, setCounts) {
  * Fetches the scene the camera is looking at, re-centring the request when the
  * camera has wandered far enough from the last one.
  */
-async function load(store, target, setStatus, isCancelled) {
-  if (!target || store.fetching) return
+async function load(store, setStatus, isCancelled) {
+  if (store.fetching) return
   store.fetching = true
   try {
-    let request = { ...target, radiusMetres: store.radius }
+    let request = {
+      ...(store.origin ?? store.viewport),
+      radiusMetres: store.radius,
+    }
     const travelled = Math.hypot(store.camera.x, store.camera.y)
+    let recenterOffset = null
     if (store.origin && travelled > store.radius * REFETCH_AT_FRACTION) {
       const moved = offsetToLatLon(store.origin, store.camera.x, store.camera.y)
       request = { ...moved, radiusMetres: store.radius }
-      // The camera is expressed relative to the scene origin, so re-centring the
-      // request means re-zeroing it, or the view would jump by what it just moved.
-      store.camera.x = 0
-      store.camera.y = 0
-      Object.assign(target, moved)
+      recenterOffset = { x: store.camera.x, y: store.camera.y }
     }
     // Ask for as much map as is actually on screen, with a margin so panning
     // does not stutter at the edge. This only decides how much is fetched; the
     // scale it is drawn at is fixed by the camera alone.
     if (store.app) {
-      const scale = screenScale(store, store.app)
+      const scale = screenScale(store)
       const visible = Math.hypot(store.app.screen.width, store.app.screen.height) / 2 / scale
       const wanted = Math.max(MIN_RADIUS_METRES,
         Math.min(MAX_RADIUS_METRES, Math.round(visible * 1.3)))
@@ -227,7 +418,20 @@ async function load(store, target, setStatus, isCancelled) {
     store.previous = store.current
     store.current = scene
     store.origin = scene.origin
+    store.viewport = {
+      latitude: scene.origin.latitude,
+      longitude: scene.origin.longitude,
+    }
     store.radius = scene.radiusMetres
+    if (recenterOffset) {
+      // Camera offsets are relative to the scene origin. Once the server has
+      // accepted the requested centre as its new origin, remove only the offset
+      // included in that request. Any movement made while the request was in
+      // flight remains, so a slow response cannot snap the map backwards.
+      store.camera.x -= recenterOffset.x
+      store.camera.y -= recenterOffset.y
+      reportViewport(store)
+    }
     store.fetchedAt = performance.now()
     store.dirty = true
     setStatus(scene.frameId >= 0 ? `Live · frame ${scene.frameId}` : 'Live · geometry only')

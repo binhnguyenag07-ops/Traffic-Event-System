@@ -63,7 +63,7 @@ Traffic-Event-System/
 |   `-- results/                  generated output; traces land here
 |-- docs/                         architecture, class diagram, algorithms, API, demo, results
 |-- frontend/
-|   |-- public/assets/            artwork slots: vehicles, surfaces, buildings (see ASSETS.md)
+|   |-- public/assets/            artwork slots: vehicles, surfaces, land, buildings (see ASSETS.md)
 |   `-- src/
 |       |-- api/trafficAPI.js     REST/SSE client
 |       |-- components/

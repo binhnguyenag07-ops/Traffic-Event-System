@@ -159,6 +159,21 @@ class LaneGeometryBuilderTest {
     }
 
     @Test
+    void aJunctionPavementUsesTheNearEndOfOutgoingRoads() {
+        RoadNetwork network = crossroads();
+        GeoPoint centre = new GeoPoint(10.000, 106.000);
+
+        JunctionGeometry pavement = new LaneGeometryBuilder(network).junctionGeometryOf("C");
+
+        assertThat(pavement.pavement()).allSatisfy(point -> {
+            double distance = PolylineGeometry.lengthMetres(List.of(centre, point));
+            assertThat(distance)
+                    .as("a pavement corner stays beside its junction")
+                    .isLessThan(10.0);
+        });
+    }
+
+    @Test
     void aScenarioWithoutCoordinatesYieldsNoGeometry() {
         RoadNetwork planar = new RoadNetwork();
         planar.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
