@@ -160,13 +160,13 @@ The number of directed roads is:
 2 * [rows * (columns - 1) + columns * (rows - 1)]
 ```
 
-`data/small_city.json` is the Week 3 routing dataset. It contains six
+`data/maps/small_city.json` is the Week 3 routing dataset. It contains six
 intersections, all supported location types, alternative paths, four congested
 roads, and one blocked direct road. `congestion_demo.json` and
 `accident_demo.json` are complete Week 6 visualization datasets with valid
 coordinates, density values, road states, and alternative routes.
 
-`data/density_demo.json` is the Week 4 road-density dataset. It contains four
+`data/maps/density_demo.json` is the Week 4 road-density dataset. It contains four
 roads with low, medium, high, and full density levels so the team can demo how
 capacity usage changes road availability and congestion-aware cost.
 

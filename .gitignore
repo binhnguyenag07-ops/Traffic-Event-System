@@ -5,3 +5,13 @@ __pycache__/
 OOP - Group Project.pdf
 AGENTS.md
 project.md
+
+# Generated simulation output. Regenerate rather than commit: a trace is
+# reproducible from its map, scenario and seed, so it adds weight without
+# adding information. The routing baseline is the one exception.
+data/results/*
+!data/results/experiment_results.json
+
+# Downloaded artwork archives. The extracted PNGs belong in the repo; the zips
+# they arrived in do not.
+frontend/public/assets/**/*.zip

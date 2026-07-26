@@ -570,4 +570,12 @@ public class TrafficSimulator {
                 config.positionAlongRoad() == null ? 0.5 : config.positionAlongRoad(),
                 java.util.Set.copyOf(config.blockedLaneIndexes()));
     }
+
+    /**
+     * The run clock, for anything that needs the time of day rather than just
+     * how long the simulation has been going.
+     */
+    public SimulationClock getClock() {
+        return clock;
+    }
 }

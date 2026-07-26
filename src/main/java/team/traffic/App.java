@@ -33,7 +33,7 @@ import team.traffic.service.impl.VehicleServiceImpl;
 
 public class App {
     private static final int PORT = Integer.parseInt(System.getenv().getOrDefault("PORT", "7070"));
-    private static final String MAP_FILE = System.getenv().getOrDefault("MAP_FILE", "data/district1_network.json");
+    private static final String MAP_FILE = System.getenv().getOrDefault("MAP_FILE", "data/maps/district1_network.json");
 
     public static void main(String[] args) throws Exception {
         // Load road network from JSON

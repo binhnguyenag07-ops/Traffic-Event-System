@@ -11,7 +11,7 @@ public final class ExperimentRunner {
         ExperimentService.ExperimentReport report = new ExperimentService().run();
         String json = new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(report);
         if (args.length > 0 && "--write".equals(args[0])) {
-            Files.writeString(Path.of("data/experiment_results.json"), json + System.lineSeparator());
+            Files.writeString(Path.of("data/results/experiment_results.json"), json + System.lineSeparator());
             Files.writeString(Path.of("docs/EXPERIMENT_RESULTS.md"), toMarkdown(report));
         }
         System.out.println(json);

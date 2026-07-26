@@ -137,6 +137,34 @@ replacement, and any in-place network edit create a new `timelineId`. This is
 intentional: frames store dynamic road state but not a full historical copy of
 network geometry.
 
+## Simulation clock
+
+`GET /api/simulation/status` carries the run clock alongside the tick counters:
+
+```jsonc
+{
+  "status": "RUNNING",
+  "currentTick": 42,
+  "elapsedSeconds": 5400.0,
+  "simulationSecondsPerTick": 10.0,
+  "playbackIntervalMs": 1000,
+  "startTimeOfDaySeconds": 21600.0,   // the run began at 06:00
+  "timeOfDaySeconds": 27000.0,        // it is now 07:30
+  "timeOfDay": "07:30"
+}
+```
+
+`startTimeOfDaySeconds` is published so a client can label **any** recorded
+frame with its clock time from that frame's own `elapsedSeconds`:
+
+```text
+timeOfDay = (startTimeOfDaySeconds + elapsedSeconds) mod 86400
+```
+
+Frames deliberately do not carry a clock time of their own. A frame already
+records its elapsed seconds, so storing the derived value beside it would be a
+second copy of the same fact, free to disagree. The clock wraps at midnight.
+
 ## Physical view
 
 ```text
