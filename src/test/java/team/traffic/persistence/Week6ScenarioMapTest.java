@@ -24,7 +24,7 @@ class Week6ScenarioMapTest {
 
     @Test
     void loadsSmallCityMap() throws IOException {
-        RoadNetwork network = loader.load("data/small_city.json");
+        RoadNetwork network = loader.load("data/maps/small_city.json");
 
         assertThat(network.getIntersections()).hasSize(6);
         assertThat(network.getRoads()).hasSize(17);
@@ -34,7 +34,7 @@ class Week6ScenarioMapTest {
 
     @Test
     void loadsCongestionDemoWithOpenAlternativeRoute() throws IOException {
-        RoadNetwork network = loader.load("data/congestion_demo.json");
+        RoadNetwork network = loader.load("data/maps/congestion_demo.json");
 
         assertVisualizationDataIsConsistent(network);
         assertThat(network.getIntersections()).hasSize(6);
@@ -47,7 +47,7 @@ class Week6ScenarioMapTest {
 
     @Test
     void loadsAccidentDemoWithBlockedMainRoadAndOpenDetour() throws IOException {
-        RoadNetwork network = loader.load("data/accident_demo.json");
+        RoadNetwork network = loader.load("data/maps/accident_demo.json");
 
         assertVisualizationDataIsConsistent(network);
         assertThat(network.getIntersections()).hasSize(6);
@@ -60,8 +60,8 @@ class Week6ScenarioMapTest {
 
     @Test
     void preservesVisualizationFieldsAcrossScenarioSaveLoadRoundTrips() throws IOException {
-        assertScenarioRoundTrip("data/congestion_demo.json", "congestion-round-trip.json");
-        assertScenarioRoundTrip("data/accident_demo.json", "accident-round-trip.json");
+        assertScenarioRoundTrip("data/maps/congestion_demo.json", "congestion-round-trip.json");
+        assertScenarioRoundTrip("data/maps/accident_demo.json", "accident-round-trip.json");
     }
 
     private void assertScenarioRoundTrip(String source, String outputName) throws IOException {

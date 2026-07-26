@@ -146,3 +146,101 @@ classDiagram
 to junctions, repeat by phase, and participate in stop-line arbitration. Event
 time is expressed in seconds; integer ticks remain only as deterministic trace
 indexes.
+
+## Added since this diagram was drawn
+
+Lateral movement and sub-lane filtering, in `domain/vehicle/dynamics`:
+
+```mermaid
+classDiagram
+    class LateralExtent {
+        +centreMetres double
+        +widthMetres double
+        +overlaps(other, clearance) boolean
+        +clearGapTo(other) double
+    }
+    class LateralTarget {
+        +laneIndex int
+        +offsetMetres double
+    }
+    class LateralMotionModel {
+        +nextOffsetMetres(...)$ double
+        +hasSettled(...)$ boolean
+    }
+    class FilteringRules {
+        +cappedSpeedMps(...) double
+    }
+    class LaneChangeModel {
+        <<interface>>
+        +chooseTarget(request) LateralTarget
+    }
+    class MobilLaneChangeModel
+    class FilteringLaneChangeModel
+    LaneChangeModel <|.. MobilLaneChangeModel
+    LaneChangeModel <|.. FilteringLaneChangeModel
+    FilteringLaneChangeModel *-- FilteringRules
+    LaneChangeModel ..> LateralTarget
+    TrafficParticipant ..> LateralExtent
+```
+
+`Vehicle` state, extracted so values that are only meaningful together live
+together:
+
+```mermaid
+classDiagram
+    class Vehicle
+    class RoadPlacement {
+        +enter(...)
+        +release()
+        +moveTo(...)
+    }
+    class RoutePlan {
+        +stepAt(offset) RouteStep
+        +advance()
+        +isExhausted() boolean
+    }
+    Vehicle *-- RoadPlacement
+    Vehicle *-- RoutePlan
+    Vehicle *-- TripRecord
+```
+
+Scene geometry, in `domain/scene`, derived from the network for the physical
+view and never stored:
+
+```mermaid
+classDiagram
+    class LaneGeometryBuilder {
+        +lanesOf(road) List~LaneGeometry~
+        +stopLineOf(road) StopLine
+        +connectorsAt(junctionId) List~LaneConnector~
+    }
+    class PhysicalSceneAssembler {
+        +sceneAround(lat, lon, radius, vehicles, signals) PhysicalScene
+    }
+    class PhysicalScene
+    class LaneGeometry
+    class StopLine
+    class LaneConnector
+    class JunctionGeometry
+    class SceneBuilding
+    class SceneSignal
+    class SceneVehicle
+    PhysicalSceneAssembler *-- LaneGeometryBuilder
+    PhysicalSceneAssembler ..> PhysicalScene
+    PhysicalScene *-- LaneGeometry
+    PhysicalScene *-- StopLine
+    PhysicalScene *-- LaneConnector
+    PhysicalScene *-- JunctionGeometry
+    PhysicalScene *-- SceneBuilding
+    PhysicalScene *-- SceneSignal
+    PhysicalScene *-- SceneVehicle
+```
+
+`domain/scene` sits beside `domain/network` and `domain/vehicle` rather than
+under either: it consumes `RoadLayout` and `PolylineGeometry` from
+`domain/vehicle` while reading the network, and a package under `network`
+reaching up into `vehicle` would invert the layering.
+
+`SimulationClock` gained a time of day, so a demand model can ask what hour it
+is. The clock time is derived from elapsed seconds and a published start offset,
+never stored per frame.

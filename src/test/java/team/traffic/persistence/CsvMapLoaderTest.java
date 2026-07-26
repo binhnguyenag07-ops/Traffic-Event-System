@@ -38,7 +38,7 @@ class CsvMapLoaderTest {
 
     @Test
     void loadsProjectSampleMap() throws IOException {
-        RoadNetwork network = loader.load("data/sample_map.csv");
+        RoadNetwork network = loader.load("data/maps/sample_map.csv");
 
         assertThat(network.getIntersectionCount()).isEqualTo(3);
         assertThat(network.getRoadCount()).isEqualTo(3);

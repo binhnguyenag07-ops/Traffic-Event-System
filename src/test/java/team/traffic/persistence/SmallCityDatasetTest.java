@@ -12,7 +12,7 @@ class SmallCityDatasetTest {
 
     @Test
     void loadsSmallCityRoutingScenario() throws IOException {
-        RoadNetwork network = new JsonMapLoader().load("data/small_city.json");
+        RoadNetwork network = new JsonMapLoader().load("data/maps/small_city.json");
 
         assertThat(network.getIntersectionCount()).isEqualTo(6);
         assertThat(network.getRoadCount()).isEqualTo(17);
@@ -25,7 +25,7 @@ class SmallCityDatasetTest {
 
     @Test
     void usesRealHcmcCoordinatesAndStreetGeometry() throws IOException {
-        RoadNetwork network = new JsonMapLoader().load("data/small_city.json");
+        RoadNetwork network = new JsonMapLoader().load("data/maps/small_city.json");
 
         assertThat(network.getIntersection("I1").getName()).isEqualTo("Bến Thành Market");
         assertThat(network.getIntersection("I1").getLatitude()).isCloseTo(10.772803,
@@ -37,7 +37,7 @@ class SmallCityDatasetTest {
 
     @Test
     void providesMultipleUsableChoicesForRouting() throws IOException {
-        RoadNetwork network = new JsonMapLoader().load("data/small_city.json");
+        RoadNetwork network = new JsonMapLoader().load("data/maps/small_city.json");
 
         long usableRoads = network.getRoads().values().stream()
                 .filter(road -> road.isAvailable())

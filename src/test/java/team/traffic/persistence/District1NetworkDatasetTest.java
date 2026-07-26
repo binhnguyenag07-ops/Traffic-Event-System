@@ -16,7 +16,7 @@ class District1NetworkDatasetTest {
             throw new AssertionError("Bundled roads must already contain geometry");
         });
 
-        try (var input = Files.newInputStream(Path.of("data/district1_network.json"))) {
+        try (var input = Files.newInputStream(Path.of("data/maps/district1_network.json"))) {
             var result = service.importJson("district1_network.json", input);
 
             assertThat(result.network().getIntersectionCount()).isGreaterThan(350);

@@ -14,7 +14,7 @@ class RoadDensityDatasetTest {
 
     @Test
     void loadsDensityDemoWithLowMediumHighAndFullRoads() throws IOException {
-        RoadNetwork network = new JsonMapLoader().load("data/density_demo.json");
+        RoadNetwork network = new JsonMapLoader().load("data/maps/density_demo.json");
 
         assertThat(network.getIntersectionCount()).isEqualTo(4);
         assertThat(network.getRoadCount()).isEqualTo(4);

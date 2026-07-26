@@ -106,6 +106,16 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     }
 
     @Override
+    public double getStartTimeOfDaySeconds() {
+        return simulator.getClock().getStartTimeOfDaySeconds();
+    }
+
+    @Override
+    public double getTimeOfDaySeconds() {
+        return simulator.getClock().getTimeOfDaySeconds();
+    }
+
+    @Override
     public SimulationSnapshot getSnapshot() {
         return simulator.getSnapshot();
     }
