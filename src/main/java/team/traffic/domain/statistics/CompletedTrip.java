@@ -7,5 +7,17 @@ public record CompletedTrip(
         VehicleType vehicleType,
         double travelTimeSeconds,
         double routeLengthKm,
-        int routeRecalculationCount) {
+        int routeRecalculationCount,
+        String tripPlanId,
+        String tripPurpose) {
+
+    public CompletedTrip(
+            String vehicleId,
+            VehicleType vehicleType,
+            double travelTimeSeconds,
+            double routeLengthKm,
+            int routeRecalculationCount) {
+        this(vehicleId, vehicleType, travelTimeSeconds, routeLengthKm,
+                routeRecalculationCount, null, null);
+    }
 }

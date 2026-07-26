@@ -6,5 +6,7 @@ public enum VehicleStatus {
     ARRIVED,
     BLOCKED,
     /** Immobile but still physically occupying its lane. */
-    STOPPED
+    STOPPED,
+    /** Waiting at a resolved trip stop without occupying a road lane. */
+    DWELLING
 }

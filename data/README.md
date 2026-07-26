@@ -8,7 +8,8 @@ exported here.
 ```text
 data/
 ├── maps/        road networks           input,  committed
-├── scenarios/   vehicle and event runs  input,  committed
+├── demand/      parameter/curve tables  input,  committed
+├── scenarios/   complete seeded runs    input,  committed
 └── results/     generated output        output, mostly ignored
 ```
 
@@ -36,12 +37,22 @@ test concern, not project data.
 
 ## scenarios/
 
-A run script: `vehicles` and `events` to seed a simulation with, matching the
-body of `POST /api/simulation/initialize`.
+A run definition: map, clock, seed, scale, generated `demandSources`, events,
+and optional scripted vehicles. The same shape is accepted by
+`POST /api/simulation/initialize`, except activation also follows the scenario's
+map reference.
 
-Empty. `demo_simulation.json` was deleted: nothing read it, and its intersection
-ids belonged to the old `small_city` map. The scenario format is being designed
-— see `VEHICLE_FLOW.md` — and this is where it will live.
+`district1_typical_day.json` is the bundled default. It exercises closed
+building loops, multi-stop errands, open outbound trips, boundary-through
+traffic and boundary visitors. Its scale and traffic values are relative demo
+assumptions, not measured District 1 counts.
+
+## demand/
+
+`default_assumptions.json` supplies every building-type occupancy/attraction
+parameter, the gravity distance-decay factor, and normalized 24-hour departure
+curves. Its top-level status and note explicitly mark the table as an assumption
+so later calibration is a data replacement rather than a Java change.
 
 ## results/
 

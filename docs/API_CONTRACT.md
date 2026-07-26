@@ -70,6 +70,10 @@ responses emit seconds fields.
 Vehicle snapshots include `laneIndex`, `lateralOffsetMetres`, resolved
 `latitude`/`longitude`, `headingDegrees`, speed, trip metrics, and route state.
 `STOPPED` vehicles remain physical lane occupants.
+Demand-created vehicles additionally include `tripPlanId`, open
+`tripPurpose`, `currentTripLegIndex`, `tripLegCount`, `currentPlaceId`, and
+`dwellUntilSeconds`. `DWELLING` vehicles have released their road occupancy and
+are omitted from the physical lane scene.
 
 `MOTORCYCLE` uses a 2.1 m × 0.75 m physical profile, compact following gaps,
 and `MOTORCYCLE_FILTERING_MOBIL`. This is a safety-preserving adjacent-lane
@@ -83,7 +87,7 @@ but it does not yet occupy a continuous position between two lane centre lines.
 | POST | `/api/routes` | One BFS, Dijkstra, or A* route |
 | POST | `/api/routes/compare` | All compatible algorithms |
 | GET | `/api/routing/algorithms` | Algorithm names and preferences |
-| POST | `/api/simulation/initialize` | Vehicles and scheduled events |
+| POST | `/api/simulation/initialize` | Optional generated demand plus scripted vehicles and events |
 | POST | `/api/simulation/start` | Start continuous playback |
 | POST | `/api/simulation/pause` | Pause playback |
 | POST | `/api/simulation/resume` | Resume playback |
@@ -109,6 +113,20 @@ inside a logical tick are applied at their exact simulated second.
 Arrived vehicles stay in snapshots for at least five simulated seconds, then
 move to completed-trip history. Initialize, reset, scenario activation, and map
 replacement clear traces and completed-trip history.
+
+Initialization accepts the complete demand shape documented in
+`DEMAND_AND_SCENARIO_DESIGN.md`: `demandParameters`, clock/duration, seed,
+scale, zones, and `demandSources`. Legacy `vehicles` and `events` remain valid
+and may be combined with generated traffic. A source may select buildings,
+boundaries, zones or an explicit place; arbitrary new purpose identifiers do
+not require a Java enum.
+
+`GET /api/simulation/status` contains a `demand` object with
+`scheduledTrips`, `spawnedTrips`, `failedTrips`, `pendingTrips`, and
+`failedPlanIds`. A plan is rejected before spawning if any consecutive leg has
+no directed path. Traffic statistics separately report `roadActiveVehicles`,
+`dwellingVehicles`, `activeVehiclesByPurpose`, and
+`completedTripsByPurpose`.
 
 ### Authoritative renderer-frame replay
 
@@ -150,7 +168,14 @@ network geometry.
   "playbackIntervalMs": 1000,
   "startTimeOfDaySeconds": 21600.0,   // the run began at 06:00
   "timeOfDaySeconds": 27000.0,        // it is now 07:30
-  "timeOfDay": "07:30"
+  "timeOfDay": "07:30",
+  "demand": {
+    "scheduledTrips": 250,
+    "spawnedTrips": 24,
+    "failedTrips": 3,
+    "pendingTrips": 223,
+    "failedPlanIds": ["homes-commute-loop-0000012"]
+  }
 }
 ```
 
