@@ -23,6 +23,7 @@ import {
   roadClassStyle,
 } from './mapUtils'
 import { clampMapZoom, MAX_MAP_ZOOM, MIN_MAP_ZOOM } from '../mapViewport'
+import { isVehicleVisibleOnMap } from '../vehicleVisibility'
 
 const TILE_URL = import.meta.env.VITE_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const TILE_ATTRIBUTION = import.meta.env.VITE_TILE_ATTRIBUTION
@@ -179,8 +180,7 @@ function TrafficMap({ intersections, roads, vehicles = [], events, route, select
           {onOpenPhysical && (
             <button
               className="physical-open"
-              disabled={zoom < 18}
-              title={zoom < 18 ? 'Zoom in to lane level to open the physical view' : 'Open the lane-level physical view here'}
+              title="Open the full physical map at this exact viewport"
               onClick={() => {
                 const target = physicalTargetFrom(mapCenter, zoom)
                 if (target) onOpenPhysical(target)
@@ -198,6 +198,7 @@ function TrafficMap({ intersections, roads, vehicles = [], events, route, select
         zoom={clampMapZoom(viewport?.zoom ?? MIN_MAP_ZOOM)}
         minZoom={MIN_MAP_ZOOM}
         maxZoom={MAX_MAP_ZOOM}
+        zoomSnap={0}
         maxBounds={HCMC_DISTRICT_BOUNDS}
         maxBoundsViscosity={1}
         preferCanvas
@@ -292,7 +293,7 @@ function TrafficMap({ intersections, roads, vehicles = [], events, route, select
         {layers.vehicles ? (
           <Pane name="vehicles" style={{ zIndex: 460 }}>
             {vehicles.map((vehicle) => {
-              if (vehicle.status === 'ARRIVED') return null
+              if (!isVehicleVisibleOnMap(vehicle)) return null
               const position = positionForVehicle(vehicle, roadById, intersectionById)
               if (!position) return null
               return (

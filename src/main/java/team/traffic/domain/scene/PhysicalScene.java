@@ -7,11 +7,10 @@ import team.traffic.domain.network.GeoPoint;
  * Everything within a chosen patch of the map that the physical renderer draws:
  * the lanes, the markings, the junctions, and the vehicles moving over them.
  *
- * <p>Assembled for one region around one point, so the browser receives the
- * lanes of one junction rather than the whole city. Coordinates are still
- * geographic; the API boundary converts the region to local metres once, so the
- * renderer works in a single flat frame and never touches latitude and
- * longitude.</p>
+ * <p>Coordinates remain geographic here whether the scene is a small region or
+ * the complete loaded network. The API boundary converts them to local metres
+ * once, so the renderer works in a single flat frame and never mixes latitude,
+ * longitude and screen pixels.</p>
  *
  * @param origin       the point the region is centred on
  * @param radiusMetres how far around it the scene extends

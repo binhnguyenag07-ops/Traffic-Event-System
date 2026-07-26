@@ -124,7 +124,12 @@ export function useTrafficDashboard() {
     setLoading(true)
     setError('')
     try {
-      await Promise.all([refreshNetwork(), refreshLiveData()])
+      const [, , status] = await Promise.all([
+        refreshNetwork(),
+        refreshLiveData(),
+        simulationApi.status(),
+      ])
+      setTickDelay(status.playbackIntervalMs)
     } catch (nextError) {
       setError(nextError.message)
     } finally {
@@ -553,11 +558,11 @@ export function useTrafficDashboard() {
     seekFrame,
     returnToLive,
     setPlaybackInterval: async (milliseconds) => {
-      setTickDelay(milliseconds)
       const status = await runAction(
-        () => simulationApi.setParameters(10, milliseconds),
+        () => simulationApi.setPlaybackInterval(milliseconds),
         { refresh: false },
       )
+      setTickDelay(status.playbackIntervalMs ?? milliseconds)
       setSnapshot((current) => ({ ...current, status: status.status }))
     },
     findRoute: async (start, destination, preference, algorithm) => {
