@@ -56,7 +56,8 @@ class PhysicalViewDtoTest {
     void carriesTheFrameIdentityAndVehiclePosition() {
         GeoPoint origin = new GeoPoint(LAT, LON);
         SceneVehicle rider = new SceneVehicle(
-                "V-1", "MOTORCYCLE", LAT, LON + 0.001, 90.0, 6.0, 2.1, 0.75, 1, 0.0);
+                "V-1", "MOTORCYCLE", LAT, LON + 0.001, 90.0, 6.0, 2.1, 0.75, 1, 0.0,
+                "R-12", 0.42, false, null, null);
         PhysicalScene scene = new PhysicalScene(
                 origin, 200, List.of(), List.of(), List.of(), List.of(),
                 List.of(), List.of(), List.of(), List.of(rider));
@@ -74,6 +75,9 @@ class PhysicalViewDtoTest {
                 .as("0.001 degree east of the origin is a little over 100 m")
                 .isGreaterThan(100.0);
         assertThat(drawn.y()).isCloseTo(0.0, within(1.0));
+        assertThat(drawn.roadId()).isEqualTo("R-12");
+        assertThat(drawn.roadProgress()).isEqualTo(0.42);
+        assertThat(drawn.inJunction()).isFalse();
     }
 
     private PhysicalScene sceneWithLaneFrom(GeoPoint a, GeoPoint b) {

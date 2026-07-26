@@ -92,7 +92,7 @@ but it does not yet occupy a continuous position between two lane centre lines.
 | POST | `/api/simulation/pause` | Pause playback |
 | POST | `/api/simulation/resume` | Resume playback |
 | POST | `/api/simulation/tick` | One manual logical tick |
-| PUT | `/api/simulation/parameters` | Logical seconds per tick and playback interval |
+| PUT | `/api/simulation/parameters` | Logical seconds per tick and/or playback interval |
 | GET | `/api/simulation/snapshot` | Current snapshot |
 | GET | `/api/simulation/stream` | Server-Sent authoritative renderer frames |
 | GET | `/api/simulation/trace/frames` | Retained frame index for the current timeline |
@@ -194,12 +194,18 @@ second copy of the same fact, free to disagree. The clock wraps at midnight.
 
 ```text
 GET /api/simulation/physical-view?lat=<deg>&lon=<deg>&radiusMetres=<m>
+GET /api/simulation/physical-view?lat=<deg>&lon=<deg>&fullMap=true
 ```
 
 Returns the lane-level scene within `radiusMetres` of the point, for the PixiJS
 renderer. All three query parameters are required and numeric; a missing or
 non-numeric one returns `400`, as does a non-positive radius. The radius is
-capped at 1000 m so one request cannot ask for the whole city.
+capped at 1000 m for an ad-hoc region.
+
+`fullMap=true` deliberately loads the complete geometry of the current network.
+It requires only `lat` and `lon`; the server derives the smallest radius that
+contains the loaded scenario around that origin. This is bounded by the network
+already held in memory, not by an arbitrary city-sized radius.
 
 The scene is projected into **local metres** with the query point as the origin,
 x running east and y running north. This is deliberate: the renderer works in a
@@ -218,7 +224,9 @@ coordinate systems (geographic, local metres, screen pixels) from being mixed.
   "connectors": [ { "fromRoadId", "fromLane", "toRoadId", "toLane", "curve": [[x,y], ...] } ],
   "junctions":  [ { "junctionId", "pavement": [[x,y], ...] } ],
   "vehicles":   [ { "id", "type", "x", "y", "headingDegrees", "speedMps",
-                    "lengthMetres", "widthMetres", "laneIndex", "lateralOffsetMetres" } ]
+                    "lengthMetres", "widthMetres", "laneIndex", "lateralOffsetMetres",
+                    "roadId", "roadProgress", "inJunction",
+                    "junctionFromRoadId", "junctionToRoadId" } ]
 }
 ```
 
@@ -226,7 +234,20 @@ Geometry is derived from the network (`domain.scene.LaneGeometryBuilder`);
 vehicles come from the current authoritative frame. `timelineId` and `frameId`
 are that frame's, so the physical view and the macro map stay on one clock. A
 vehicle's `lateralOffsetMetres` is its real offset, so a filtering motorcycle is
-drawn between the lanes it is riding between rather than snapped to one.
+drawn between the lanes it is riding between rather than snapped to one. Road
+progress and the two junction road ids let the renderer follow lane centrelines
+and connector curves rather than cutting a straight chord across a bend.
 
-Static geometry and moving vehicles share one response for now; when the network
-grows, geometry (fetched once per region) and vehicles (fetched per frame) split.
+After that first geometry response the renderer polls only the changing state:
+
+```text
+GET /api/simulation/physical-view/state?lat=<origin-lat>&lon=<origin-lon>&radiusMetres=<scene-radius>
+```
+
+The state response has the same `origin`, `radiusMetres`, `timelineId`,
+`frameId`, and `elapsedSeconds`, adds `playbackIntervalMs`, and carries only
+`signals` and `vehicles`. The interval controls interpolation time only; changing
+playback speed does not alter `simulationSecondsPerTick` or the physical model.
+Static lanes, junctions, land cover and buildings therefore cross the wire and
+enter Pixi once instead of being rebuilt every 250 ms. A changed `timelineId`
+causes the client to reload the complete geometry.

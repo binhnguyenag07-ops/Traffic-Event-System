@@ -6,6 +6,7 @@ import TimelineScrubber from './components/TimelineScrubber'
 import PhysicalScene from './physical/PhysicalScene'
 import { useTrafficDashboard } from './hooks/useTrafficDashboard'
 import { DEFAULT_PHYSICAL_ZOOM } from './mapViewport'
+import { isVehicleVisibleOnMap } from './vehicleVisibility'
 
 const PREFERENCES = [
   ['CONGESTION_AWARE', 'Traffic aware'],
@@ -118,6 +119,10 @@ export default function App() {
   const canPause = snapshot.status === 'RUNNING'
   const canResume = snapshot.status === 'PAUSED'
   const viewRoadStates = viewFrame.roadStates || []
+  const visibleVehicles = useMemo(
+    () => (viewFrame.vehicles || []).filter(isVehicleVisibleOnMap),
+    [viewFrame.vehicles],
+  )
   const pressure = viewRoadStates.length
     ? Math.round(viewRoadStates.reduce((sum, road) => sum + Number(road.congestionLevel || 0), 0)
       / viewRoadStates.length * 100)
@@ -236,7 +241,7 @@ export default function App() {
           <TrafficMap
             intersections={intersections}
             roads={viewRoads}
-            vehicles={viewFrame.vehicles || []}
+            vehicles={visibleVehicles}
             events={viewFrame.trafficEvents || []}
             route={route}
             selected={selected}
@@ -261,11 +266,14 @@ export default function App() {
             <PhysicalScene
               viewport={mapViewport}
               onViewportChange={setMapViewport}
-              onClose={() => setPhysicalOpen(false)}
+              onClose={(viewport) => {
+                if (viewport) setMapViewport(viewport)
+                setPhysicalOpen(false)
+              }}
             />
           )}
           <div className="map-metrics" aria-label={viewingHistory ? 'Historical traffic summary' : 'Live traffic summary'}>
-            <Metric label="Fleet" value={viewFrame.vehicles?.length || 0} />
+            <Metric label="Fleet" value={visibleVehicles.length} />
             <Metric label={viewingHistory ? 'Frame time' : 'Average trip'}
               value={viewingHistory ? formatDuration(viewFrame.elapsedSeconds) : formatDuration(traffic.averageTravelTimeSeconds)} />
             <Metric label="Network pressure" value={`${pressure}%`} tone={pressure > 65 ? 'danger' : ''} />
@@ -290,7 +298,7 @@ export default function App() {
               <button onClick={() => safely(dashboard.initializeDemo)} disabled={loading || snapshot.status === 'RUNNING'}>
                 Reload live traffic
               </button>
-              <Field label="Playback">
+              <Field label="Speed">
                 <select value={tickDelay} onChange={(event) => safely(() => dashboard.setPlaybackInterval(Number(event.target.value)))}>
                   <option value="2000">0.5×</option><option value="1000">1×</option>
                   <option value="500">2×</option><option value="250">4×</option>
