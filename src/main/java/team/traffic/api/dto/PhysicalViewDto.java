@@ -7,6 +7,7 @@ import team.traffic.domain.scene.LaneConnector;
 import team.traffic.domain.scene.LaneGeometry;
 import team.traffic.domain.scene.PhysicalScene;
 import team.traffic.domain.scene.SceneBuilding;
+import team.traffic.domain.scene.SceneLandCover;
 import team.traffic.domain.scene.SceneSignal;
 import team.traffic.domain.scene.SceneVehicle;
 import team.traffic.domain.scene.StopLine;
@@ -34,6 +35,7 @@ public record PhysicalViewDto(
         List<StopLineDto> stopLines,
         List<ConnectorDto> connectors,
         List<JunctionDto> junctions,
+        List<LandCoverDto> landCovers,
         List<BuildingDto> buildings,
         List<SignalDto> signals,
         List<VehicleDto> vehicles) {
@@ -54,6 +56,10 @@ public record PhysicalViewDto(
                 scene.stopLines().stream().map(stopLine -> stopLine(stopLine, origin)).toList(),
                 scene.connectors().stream().map(connector -> connector(connector, origin)).toList(),
                 scene.junctions().stream().map(junction -> junction(junction, origin)).toList(),
+                scene.landCovers().stream()
+                        .map(cover -> new LandCoverDto(cover.id(), cover.type().name(),
+                                project(cover.polygon(), origin)))
+                        .toList(),
                 scene.buildings().stream().map(building -> building(building, origin)).toList(),
                 scene.signals().stream().map(signal -> signal(signal, origin)).toList(),
                 scene.vehicles().stream().map(vehicle -> vehicle(vehicle, origin)).toList());
@@ -138,6 +144,9 @@ public record PhysicalViewDto(
     }
 
     public record JunctionDto(String junctionId, List<double[]> pavement) {
+    }
+
+    public record LandCoverDto(String id, String type, List<double[]> polygon) {
     }
 
     public record BuildingDto(

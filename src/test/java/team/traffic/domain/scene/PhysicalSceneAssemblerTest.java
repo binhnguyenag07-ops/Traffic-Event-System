@@ -10,6 +10,8 @@ import team.traffic.domain.network.Building;
 import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.GeoPoint;
+import team.traffic.domain.network.LandCover;
+import team.traffic.domain.network.LandCoverType;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
@@ -152,6 +154,35 @@ class PhysicalSceneAssemblerTest {
                 .sceneAround(LAT, WEST_LON, 300, List.of(), List.of());
 
         assertThat(scene.signals()).isEmpty();
+    }
+
+    @Test
+    void carriesTheLandCoverThatReachesIntoTheRadius() {
+        RoadNetwork network = twoRoadNetwork();
+        network.addLandCover(new LandCover("L-near", LandCoverType.PARK, List.of(
+                new GeoPoint(LAT, WEST_LON),
+                new GeoPoint(LAT + 0.0002, WEST_LON),
+                new GeoPoint(LAT + 0.0002, WEST_LON + 0.0002))));
+        network.addLandCover(new LandCover("L-far", LandCoverType.WATER, List.of(
+                new GeoPoint(LAT, EAST_LON),
+                new GeoPoint(LAT + 0.0002, EAST_LON),
+                new GeoPoint(LAT + 0.0002, EAST_LON + 0.0002))));
+
+        PhysicalScene scene = new PhysicalSceneAssembler(network)
+                .sceneAround(LAT, WEST_LON, 120, List.of());
+
+        assertThat(scene.landCovers()).extracting(SceneLandCover::id).containsExactly("L-near");
+        assertThat(scene.landCovers().get(0).type()).isEqualTo(LandCoverType.PARK);
+    }
+
+    @Test
+    void hasNoLandCoverWhenTheMapRecordsNone() {
+        // NORMAL fabric is the background, not a polygon, so an unmapped map is
+        // simply empty here rather than full of filler.
+        PhysicalScene scene = new PhysicalSceneAssembler(twoRoadNetwork())
+                .sceneAround(LAT, WEST_LON, 300, List.of());
+
+        assertThat(scene.landCovers()).isEmpty();
     }
 
     private Building building(String id, double lat, double lon) {
