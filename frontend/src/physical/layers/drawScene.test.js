@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { drawSignals, drawStatic, drawTrails } from './drawScene'
 
 // A stand-in for a PixiJS Graphics that records what was asked of it. The real
@@ -64,7 +64,7 @@ describe('drawStatic', () => {
     expect(graphics.calls.poly).toBeGreaterThanOrEqual(2)
   })
 
-  it('strokes lane surfaces, markings and stop lines', () => {
+  it('strokes lane surfaces and markings', () => {
     const graphics = fakeGraphics()
     drawStatic(graphics, scene)
     expect(graphics.calls.stroke).toBeGreaterThanOrEqual(5)
@@ -82,8 +82,8 @@ describe('drawSignals', () => {
   it('draws a head per controlled approach', () => {
     const graphics = fakeGraphics()
     drawSignals(graphics, scene)
-    // A glow and a lamp for each of the two approaches.
-    expect(graphics.calls.circle).toBe(4)
+    // One unambiguous dot for each of the two approaches.
+    expect(graphics.calls.circle).toBe(2)
   })
 
   it('is silent on a scene with no signals', () => {

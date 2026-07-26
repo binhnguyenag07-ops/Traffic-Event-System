@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import L from 'leaflet'
 import {
   CircleMarker,
@@ -22,16 +22,19 @@ import {
   roadColor,
   roadClassStyle,
 } from './mapUtils'
+import { clampMapZoom, MAX_MAP_ZOOM, MIN_MAP_ZOOM } from '../mapViewport'
 
 const TILE_URL = import.meta.env.VITE_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const TILE_ATTRIBUTION = import.meta.env.VITE_TILE_ATTRIBUTION
   || '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 
-function FitNetwork({ positions }) {
+function FitNetwork({ positions, enabled }) {
   const map = useMap()
   useEffect(() => {
-    if (positions.length > 1) map.fitBounds(positions, { padding: [44, 44], maxZoom: 16 })
-  }, [map, positions])
+    if (enabled && positions.length > 1) {
+      map.fitBounds(positions, { padding: [44, 44], maxZoom: MIN_MAP_ZOOM })
+    }
+  }, [enabled, map, positions])
   return null
 }
 
@@ -44,23 +47,49 @@ function MapCoordinatePicker({ active, onPick }) {
   return null
 }
 
-function MapZoomTracker({ onZoom, onCenter }) {
-  const map = useMapEvents({
-    zoomend: () => { onZoom(map.getZoom()); onCenter?.(map.getCenter()) },
-    moveend: () => onCenter?.(map.getCenter()),
-  })
-  useEffect(() => { onZoom(map.getZoom()); onCenter?.(map.getCenter()) }, [map, onZoom, onCenter])
+function MapViewportSync({ viewport, onViewportChange, onZoom, onCenter }) {
+  const map = useMap()
+  const report = useCallback(() => {
+    const center = map.getCenter()
+    const zoom = map.getZoom()
+    onZoom(zoom)
+    onCenter(center)
+    onViewportChange?.({ latitude: center.lat, longitude: center.lng, zoom })
+  }, [map, onCenter, onViewportChange, onZoom])
+
+  useMapEvents({ zoomend: report, moveend: report })
+
+  // MapContainer only uses its centre prop at construction time. Apply later
+  // changes explicitly so a viewport reported by Physical View is already in
+  // place when the overlay closes.
+  useEffect(() => {
+    if (!viewport) return
+    const latitude = Number(viewport.latitude)
+    const longitude = Number(viewport.longitude)
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return
+    const zoom = clampMapZoom(viewport.zoom)
+    const current = map.getCenter()
+    if (current.distanceTo([latitude, longitude]) > 0.2
+      || Math.abs(map.getZoom() - zoom) > 1e-3) {
+      map.setView([latitude, longitude], zoom, { animate: false })
+    }
+  }, [map, viewport])
+
+  useEffect(report, [report])
   return null
 }
 
-// Where the physical view should open: the selected junction if it carries
-// coordinates, otherwise the middle of what the user is looking at.
-function physicalTargetFrom(selected, mapCenter, radiusMetres = 220) {
-  const data = selected?.data
-  if (data && data.latitude != null && data.longitude != null) {
-    return { latitude: Number(data.latitude), longitude: Number(data.longitude), radiusMetres }
+// Open exactly where the macro camera is looking. A selected object may sit
+// away from the centre, so using it here made switching views appear to jump.
+function physicalTargetFrom(mapCenter, zoom, radiusMetres = 220) {
+  if (mapCenter) {
+    return {
+      latitude: mapCenter.lat,
+      longitude: mapCenter.lng,
+      zoom: clampMapZoom(zoom),
+      radiusMetres,
+    }
   }
-  if (mapCenter) return { latitude: mapCenter.lat, longitude: mapCenter.lng, radiusMetres }
   return null
 }
 
@@ -114,10 +143,12 @@ function MapLegend() {
 
 function TrafficMap({ intersections, roads, vehicles = [], events, route, selected, onSelect, onPickIntersection,
   captureIntersection = false, draftIntersection = null, highlightedRoadIds = [], onMapCoordinate = () => {},
-  onOpenPhysical = null }) {
+  onOpenPhysical = null, viewport = null, onViewportChange = null, fitNetwork = true }) {
   const [layers, setLayers] = useState({ traffic: true, vehicles: true, events: true, labels: true })
-  const [zoom, setZoom] = useState(16)
-  const [mapCenter, setMapCenter] = useState(null)
+  const [zoom, setZoom] = useState(() => clampMapZoom(viewport?.zoom ?? MIN_MAP_ZOOM))
+  const [mapCenter, setMapCenter] = useState(() => viewport
+    ? { lat: Number(viewport.latitude), lng: Number(viewport.longitude) }
+    : null)
   const intersectionById = useMemo(
     () => new Map(intersections.map((intersection) => [intersection.id, intersection])),
     [intersections],
@@ -151,7 +182,7 @@ function TrafficMap({ intersections, roads, vehicles = [], events, route, select
               disabled={zoom < 18}
               title={zoom < 18 ? 'Zoom in to lane level to open the physical view' : 'Open the lane-level physical view here'}
               onClick={() => {
-                const target = physicalTargetFrom(selected, mapCenter)
+                const target = physicalTargetFrom(mapCenter, zoom)
                 if (target) onOpenPhysical(target)
               }}>
               Open physical view
@@ -161,18 +192,26 @@ function TrafficMap({ intersections, roads, vehicles = [], events, route, select
       </div>
 
       <MapContainer
-        center={HCMC_CENTER}
-        zoom={16}
-        minZoom={16}
-        maxZoom={19}
+        center={viewport
+          ? [Number(viewport.latitude), Number(viewport.longitude)]
+          : HCMC_CENTER}
+        zoom={clampMapZoom(viewport?.zoom ?? MIN_MAP_ZOOM)}
+        minZoom={MIN_MAP_ZOOM}
+        maxZoom={MAX_MAP_ZOOM}
         maxBounds={HCMC_DISTRICT_BOUNDS}
         maxBoundsViscosity={1}
         preferCanvas
         className="traffic-map"
       >
-        <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
-        <FitNetwork positions={positions} />
-        <MapZoomTracker onZoom={setZoom} onCenter={setMapCenter} />
+        <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL}
+          maxNativeZoom={19} maxZoom={MAX_MAP_ZOOM} />
+        <FitNetwork positions={positions} enabled={fitNetwork} />
+        <MapViewportSync
+          viewport={viewport}
+          onViewportChange={onViewportChange}
+          onZoom={setZoom}
+          onCenter={setMapCenter}
+        />
         <MapCoordinatePicker active={captureIntersection} onPick={onMapCoordinate} />
 
         <Pane name="roads" style={{ zIndex: 410 }}>

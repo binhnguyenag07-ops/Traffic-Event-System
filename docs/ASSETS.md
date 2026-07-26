@@ -20,27 +20,32 @@ frontend/public/assets/
 │   ├── bus.png
 │   └── emergency.png
 ├── surfaces/
-│   ├── asphalt.png
-│   └── junction.png
+│   ├── asphalt.jpg
+│   └── junction.jpg
 ├── land/
-│   ├── normal.png          ordinary urban fabric — the base everything sits on
-│   ├── park.png
-│   ├── water.png
-│   ├── grass.png
+│   ├── normal.jpg          ordinary urban fabric — the base everything sits on
+│   ├── park.jpg
+│   ├── water.jpg
+│   ├── grass.jpg
 │   └── … one per LandCoverType
 └── buildings/
-    ├── residential.png
-    ├── commercial.png
-    ├── office.png
-    ├── school.png
-    ├── hospital.png
-    ├── industrial.png
-    ├── parking.png
-    └── other.png
+    ├── residential.jpg
+    ├── commercial.jpg
+    ├── office.jpg
+    ├── school.jpg
+    ├── hospital.jpg
+    ├── industrial.jpg
+    ├── parking.jpg
+    └── other.jpg
 ```
 
 The paths are declared in `frontend/src/physical/assetManifest.js`. To add a
 slot, add it there; the loader picks it up automatically.
+
+Vehicle sprites use PNG because they need transparency. Opaque textures use
+JPEG to keep the shipped artwork small. The runtime artwork is 512 px and
+colour-normalised; full-resolution source material does not belong in
+`public/`.
 
 ## Vehicles — 4 files
 
@@ -48,10 +53,10 @@ Top-down sprites, transparent background, cropped tight to the bodywork.
 
 | File | Vehicle | Real size | Suggested pixels |
 |---|---|---|---|
-| `car.png` | Car | 4.5 × 1.8 m | 576 × 230 |
-| `motorcycle.png` | Motorcycle with rider | 2.1 × 0.75 m | 269 × 96 |
-| `bus.png` | City bus | 12 × 2.5 m | 1536 × 320 |
-| `emergency.png` | Ambulance or police car | 5.0 × 2.0 m | 640 × 256 |
+| `car.png` | Car | 4.5 × 1.8 m | 230 × 576 |
+| `motorcycle.png` | Motorcycle with rider | 2.1 × 0.75 m | 96 × 269 |
+| `bus.png` | City bus | 12 × 2.5 m | 320 × 1536 |
+| `emergency.png` | Ambulance or police car | 5.0 × 2.0 m | 256 × 640 |
 
 **The nose must point UP.** The renderer rotates a sprite by the vehicle's
 compass heading and adds no offset, so artwork drawn facing right puts every
@@ -73,35 +78,35 @@ Where to look, all CC0 or free-to-use:
 A motorcycle from above is the hard one to find; a scooter sprite reads fine at
 this scale.
 
-## Road and ground surfaces — 3 files
+## Road surfaces — 2 files
 
 **Seamlessly tiling** textures. A tile whose edges do not meet its opposite side
 shows as a visible grid across the whole map. 512 × 512 px is plenty.
 
 | File | Used for |
 |---|---|
-| `asphalt.png` | The carriageway |
-| `junction.png` | Paved area inside a junction |
+| `asphalt.jpg` | The carriageway |
+| `junction.jpg` | Paved area inside a junction |
 
 ## Land cover — 12 files
 
-The ground between the roads, one texture per `LandCoverType`. `normal.png` is
+The ground between the roads, one texture per `LandCoverType`. `normal.jpg` is
 the base the whole scene is drawn on; the rest fill mapped polygons on top.
 
 | File | What it covers | Polygons in the current map |
 |---|---|---|
-| `normal.png` | Ordinary urban fabric — everywhere nothing else is mapped | the background |
-| `grass.png` | Verges and yards | 136 |
-| `commercial.png` | Commercial blocks | 25 |
-| `water.png` | Saigon river, Ben Nghe canal | 21 |
-| `park.png` | Tao Dan and the rest | 18 |
-| `construction.png` | Sites | 17 |
-| `other.png` | Mapped, but not a type this model distinguishes | 20 |
-| `residential.png`, `industrial.png`, `forest.png`, `religious.png`, `recreation.png` | as named | few or none |
+| `normal.jpg` | Ordinary urban fabric — everywhere nothing else is mapped | the background |
+| `grass.jpg` | Verges and yards | 136 |
+| `commercial.jpg` | Commercial blocks | 25 |
+| `water.jpg` | Saigon river, Ben Nghe canal | 21 |
+| `park.jpg` | Tao Dan and the rest | 18 |
+| `construction.jpg` | Sites | 17 |
+| `other.jpg` | Mapped, but not a type this model distinguishes | 20 |
+| `residential.jpg`, `industrial.jpg`, `forest.jpg`, `religious.jpg`, `recreation.jpg` | as named | few or none |
 
-`normal.png` is the one that matters most: it is the majority of the screen.
-Something quiet and slightly textured — dry concrete, packed earth, a pale
-render — reads as city without pretending to be buildings.
+`normal.jpg` is the one that matters most: it is the majority of the screen.
+Use a quiet, cool-grey pavement or concrete texture. Brown render, packed earth
+and warm gravel make this dense District 1 map read as countryside.
 
 Where to look:
 
@@ -122,18 +127,25 @@ start with `residential`, `office` and `other`, which cover most of District 1.
 
 | File | Building type | Count in the current map |
 |---|---|---|
-| `other.png` | Untagged | 885 |
-| `residential.png` | Houses, apartments | 147 |
-| `office.png` | Offices | 57 |
-| `commercial.png` | Shops, hotels | 36 |
-| `school.png` | Schools, universities | 18 |
-| `hospital.png` | Hospitals, clinics | 17 |
-| `parking.png` | Car parks | 2 |
-| `industrial.png` | Warehouses | 0 |
+| `other.jpg` | Untagged | 885 |
+| `residential.jpg` | Houses, apartments | 147 |
+| `office.jpg` | Offices | 57 |
+| `commercial.jpg` | Shops, hotels | 36 |
+| `school.jpg` | Schools, universities | 18 |
+| `hospital.jpg` | Hospitals, clinics | 17 |
+| `parking.jpg` | Car parks | 2 |
+| `industrial.jpg` | Warehouses | 0 |
 
-Roof textures, seen from directly above: tiles, corrugated metal, flat concrete
-with rooftop plant. Same CC0 sources as the surfaces above; ambientCG has
-`RoofingTiles` and `Metal` sets.
+These are not complete building sprites. The renderer must fill arbitrary OSM
+footprints, so each file is a top-down roof material. The shipped set adds
+semantic cues while keeping one restrained palette: terracotta for residential,
+blue panels for commercial/office, green tiles for schools, red crosses for
+hospitals, corrugated metal for industrial, parking bays, and a neutral plant
+roof for `OTHER`.
+
+`tools/generate_urban_assets.py` reproducibly colour-normalises the CC0 source
+materials and adds those cues. The type tint is drawn first and the material is
+then overlaid at partial opacity, so an asset cannot erase the semantic colour.
 
 ## What does not work — learned the hard way
 
@@ -169,9 +181,10 @@ around 15 MB of which roughly 1.3 MB is wanted.
 
 1. **The four vehicles.** They are the moving thing on screen and the current
    stand-ins are the weakest part of the view.
-2. **`asphalt.png` and `ground.png`.** Two files, and they cover most of the
-   screen area.
-3. **`other.png` and `residential.png`.** 1032 of the 1162 buildings.
+2. **`asphalt.jpg` and `land/normal.jpg`.** Two files, and they cover most of
+   the screen area.
+3. **`buildings/other.jpg` and `buildings/residential.jpg`.** 1032 of the 1162
+   buildings.
 
 Everything else is polish.
 
@@ -186,21 +199,49 @@ a university submission is a publication.
 The physical view's status bar counts the slots that loaded:
 
 ```text
-Live · frame 412 · 126 vehicles · 68 buildings · 7 assets · drag to move, scroll to zoom
+Live · frame 412 · 126 vehicles · 68 buildings · 26 assets · drag to move, scroll to zoom
 ```
 
-`0 assets` means nothing was found — check the filenames and that the files sit
-under `frontend/public/assets/`, not `frontend/src/`.
+Anything below `26 assets` means at least one file was not found or decoded.
+Check the filenames and that the files sit under `frontend/public/assets/`, not
+`frontend/src/`.
 
 ## Filled so far
 
 | Slot | Source | Licence |
 |---|---|---|
-| `surfaces/asphalt.png` | ambientCG `Road012A` colour map | CC0 |
+| `vehicles/car.png` | [Devil's Work.shop 2D Car Pack](https://opengameart.org/content/2d-car-pack-0), `car01/top_0000.png` | CC0 |
+| `vehicles/motorcycle.png` | [Kenney Racing Pack](https://kenney.nl/assets/racing-pack), `motorcycle_blue.png` | CC0 |
+| `vehicles/bus.png` | [Devil's Work.shop 2D Car Pack](https://opengameart.org/content/2d-car-pack-0), `bus/top_0000.png` | CC0 |
+| `vehicles/emergency.png` | [Devil's Work.shop 2D Car Pack](https://opengameart.org/content/2d-car-pack-0), `policeCar/top_0000.png` | CC0 |
+| `surfaces/asphalt.jpg` | [Poly Haven Clean Asphalt](https://polyhaven.com/a/clean_asphalt), 1K diffuse, colour-normalised | CC0 |
+| `surfaces/junction.jpg` | [Poly Haven Clean Asphalt](https://polyhaven.com/a/clean_asphalt), 1K diffuse, slightly lightened | CC0 |
+| `buildings/residential.jpg` | [Poly Haven Ceramic Roof 01](https://polyhaven.com/a/ceramic_roof_01), colour-normalised | CC0 |
+| `buildings/commercial.jpg` | [Poly Haven Grey Roof Tiles 02](https://polyhaven.com/a/grey_roof_tiles_02), blue panel overlay | CC0 |
+| `buildings/office.jpg` | [Poly Haven Grey Roof 01](https://polyhaven.com/a/grey_roof_01), slate panel overlay | CC0 |
+| `buildings/school.jpg` | [Poly Haven Roof Tiles 14](https://polyhaven.com/a/roof_tiles_14), green panel overlay | CC0 |
+| `buildings/hospital.jpg` | [Poly Haven White Plaster 02](https://polyhaven.com/a/white_plaster_02), red-cross overlay | CC0 |
+| `buildings/industrial.jpg` | [Poly Haven Corrugated Iron](https://polyhaven.com/a/corrugated_iron), seam overlay | CC0 |
+| `buildings/parking.jpg` | [Poly Haven Aerial Asphalt 01](https://polyhaven.com/a/aerial_asphalt_01), parking-bay overlay | CC0 |
+| `buildings/other.jpg` | [Poly Haven Concrete Floor 02](https://polyhaven.com/a/concrete_floor_02), rooftop-plant overlay | CC0 |
+| `land/normal.jpg` | [Poly Haven Concrete Pavement 03](https://polyhaven.com/a/concrete_pavement_03), 1K diffuse, colour-normalised | CC0 |
+| `land/park.jpg` | [Poly Haven Aerial Grass Rock](https://polyhaven.com/a/aerial_grass_rock), 1K diffuse | CC0 |
+| `land/water.jpg` | [OpenGameArt Seamless Water Tiles](https://opengameart.org/content/seamless-water-tiles), `dark_water.jpg` by Hazmat Harry | CC0 |
+| `land/grass.jpg` | [Poly Haven Leafy Grass](https://polyhaven.com/a/leafy_grass), 1K diffuse | CC0 |
+| `land/forest.jpg` | [Poly Haven Forest Ground 01](https://polyhaven.com/a/forrest_ground_01), 1K diffuse | CC0 |
+| `land/commercial.jpg` | [Poly Haven Pavement 02](https://polyhaven.com/a/pavement_02), 1K diffuse | CC0 |
+| `land/residential.jpg` | [Poly Haven Large Square Pattern 01](https://polyhaven.com/a/large_square_pattern_01), 1K diffuse | CC0 |
+| `land/industrial.jpg` | [Poly Haven Gravel Concrete 03](https://polyhaven.com/a/gravel_concrete_03), 1K diffuse | CC0 |
+| `land/construction.jpg` | [Poly Haven Dry Ground Rocks](https://polyhaven.com/a/dry_ground_rocks), 1K diffuse | CC0 |
+| `land/religious.jpg` | [Poly Haven Patterned Brick Floor](https://polyhaven.com/a/patterned_brick_floor), 1K diffuse | CC0 |
+| `land/recreation.jpg` | [Poly Haven Rubber Tiles](https://polyhaven.com/a/rubber_tiles), 1K diffuse | CC0 |
+| `land/other.jpg` | [Poly Haven Gravel Embedded Concrete](https://polyhaven.com/a/gravel_embedded_concrete), 1K diffuse | CC0 |
 
-The other fourteen slots fall back to drawn shapes, which is why the view still
-renders.
+All 26 slots are filled. The fallback renderer remains in place so a missing or
+unreadable file still cannot prevent the scene from rendering.
 
-A surface texture is tiled to cover six metres of ground per repeat. Mapped one
-pixel to one metre a 1024-pixel tile would span a kilometre and read as a flat
-smear, so the scale is set where the grain stays visible.
+Texture scale follows what the material represents: surface tiles cover 12 m,
+building roofs 24 m, and land cover 42 m per repeat. Land, roof and road photos
+are low-opacity overlays over the renderer's colour palette rather than full
+strength replacements. This keeps lane markings and building categories
+readable.

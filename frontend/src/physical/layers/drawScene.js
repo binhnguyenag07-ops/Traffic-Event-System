@@ -1,5 +1,5 @@
 // Draws a physical scene, back to front: ground, blocks, pavement, road
-// surface, markings, stop lines, signals, vehicles.
+// surface, markings, signals, vehicles.
 //
 // Everything is drawn in world metres. The container this goes into carries the
 // zoom and pan, so nothing here needs to know the scale — which is also why a
@@ -12,15 +12,21 @@ import { worldPoint } from '../sceneTransform'
 // quarter of the luminance range -- ground 21, road 63, buildings 68 out of 255
 // -- which is a set of near-identical darks, and reads as a black screen. Land,
 // blocks and carriageway now sit far enough apart to tell apart at a glance.
-const GROUND = 0xe7e3da
-const BUILDING_EDGE = 0x9aa0aa
-const ROAD_CASING = 0xa8aeb8
-const ROAD = 0xfbfbfc
-const PAVEMENT = 0xf2f3f5
-const CONNECTOR = 0xf5f6f8
-const LANE_DASH = 0xb9bec7
-const STOP_LINE = 0x4a5059
+const GROUND = 0xc9c9c5
+const BUILDING_EDGE = 0x606a70
+const ROAD_CASING = 0x242a30
+const ROAD = 0x4b5158
+const PAVEMENT = 0x525a62
+const CONNECTOR = 0x59626b
+const LANE_DASH = 0xe5e8e9
 const TRAIL = 0xe0a415
+
+// Photographic material should add grain, not replace the map's visual
+// hierarchy. The semantic palette stays dominant at a glance.
+const NORMAL_TEXTURE_ALPHA = 0.12
+const LAND_TEXTURE_ALPHA = 0.2
+const ROOF_TEXTURE_ALPHA = 0.48
+const ROAD_TEXTURE_ALPHA = 0.32
 
 // What the ground is, where it is not road or building. NORMAL has no entry: it
 // is the background everything else is drawn on, which is exactly what ordinary
@@ -75,6 +81,43 @@ function fillPolygon(graphics, points, colour, alpha = 1, fill = null) {
   graphics.poly(points.flatMap(([x, y]) => worldPoint(x, y))).fill(style)
 }
 
+/**
+ * A fillable strip around a lane centreline.
+ *
+ * Pixi accepts a texture in a stroke style, but combining that texture with a
+ * world-scale matrix makes some multi-segment strokes triangulate across their
+ * bends. The result is a giant asphalt wedge instead of a road. A corridor
+ * polygon keeps the material clipped to the lane's real width.
+ */
+function laneCorridor(points, width) {
+  if (!points || points.length < 2 || width <= 0) return []
+
+  const unique = points.filter((point, index) => {
+    if (index === 0) return true
+    const previous = points[index - 1]
+    return Math.hypot(point[0] - previous[0], point[1] - previous[1]) > 1e-9
+  })
+  if (unique.length < 2) return []
+
+  const halfWidth = width / 2
+  const left = []
+  const right = []
+  for (let index = 0; index < unique.length; index += 1) {
+    const point = unique[index]
+    const previous = unique[Math.max(0, index - 1)]
+    const next = unique[Math.min(unique.length - 1, index + 1)]
+    const dx = next[0] - previous[0]
+    const dy = next[1] - previous[1]
+    const length = Math.hypot(dx, dy)
+    if (length <= 1e-9) continue
+    const nx = -dy / length
+    const ny = dx / length
+    left.push([point[0] + nx * halfWidth, point[1] + ny * halfWidth])
+    right.push([point[0] - nx * halfWidth, point[1] - ny * halfWidth])
+  }
+  return [...left, ...right.reverse()]
+}
+
 /** Dashes along a polyline, so a lane divider reads as paint rather than a line. */
 function strokeDashed(graphics, points, style) {
   if (!points || points.length < 2) return
@@ -126,23 +169,32 @@ export function drawStatic(graphics, scene, assets = {}) {
 
   // The base is NORMAL land: ordinary fabric, and what fills everywhere nothing
   // else is mapped.
-  graphics.rect(-radius * 3, -radius * 3, radius * 6, radius * 6)
-    .fill(land.NORMAL ? { ...land.NORMAL } : { color: GROUND })
+  graphics.rect(-radius * 3, -radius * 3, radius * 6, radius * 6).fill({ color: GROUND })
+  if (land.NORMAL) {
+    graphics.rect(-radius * 3, -radius * 3, radius * 6, radius * 6)
+      .fill({ ...land.NORMAL, alpha: NORMAL_TEXTURE_ALPHA })
+  }
 
   // Ground cover first: it sits under everything, and a building standing in a
   // park should be drawn on the park rather than beside it.
   scene.landCovers?.forEach((cover) => {
     const kind = String(cover.type || 'OTHER').toUpperCase()
     if (kind === 'NORMAL') return
-    fillPolygon(graphics, cover.polygon, colourFor(LAND_COLOUR, kind, LAND_COLOUR.OTHER),
-      1, land[kind])
+    const colour = colourFor(LAND_COLOUR, kind, LAND_COLOUR.OTHER)
+    fillPolygon(graphics, cover.polygon, colour)
+    if (land[kind]) {
+      fillPolygon(graphics, cover.polygon, colour, LAND_TEXTURE_ALPHA, land[kind])
+    }
   })
 
   scene.buildings?.forEach((building) => {
     const colour = colourFor(BUILDING_COLOUR, building.type, BUILDING_COLOUR.OTHER)
     const roof = roofs[String(building.type || '').toUpperCase()]
     if (building.footprint && building.footprint.length >= 3) {
-      fillPolygon(graphics, building.footprint, colour, 1, roof)
+      fillPolygon(graphics, building.footprint, colour)
+      if (roof) {
+        fillPolygon(graphics, building.footprint, colour, ROOF_TEXTURE_ALPHA, roof)
+      }
       strokePath(graphics, [...building.footprint, building.footprint[0]],
         { width: 0.4, color: BUILDING_EDGE, alpha: 0.7 })
     } else if (building.centre) {
@@ -159,14 +211,21 @@ export function drawStatic(graphics, scene, assets = {}) {
   }))
   scene.junctions?.forEach((junction) => fillPolygon(graphics, junction.pavement, ROAD_CASING))
 
-  const roadStyle = surfaces.ROAD
-    ? { ...surfaces.ROAD, cap: 'round', join: 'round' }
-    : { color: ROAD, cap: 'round', join: 'round' }
   scene.lanes?.forEach((lane) => strokePath(graphics, lane.centreline, {
-    ...roadStyle, width: lane.widthMetres,
+    width: lane.widthMetres, color: ROAD, cap: 'round', join: 'round',
   }))
   scene.junctions?.forEach((junction) =>
-    fillPolygon(graphics, junction.pavement, PAVEMENT, 0.92, surfaces.JUNCTION))
+    fillPolygon(graphics, junction.pavement, PAVEMENT, 0.96))
+  if (surfaces.ROAD) {
+    scene.lanes?.forEach((lane) =>
+      fillPolygon(graphics, laneCorridor(lane.centreline, lane.widthMetres),
+        ROAD, ROAD_TEXTURE_ALPHA, surfaces.ROAD))
+  }
+  if (surfaces.JUNCTION) {
+    scene.junctions?.forEach((junction) =>
+      fillPolygon(graphics, junction.pavement, PAVEMENT,
+        ROAD_TEXTURE_ALPHA, surfaces.JUNCTION))
+  }
   scene.connectors?.forEach((connector) => strokePath(graphics, connector.curve, {
     width: 2.8, color: CONNECTOR, cap: 'round', join: 'round',
   }))
@@ -175,18 +234,15 @@ export function drawStatic(graphics, scene, assets = {}) {
     strokeDashed(graphics, lane.centreline, { width: 0.16, color: LANE_DASH, alpha: 0.9 })
   })
 
-  scene.stopLines?.forEach((stopLine) => strokePath(graphics, [stopLine.from, stopLine.to], {
-    width: 0.5, color: STOP_LINE, alpha: 0.8,
-  }))
 }
 
 /**
- * Signal lamps, as a small glow beside the kerb.
+ * One signal dot per controlled approach.
  *
- * They were a 1.7 m disc across the middle of the carriageway, which read as
- * something dumped in the road rather than a light controlling it. A real lamp
- * is a few centimetres; this is a little larger so it stays visible when zoomed
- * out, and no bigger.
+ * The old combination of a stop-line bar, a glow and a lamp looked like a gate
+ * blocking the road. Direction still matters — one junction can be green on one
+ * axis and red on the other — so each approach keeps one small dot, with no bar
+ * and no second glow circle.
  */
 export function drawSignals(graphics, scene) {
   graphics.clear()
@@ -195,8 +251,7 @@ export function drawSignals(graphics, scene) {
     signal.approaches?.forEach((approach) => {
       const [x, y] = worldPoint(approach.head[0], approach.head[1])
       const colour = approach.green ? 0x2fbf62 : 0xe03b3b
-      graphics.circle(x, y, 0.85).fill({ color: colour, alpha: 0.18 })
-      graphics.circle(x, y, 0.32).fill({ color: colour })
+      graphics.circle(x, y, 0.48).fill({ color: colour })
     })
   })
 }
