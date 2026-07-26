@@ -22,6 +22,23 @@ const LANE_DASH = 0xb9bec7
 const STOP_LINE = 0x4a5059
 const TRAIL = 0xe0a415
 
+// What the ground is, where it is not road or building. NORMAL has no entry: it
+// is the background everything else is drawn on, which is exactly what ordinary
+// urban fabric with nothing mapped on it should look like.
+const LAND_COLOUR = {
+  PARK: 0xc7dfb4,
+  WATER: 0xa8cfe0,
+  GRASS: 0xd2e3c2,
+  FOREST: 0xb5d3a4,
+  COMMERCIAL: 0xe6dcd0,
+  RESIDENTIAL: 0xe4ded2,
+  INDUSTRIAL: 0xdedad2,
+  CONSTRUCTION: 0xded6c6,
+  RELIGIOUS: 0xe2dcd4,
+  RECREATION: 0xd4e3c8,
+  OTHER: 0xe2ded6,
+}
+
 // Buildings by what they are for, so a hospital does not look like a house.
 const BUILDING_COLOUR = {
   RESIDENTIAL: 0xd8cfc0,
@@ -105,9 +122,21 @@ export function drawStatic(graphics, scene, assets = {}) {
   const radius = scene.radiusMetres || 200
   const surfaces = assets.surfaces || {}
   const roofs = assets.buildings || {}
+  const land = assets.land || {}
 
+  // The base is NORMAL land: ordinary fabric, and what fills everywhere nothing
+  // else is mapped.
   graphics.rect(-radius * 3, -radius * 3, radius * 6, radius * 6)
-    .fill(surfaces.GROUND ? { ...surfaces.GROUND } : { color: GROUND })
+    .fill(land.NORMAL ? { ...land.NORMAL } : { color: GROUND })
+
+  // Ground cover first: it sits under everything, and a building standing in a
+  // park should be drawn on the park rather than beside it.
+  scene.landCovers?.forEach((cover) => {
+    const kind = String(cover.type || 'OTHER').toUpperCase()
+    if (kind === 'NORMAL') return
+    fillPolygon(graphics, cover.polygon, colourFor(LAND_COLOUR, kind, LAND_COLOUR.OTHER),
+      1, land[kind])
+  })
 
   scene.buildings?.forEach((building) => {
     const colour = colourFor(BUILDING_COLOUR, building.type, BUILDING_COLOUR.OTHER)

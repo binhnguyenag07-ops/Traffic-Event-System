@@ -33,6 +33,29 @@ The three `*_demo` files are **networks**, not scripts, despite the name — the
 are scenario *maps*, selected by the scenario picker in the UI. The names are
 kept because scenario ids and several tests refer to them.
 
+### How complete is District 1, really
+
+Measured over the generator's 3.07 km² bounding box:
+
+| | Share of the box |
+|---|---|
+| Buildings, as mapped | **19.1%** |
+| Parks | 9.3% |
+| Water — Saigon river, Ben Nghe canal | 5.8% |
+| Other landuse | ~8.5% |
+
+Nineteen per cent is far too little for the real District 1, which is packed
+with shophouses. The shortfall is **OpenStreetMap's, not the pipeline's**:
+Overpass returns 1197 building ways for that box and the generator keeps 1162 of
+them. Only 27% carry a name and 794 are tagged nothing but `building=yes` —
+the signature of a place where the landmarks are mapped and the ordinary fabric
+is not.
+
+That is why `LandCoverType.NORMAL` exists. Ground with nothing mapped on it is
+ordinary urban fabric, and saying so is honest; filling it with invented
+buildings would not be, and a demand model would then generate trips from
+addresses that do not exist.
+
 ## scenarios/
 
 A run script: `vehicles` and `events` to seed a simulation with, matching the

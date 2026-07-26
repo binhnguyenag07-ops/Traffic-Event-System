@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import team.traffic.domain.network.Building;
 import team.traffic.domain.network.GeoPoint;
+import team.traffic.domain.network.LandCover;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
@@ -108,6 +109,12 @@ public final class PhysicalSceneAssembler {
             }
         }
 
+        List<SceneLandCover> landCovers = network.getLandCovers().stream()
+                .filter(cover -> cover.polygon().stream()
+                        .anyMatch(point -> withinRadius(origin, point, radiusMetres)))
+                .map(cover -> new SceneLandCover(cover.id(), cover.type(), cover.polygon()))
+                .toList();
+
         List<SceneBuilding> buildings = network.getBuildings().values().stream()
                 .filter(building -> buildingInRange(building, origin, radiusMetres))
                 .map(PhysicalSceneAssembler::toSceneBuilding)
@@ -120,7 +127,7 @@ public final class PhysicalSceneAssembler {
 
         return new PhysicalScene(
                 origin, radiusMetres, lanes, stopLines, connectors, junctions,
-                buildings, sceneSignals, inRange);
+                landCovers, buildings, sceneSignals, inRange);
     }
 
     /** Places one head per controlled approach, on that approach's stop line. */

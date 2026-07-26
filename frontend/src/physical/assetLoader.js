@@ -37,7 +37,7 @@ function tiledFill(texture) {
  * own shape instead.
  */
 export async function loadSceneAssets() {
-  const loaded = { vehicles: {}, surfaces: {}, buildings: {} }
+  const loaded = { vehicles: {}, surfaces: {}, buildings: {}, land: {} }
   await Promise.all(allAssetSlots().map(async ({ group, key, url }) => {
     try {
       const texture = await Assets.load(url)
