@@ -23,9 +23,24 @@ import team.traffic.persistence.SyntheticMapGenerator;
 import team.traffic.routing.AStarPathFindingStrategy;
 import team.traffic.routing.BfsPathFindingStrategy;
 import team.traffic.routing.DijkstraPathFindingStrategy;
+import team.traffic.routing.RouteBuilder;
 import team.traffic.routing.PathFindingStrategy;
 
 public class ExperimentService {
+    /** The only map the project ships. Everything is measured on it. */
+    private static final String MAP = "data/maps/district1_network.json";
+    /**
+     * How congested "heavy congestion" makes a road.
+     *
+     * <p>Deliberately under {@link RouteBuilder#DEFAULT_CONGESTION_THRESHOLD}.
+     * Above that a road is dropped from the graph altogether, and congesting a
+     * third of the network past it does not measure routing under load — it
+     * measures routing on a network that has been cut into pieces, which is why
+     * a first attempt at 0.7 on top of the map's own congestion reported every
+     * request as a failure.</p>
+     */
+    private static final double HEAVY_CONGESTION_LEVEL = 0.75;
+
     public static final long SEED = 42L;
     public static final int REQUESTS_PER_SCENARIO = 30;
     private final JsonMapLoader loader = new JsonMapLoader();
@@ -48,8 +63,8 @@ public class ExperimentService {
     public synchronized ExperimentReport run() {
         try {
             List<ScenarioInput> inputs = List.of(
-                    new ScenarioInput("normal", "Normal traffic", loader.load("data/maps/small_city.json")),
-                    new ScenarioInput("heavy-congestion", "Heavy congestion", loader.load("data/maps/congestion_demo.json")),
+                    new ScenarioInput("normal", "Normal traffic", loader.load(MAP)),
+                    new ScenarioInput("heavy-congestion", "Heavy congestion", congestedNetwork()),
                     new ScenarioInput("random-events", "Seeded random events", randomEventNetwork()),
                     new ScenarioInput("large-network", "20×20 synthetic grid",
                             new SyntheticMapGenerator().generateGridMap(20, 20)));
@@ -65,8 +80,33 @@ public class ExperimentService {
         }
     }
 
+    /**
+     * The real map under heavy load.
+     *
+     * <p>Congestion used to come from a hand-made six-junction map. Raising it on
+     * the real network instead means the benchmark measures routing over the
+     * topology the simulation actually runs on, rather than over a toy that
+     * happened to have congestion written into its file.</p>
+     */
+    private RoadNetwork congestedNetwork() throws IOException {
+        RoadNetwork network = loader.load(MAP);
+        List<Road> roads = new ArrayList<>(network.getRoads().values());
+        Collections.shuffle(roads, new Random(SEED));
+        int congested = Math.max(1, roads.size() / 3);
+        for (int index = 0; index < congested; index++) {
+            Road road = roads.get(index);
+            // Raise each road to the same heavy level rather than adding a fixed
+            // amount to whatever it already carried, so the load does not depend
+            // on the congestion the map happened to ship with.
+            double increase = Math.max(0.0,
+                    HEAVY_CONGESTION_LEVEL - road.getCondition().getCongestionLevel());
+            new CongestionEvent("heavy-" + index, road.getId(), 0, 10, increase).apply(network);
+        }
+        return network;
+    }
+
     private RoadNetwork randomEventNetwork() throws IOException {
-        RoadNetwork network = loader.load("data/maps/small_city.json");
+        RoadNetwork network = loader.load(MAP);
         List<Road> roads = new ArrayList<>(network.getRoads().values());
         Collections.shuffle(roads, new Random(SEED));
         int eventCount = Math.max(1, roads.size() / 4);

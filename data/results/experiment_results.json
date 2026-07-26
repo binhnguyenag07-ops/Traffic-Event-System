@@ -1,51 +1,162 @@
 {
-  "generatedAt": "2026-07-19T10:12:00Z",
-  "seed": 42,
-  "requestsPerScenario": 30,
-  "scenarios": [
-    {
-      "id": "normal",
-      "name": "Normal traffic",
-      "intersectionCount": 6,
-      "roadCount": 17,
-      "algorithms": [
-        {"algorithm":"BFS","objective":"MINIMUM_HOPS","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.0714,"averageVisitedNodes":2.0,"averageRouteCost":1.7,"averagePathOptimality":100.0},
-        {"algorithm":"Dijkstra","objective":"SHORTEST_TIME","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.0881,"averageVisitedNodes":3.5333,"averageRouteCost":0.0430,"averagePathOptimality":100.0},
-        {"algorithm":"A*","objective":"SHORTEST_TIME","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.1147,"averageVisitedNodes":3.4333,"averageRouteCost":0.0430,"averagePathOptimality":100.0}
-      ]
-    },
-    {
-      "id": "heavy-congestion",
-      "name": "Heavy congestion",
-      "intersectionCount": 6,
-      "roadCount": 13,
-      "algorithms": [
-        {"algorithm":"BFS","objective":"MINIMUM_HOPS","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.0206,"averageVisitedNodes":2.8667,"averageRouteCost":2.3,"averagePathOptimality":100.0},
-        {"algorithm":"Dijkstra","objective":"SHORTEST_TIME","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.0216,"averageVisitedNodes":3.6,"averageRouteCost":0.1140,"averagePathOptimality":100.0},
-        {"algorithm":"A*","objective":"SHORTEST_TIME","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.0366,"averageVisitedNodes":3.7667,"averageRouteCost":0.1140,"averagePathOptimality":100.0}
-      ]
-    },
-    {
-      "id": "random-events",
-      "name": "Seeded random events",
-      "intersectionCount": 6,
-      "roadCount": 17,
-      "algorithms": [
-        {"algorithm":"BFS","objective":"MINIMUM_HOPS","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.0090,"averageVisitedNodes":1.6667,"averageRouteCost":1.4667,"averagePathOptimality":100.0},
-        {"algorithm":"Dijkstra","objective":"SHORTEST_TIME","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.0108,"averageVisitedNodes":3.2,"averageRouteCost":0.0422,"averagePathOptimality":100.0},
-        {"algorithm":"A*","objective":"SHORTEST_TIME","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.0240,"averageVisitedNodes":3.4667,"averageRouteCost":0.0422,"averagePathOptimality":100.0}
-      ]
-    },
-    {
-      "id": "large-network",
-      "name": "20×20 synthetic grid",
-      "intersectionCount": 400,
-      "roadCount": 1520,
-      "algorithms": [
-        {"algorithm":"BFS","objective":"MINIMUM_HOPS","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.3207,"averageVisitedNodes":148.7,"averageRouteCost":11.0667,"averagePathOptimality":100.0},
-        {"algorithm":"Dijkstra","objective":"SHORTEST_TIME","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.2009,"averageVisitedNodes":164.7,"averageRouteCost":0.2213,"averagePathOptimality":100.0},
-        {"algorithm":"A*","objective":"SHORTEST_TIME","requests":30,"successes":30,"failures":0,"successRate":100.0,"averageComputationTimeMillis":0.1979,"averageVisitedNodes":45.0,"averageRouteCost":0.2213,"averagePathOptimality":100.0}
-      ]
-    }
-  ]
+  "generatedAt" : "2026-07-26T05:39:11.400106900Z",
+  "seed" : 42,
+  "requestsPerScenario" : 30,
+  "scenarios" : [ {
+    "id" : "normal",
+    "name" : "Normal traffic",
+    "intersectionCount" : 389,
+    "roadCount" : 730,
+    "algorithms" : [ {
+      "algorithm" : "BFS",
+      "objective" : "MINIMUM_HOPS",
+      "requests" : 30,
+      "successes" : 26,
+      "failures" : 4,
+      "successRate" : 86.66666666666667,
+      "averageComputationTimeMillis" : 0.9398307692307692,
+      "averageVisitedNodes" : 144.53846153846155,
+      "averageRouteCost" : 13.23076923076923,
+      "averagePathOptimality" : 100.0
+    }, {
+      "algorithm" : "Dijkstra",
+      "objective" : "SHORTEST_TIME",
+      "requests" : 30,
+      "successes" : 26,
+      "failures" : 4,
+      "successRate" : 86.66666666666667,
+      "averageComputationTimeMillis" : 0.8201,
+      "averageVisitedNodes" : 154.80769230769232,
+      "averageRouteCost" : 0.02395334615384615,
+      "averagePathOptimality" : 100.0
+    }, {
+      "algorithm" : "A*",
+      "objective" : "SHORTEST_TIME",
+      "requests" : 30,
+      "successes" : 26,
+      "failures" : 4,
+      "successRate" : 86.66666666666667,
+      "averageComputationTimeMillis" : 0.8663038461538461,
+      "averageVisitedNodes" : 58.92307692307692,
+      "averageRouteCost" : 0.02395334615384615,
+      "averagePathOptimality" : 100.0
+    } ]
+  }, {
+    "id" : "heavy-congestion",
+    "name" : "Heavy congestion",
+    "intersectionCount" : 389,
+    "roadCount" : 730,
+    "algorithms" : [ {
+      "algorithm" : "BFS",
+      "objective" : "MINIMUM_HOPS",
+      "requests" : 30,
+      "successes" : 23,
+      "failures" : 7,
+      "successRate" : 76.66666666666667,
+      "averageComputationTimeMillis" : 0.31298695652173913,
+      "averageVisitedNodes" : 150.34782608695653,
+      "averageRouteCost" : 13.26086956521739,
+      "averagePathOptimality" : 100.0
+    }, {
+      "algorithm" : "Dijkstra",
+      "objective" : "SHORTEST_TIME",
+      "requests" : 30,
+      "successes" : 23,
+      "failures" : 7,
+      "successRate" : 76.66666666666667,
+      "averageComputationTimeMillis" : 0.49653043478260867,
+      "averageVisitedNodes" : 190.30434782608697,
+      "averageRouteCost" : 0.02515039855072464,
+      "averagePathOptimality" : 100.0
+    }, {
+      "algorithm" : "A*",
+      "objective" : "SHORTEST_TIME",
+      "requests" : 30,
+      "successes" : 23,
+      "failures" : 7,
+      "successRate" : 76.66666666666667,
+      "averageComputationTimeMillis" : 0.3829130434782609,
+      "averageVisitedNodes" : 71.52173913043478,
+      "averageRouteCost" : 0.02515039855072464,
+      "averagePathOptimality" : 100.0
+    } ]
+  }, {
+    "id" : "random-events",
+    "name" : "Seeded random events",
+    "intersectionCount" : 389,
+    "roadCount" : 730,
+    "algorithms" : [ {
+      "algorithm" : "BFS",
+      "objective" : "MINIMUM_HOPS",
+      "requests" : 30,
+      "successes" : 16,
+      "failures" : 14,
+      "successRate" : 53.333333333333336,
+      "averageComputationTimeMillis" : 0.3031125,
+      "averageVisitedNodes" : 135.625,
+      "averageRouteCost" : 17.625,
+      "averagePathOptimality" : 100.0
+    }, {
+      "algorithm" : "Dijkstra",
+      "objective" : "SHORTEST_TIME",
+      "requests" : 30,
+      "successes" : 16,
+      "failures" : 14,
+      "successRate" : 53.333333333333336,
+      "averageComputationTimeMillis" : 0.25215,
+      "averageVisitedNodes" : 150.875,
+      "averageRouteCost" : 0.03496514930555555,
+      "averagePathOptimality" : 100.0
+    }, {
+      "algorithm" : "A*",
+      "objective" : "SHORTEST_TIME",
+      "requests" : 30,
+      "successes" : 16,
+      "failures" : 14,
+      "successRate" : 53.333333333333336,
+      "averageComputationTimeMillis" : 0.566225,
+      "averageVisitedNodes" : 89.5,
+      "averageRouteCost" : 0.03496514930555555,
+      "averagePathOptimality" : 100.0
+    } ]
+  }, {
+    "id" : "large-network",
+    "name" : "20×20 synthetic grid",
+    "intersectionCount" : 400,
+    "roadCount" : 1520,
+    "algorithms" : [ {
+      "algorithm" : "BFS",
+      "objective" : "MINIMUM_HOPS",
+      "requests" : 30,
+      "successes" : 30,
+      "failures" : 0,
+      "successRate" : 100.0,
+      "averageComputationTimeMillis" : 0.39657,
+      "averageVisitedNodes" : 148.7,
+      "averageRouteCost" : 11.066666666666666,
+      "averagePathOptimality" : 100.0
+    }, {
+      "algorithm" : "Dijkstra",
+      "objective" : "SHORTEST_TIME",
+      "requests" : 30,
+      "successes" : 30,
+      "failures" : 0,
+      "successRate" : 100.0,
+      "averageComputationTimeMillis" : 0.3348933333333333,
+      "averageVisitedNodes" : 164.7,
+      "averageRouteCost" : 0.22133333333333333,
+      "averagePathOptimality" : 100.0
+    }, {
+      "algorithm" : "A*",
+      "objective" : "SHORTEST_TIME",
+      "requests" : 30,
+      "successes" : 30,
+      "failures" : 0,
+      "successRate" : 100.0,
+      "averageComputationTimeMillis" : 0.42872333333333335,
+      "averageVisitedNodes" : 45.0,
+      "averageRouteCost" : 0.22133333333333333,
+      "averagePathOptimality" : 100.0
+    } ]
+  } ]
 }
