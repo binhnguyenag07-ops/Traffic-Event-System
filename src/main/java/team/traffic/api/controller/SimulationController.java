@@ -4,18 +4,21 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Consumer;
 import team.traffic.api.dto.SimulationSnapshotDto;
 import team.traffic.api.dto.VehicleTracePointDto;
 import team.traffic.api.dto.VehicleTraceSummaryDto;
+import team.traffic.domain.demand.DemandScenario;
+import team.traffic.persistence.DemandScenarioParser;
+import team.traffic.persistence.ScenarioConfigParser;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.VehicleConfig;
-
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
 import team.traffic.simulation.SimulationClock;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
@@ -69,9 +72,19 @@ public class SimulationController {
     private void initialize(Context ctx) {
         try {
             JsonNode body = objectMapper.readTree(ctx.body());
-            List<VehicleConfig> vehicleConfigs = parseVehicleConfigs(body.get("vehicles"));
-            List<EventConfig> eventConfigs = parseEventConfigs(body.get("events"));
-            simulationService.initialize(vehicleConfigs, eventConfigs);
+            List<VehicleConfig> vehicleConfigs =
+                    ScenarioConfigParser.parseVehicles(body.get("vehicles"));
+            List<EventConfig> eventConfigs =
+                    ScenarioConfigParser.parseEvents(body.get("events"));
+            Optional<DemandScenario> demand = new DemandScenarioParser().parseOptional(
+                    body,
+                    simulationService.getNetwork(),
+                    Path.of(".").toAbsolutePath().normalize());
+            if (demand.isPresent()) {
+                simulationService.initialize(demand.get(), vehicleConfigs, eventConfigs);
+            } else {
+                simulationService.initialize(vehicleConfigs, eventConfigs);
+            }
             ctx.json(statusResponse());
         } catch (Exception e) {
             ctx.status(400).json(error("Failed to initialize: " + e.getMessage()));
@@ -157,6 +170,7 @@ public class SimulationController {
         response.put("startTimeOfDaySeconds", simulationService.getStartTimeOfDaySeconds());
         response.put("timeOfDaySeconds", simulationService.getTimeOfDaySeconds());
         response.put("timeOfDay", SimulationClock.formatTimeOfDay(simulationService.getTimeOfDaySeconds()));
+        response.put("demand", simulationService.getDemandRunStatistics());
         return response;
     }
 
@@ -170,71 +184,6 @@ public class SimulationController {
             }
         });
         return dto;
-    }
-
-    private List<VehicleConfig> parseVehicleConfigs(JsonNode vehiclesNode) {
-        List<VehicleConfig> configs = new ArrayList<>();
-        if (vehiclesNode == null || !vehiclesNode.isArray()) return configs;
-        for (JsonNode node : vehiclesNode) {
-            String id = textOrDefault(node, "id", "vehicle-" + configs.size());
-            String type = textOrDefault(node, "type", "CAR");
-            String start = firstNonNull(node, "currentIntersectionId", "startIntersectionId");
-            String dest = firstNonNull(node, "destinationIntersectionId", "endIntersectionId");
-            if (start != null && dest != null) {
-                configs.add(new VehicleConfig(id, type, start, dest));
-            }
-        }
-        return configs;
-    }
-
-    private List<EventConfig> parseEventConfigs(JsonNode eventsNode) {
-        List<EventConfig> configs = new ArrayList<>();
-        if (eventsNode == null || !eventsNode.isArray()) return configs;
-        for (JsonNode node : eventsNode) {
-            String id = textOrDefault(node, "id", "event-" + configs.size());
-            String type = textOrDefault(node, "type", "CONGESTION");
-            String roadId = firstNonNull(node, "affectedRoadId", "roadId");
-            double startTimeSeconds = numberWithLegacyAlias(node,
-                    "startTimeSeconds", "startTick", 0.0);
-            double durationSeconds = numberWithLegacyAlias(node,
-                    "durationSeconds", "durationTicks", 10.0);
-            Double value = node.has("value") && !node.get("value").isNull()
-                    ? node.get("value").asDouble()
-                    : null;
-            String causingVehicleId = firstNonNull(node, "causingVehicleId", "affectedVehicleId");
-            Double positionAlongRoad = node.has("positionAlongRoad")
-                    ? node.get("positionAlongRoad").asDouble()
-                    : null;
-            List<Integer> blockedLaneIndexes = new ArrayList<>();
-            JsonNode blockedLanes = node.get("blockedLaneIndexes");
-            if (blockedLanes != null && blockedLanes.isArray()) {
-                blockedLanes.forEach(valueNode -> blockedLaneIndexes.add(valueNode.asInt()));
-            }
-            if (roadId != null) {
-                configs.add(new EventConfig(id, type, roadId, startTimeSeconds,
-                        durationSeconds, value, causingVehicleId,
-                        positionAlongRoad, blockedLaneIndexes));
-            }
-        }
-        return configs;
-    }
-
-    private double numberWithLegacyAlias(JsonNode node, String field, String legacyField, double defaultValue) {
-        if (node.has(field)) return node.get(field).asDouble(defaultValue);
-        return node.has(legacyField) ? node.get(legacyField).asDouble(defaultValue) : defaultValue;
-    }
-
-    private String textOrDefault(JsonNode node, String field, String defaultValue) {
-        JsonNode f = node.get(field);
-        return (f != null && !f.isNull()) ? f.asText() : defaultValue;
-    }
-
-    private String firstNonNull(JsonNode node, String... fields) {
-        for (String field : fields) {
-            JsonNode f = node.get(field);
-            if (f != null && !f.isNull() && !f.asText().isBlank()) return f.asText();
-        }
-        return null;
     }
 
     private void getTraceSummary(Context ctx) {

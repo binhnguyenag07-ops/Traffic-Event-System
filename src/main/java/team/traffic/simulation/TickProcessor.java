@@ -113,7 +113,11 @@ public class TickProcessor {
         }
         List<Vehicle> movable = new ArrayList<>();
         for (Vehicle vehicle : vehicles) {
-            if (vehicle.hasReachedDestination()) {
+            if (vehicle.getStatus() == VehicleStatus.DWELLING) {
+                vehicle.addTravelTime(simulationSecondsPerTick);
+                continue;
+            }
+            if (vehicle.isJourneyComplete()) {
                 continue;
             }
             vehicle.addTravelTime(simulationSecondsPerTick);

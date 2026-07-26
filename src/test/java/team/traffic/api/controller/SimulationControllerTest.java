@@ -14,8 +14,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import team.traffic.domain.demand.DemandScenario;
 import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
+import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.LocationType;
+import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
@@ -78,6 +82,42 @@ class SimulationControllerTest {
         assertThat(event.type()).isEqualTo("ACCIDENT");
         assertThat(event.value()).isEqualTo(0.8);
         assertThat(event.causingVehicleId()).isEqualTo("car-42");
+    }
+
+    @Test
+    void initializeAcceptsGeneratedDemandAlongsideLegacySections() throws Exception {
+        HttpResponse<String> response = postJson(
+                "/api/simulation/initialize",
+                """
+                {
+                  "demandParameters": "data/demand/default_assumptions.json",
+                  "startTimeOfDay": "06:00",
+                  "durationHours": 1,
+                  "seed": 9,
+                  "scale": 1,
+                  "demandSources": [{
+                    "id": "custom",
+                    "from": {"kind": "EXPLICIT", "intersectionId": "A"},
+                    "production": {"kind": "ABSOLUTE", "vehiclesPerDay": 10},
+                    "flows": [{
+                      "id": "delivery",
+                      "purpose": "NEW_DELIVERY_FLOW",
+                      "share": 1,
+                      "vehicleMix": [{"type": "MOTORCYCLE", "share": 1}],
+                      "curve": "FLAT",
+                      "completion": "REMOVE_AT_LAST_STOP",
+                      "legs": [{"to": {"kind": "EXPLICIT", "intersectionId": "B"}}]
+                    }]
+                  }],
+                  "vehicles": [],
+                  "events": []
+                }
+                """);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(simulationService.demandScenario).isNotNull();
+        assertThat(simulationService.demandScenario.sources().get(0).flows().get(0)
+                .purpose().value()).isEqualTo("NEW_DELIVERY_FLOW");
     }
 
     @Test
@@ -190,6 +230,8 @@ class SimulationControllerTest {
         private List<EventConfig> events = new ArrayList<>();
         private List<Vehicle> domainVehicles = List.of();
         private List<TrafficEvent> trafficEvents = List.of();
+        private DemandScenario demandScenario;
+        private final RoadNetwork network = demandNetwork();
         private long capturedFromTick;
         private long capturedToTick;
         private final SimulationFrame historicalFrame = new SimulationFrame(
@@ -217,6 +259,18 @@ class SimulationControllerTest {
             this.vehicles = List.copyOf(vehicles);
             this.events = List.copyOf(events);
         }
+
+        @Override
+        public void initialize(
+                DemandScenario demandScenario,
+                List<VehicleConfig> vehicles,
+                List<EventConfig> events) {
+            this.demandScenario = demandScenario;
+            this.vehicles = List.copyOf(vehicles);
+            this.events = List.copyOf(events);
+        }
+
+        @Override public RoadNetwork getNetwork() { return network; }
 
         @Override public void start() {}
         @Override public void pause() {}
@@ -276,6 +330,13 @@ class SimulationControllerTest {
         @Override
         public Optional<SimulationFrame> getFrameAtOrBefore(double elapsedSeconds) {
             return elapsedSeconds >= 2.0 ? Optional.of(historicalFrame) : Optional.empty();
+        }
+
+        private static RoadNetwork demandNetwork() {
+            RoadNetwork network = new RoadNetwork();
+            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+            return network;
         }
     }
 }

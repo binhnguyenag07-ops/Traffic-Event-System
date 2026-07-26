@@ -1,6 +1,9 @@
 package team.traffic.simulation;
 
 import java.util.UUID;
+import team.traffic.domain.demand.DemandScenario;
+import team.traffic.domain.demand.GravityDemandModel;
+import team.traffic.domain.demand.TripDemandModel;
 import team.traffic.domain.event.AccidentEvent;
 import team.traffic.domain.event.CongestionEvent;
 import team.traffic.domain.event.RoadClosureEvent;
@@ -44,7 +47,7 @@ public class TrafficSimulator {
     private final RoutingService routingService;
     private final VehicleFactory vehicleFactory;
     private final TickProcessor tickProcessor;
-    private final SimulationClock clock;
+    private SimulationClock clock;
     private final VehicleTraceStore vehicleTraceStore;
     private final FlowRecorder flowRecorder;
     private final SimulationFrameHistory frameHistory;
@@ -57,6 +60,10 @@ public class TrafficSimulator {
     private final Map<String, Double> arrivedAtSeconds;
     private List<VehicleConfig> vehicleConfigs;
     private List<EventConfig> eventConfigs;
+    private TripDemandModel demandModel;
+    private double demandStartTimeOfDaySeconds =
+            SimulationClock.DEFAULT_START_TIME_OF_DAY_SECONDS;
+    private DemandDrivenSpawner demandSpawner;
     private double simulationSecondsPerTick;
 
     public TrafficSimulator(RoadNetwork network, RoutingService routingService) {
@@ -85,16 +92,63 @@ public class TrafficSimulator {
     }
 
     public synchronized void initialize(List<VehicleConfig> vehicleConfigs, List<EventConfig> eventConfigs) {
+        initializeRun(
+                vehicleConfigs,
+                eventConfigs,
+                null,
+                SimulationClock.DEFAULT_START_TIME_OF_DAY_SECONDS);
+    }
+
+    public synchronized void initialize(
+            DemandScenario demandScenario,
+            List<VehicleConfig> vehicleConfigs,
+            List<EventConfig> eventConfigs) {
+        if (demandScenario == null) throw new IllegalArgumentException("Demand scenario is required");
+        initializeRun(
+                vehicleConfigs,
+                eventConfigs,
+                new GravityDemandModel(network, demandScenario),
+                demandScenario.startTimeOfDaySeconds());
+    }
+
+    /**
+     * Initializes the same runtime from any resolved demand strategy.
+     *
+     * <p>This is the extension seam for scripted plans and future OD-matrix
+     * models; the spawner and vehicle lifecycle remain unchanged.</p>
+     */
+    public synchronized void initialize(
+            TripDemandModel demandModel,
+            double startTimeOfDaySeconds,
+            List<VehicleConfig> vehicleConfigs,
+            List<EventConfig> eventConfigs) {
+        if (demandModel == null) throw new IllegalArgumentException("Demand model is required");
+        initializeRun(vehicleConfigs, eventConfigs, demandModel, startTimeOfDaySeconds);
+    }
+
+    private void initializeRun(
+            List<VehicleConfig> vehicleConfigs,
+            List<EventConfig> eventConfigs,
+            TripDemandModel demandModel,
+            double startTimeOfDaySeconds) {
         resolveActiveEvents();
         releaseVehicleOccupancy();
-        this.vehicleConfigs = new ArrayList<>(vehicleConfigs);
-        this.eventConfigs = new ArrayList<>(eventConfigs);
+        this.vehicleConfigs = vehicleConfigs == null ? new ArrayList<>() : new ArrayList<>(vehicleConfigs);
+        this.eventConfigs = eventConfigs == null ? new ArrayList<>() : new ArrayList<>(eventConfigs);
+        this.demandModel = demandModel;
+        this.demandStartTimeOfDaySeconds = SimulationClock.timeOfDayAt(
+                startTimeOfDaySeconds, 0);
+        this.clock = new SimulationClock(this.demandStartTimeOfDaySeconds);
         this.vehicles = buildVehicles(this.vehicleConfigs);
         this.events = buildEvents(this.eventConfigs);
         this.signals = new ArrayList<>(SignalPlan.defaultSignals(network));
         this.completedTrips.clear();
         this.arrivedAtSeconds.clear();
-        this.clock.reset();
+        this.demandSpawner = demandModel == null
+                ? null
+                : new DemandDrivenSpawner(demandModel, network, routingService);
+        spawnDemandThrough(0);
+        advancePlannedVehicleLifecycles(0);
         this.status = SimulationStatus.READY;
         this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
         this.flowRecorder.reset();
@@ -128,12 +182,17 @@ public class TrafficSimulator {
     public synchronized void reset() {
         resolveActiveEvents();
         releaseVehicleOccupancy();
+        this.clock = new SimulationClock(demandStartTimeOfDaySeconds);
         this.vehicles = buildVehicles(this.vehicleConfigs);
         this.events = buildEvents(this.eventConfigs);
         this.signals = new ArrayList<>(SignalPlan.defaultSignals(network));
         this.completedTrips.clear();
         this.arrivedAtSeconds.clear();
-        this.clock.reset();
+        this.demandSpawner = demandModel == null
+                ? null
+                : new DemandDrivenSpawner(demandModel, network, routingService);
+        spawnDemandThrough(0);
+        advancePlannedVehicleLifecycles(0);
         this.status = SimulationStatus.READY;
         this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
         this.flowRecorder.reset();
@@ -141,6 +200,8 @@ public class TrafficSimulator {
     }
 
     public synchronized void advanceTick() {
+        advancePlannedVehicleLifecycles(clock.getElapsedSeconds());
+        spawnDemandThrough(clock.getElapsedSeconds());
         removeExpiredArrivals();
         tickProcessor.process(clock.getCurrentTick(), clock.getElapsedSeconds(),
                 network, vehicles, events, signals, simulationSecondsPerTick,
@@ -148,6 +209,8 @@ public class TrafficSimulator {
                         clock.getCurrentTick(), elapsedSeconds, status,
                         network, vehicles, events, signals));
         clock.tick(simulationSecondsPerTick);
+        advancePlannedVehicleLifecycles(clock.getElapsedSeconds());
+        spawnDemandThrough(clock.getElapsedSeconds());
         vehicleTraceStore.record(clock.getCurrentTick(), vehicles);
         flowRecorder.record(clock.getCurrentTick(), clock.getElapsedSeconds(), network, vehicles);
         rememberNewArrivals();
@@ -324,13 +387,16 @@ public class TrafficSimulator {
             return false;
         }
         vehicle.releaseRoad(network);
-        if (vehicle.hasReachedDestination()) {
+        if (vehicle.isJourneyComplete()) {
             completedTrips.add(new CompletedTrip(
                     vehicle.getId(),
                     vehicle.getType(),
                     vehicle.getTravelTimeSeconds(),
                     vehicle.getDistanceTravelledKm(),
-                    vehicle.getRouteRecalculationCount()));
+                    vehicle.getRouteRecalculationCount(),
+                    vehicle.getTripPlan() == null ? null : vehicle.getTripPlan().id(),
+                    vehicle.getTripPlan() == null
+                            ? null : vehicle.getTripPlan().purpose().value()));
         }
         arrivedAtSeconds.remove(vehicleId);
         boolean removed = vehicles.remove(vehicle);
@@ -356,7 +422,10 @@ public class TrafficSimulator {
         arrivedAtSeconds.clear();
         vehicleConfigs = new ArrayList<>();
         eventConfigs = new ArrayList<>();
-        clock.reset();
+        demandModel = null;
+        demandStartTimeOfDaySeconds = SimulationClock.DEFAULT_START_TIME_OF_DAY_SECONDS;
+        demandSpawner = null;
+        clock = new SimulationClock();
         status = SimulationStatus.READY;
         vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
         flowRecorder.reset();
@@ -365,11 +434,35 @@ public class TrafficSimulator {
 
     private void rememberNewArrivals() {
         for (Vehicle vehicle : vehicles) {
-            if (vehicle.hasReachedDestination()
-                    || vehicle.getStatus() == team.traffic.domain.vehicle.VehicleStatus.ARRIVED) {
+            if (vehicle.isJourneyComplete()) {
                 arrivedAtSeconds.putIfAbsent(vehicle.getId(), clock.getElapsedSeconds());
             }
         }
+    }
+
+    private void advancePlannedVehicleLifecycles(double elapsedSeconds) {
+        for (Vehicle vehicle : vehicles) {
+            if (vehicle.getTripPlan() == null) continue;
+            boolean completed = vehicle.updateTripPlanLifecycle(elapsedSeconds, network, routingService);
+            if (!completed) {
+                arrivedAtSeconds.remove(vehicle.getId());
+            }
+        }
+    }
+
+    private void spawnDemandThrough(double elapsedSeconds) {
+        if (demandSpawner == null) return;
+        for (Vehicle vehicle : demandSpawner.spawnDueThrough(elapsedSeconds)) {
+            if (vehicles.stream().anyMatch(existing -> existing.getId().equals(vehicle.getId()))) {
+                continue;
+            }
+            if (vehicle instanceof Bus bus) configureDefaultBusStops(bus);
+            vehicles.add(vehicle);
+        }
+    }
+
+    public synchronized DemandRunStatistics getDemandRunStatistics() {
+        return demandSpawner == null ? DemandRunStatistics.empty() : demandSpawner.statistics();
     }
 
     private void removeExpiredArrivals() {
