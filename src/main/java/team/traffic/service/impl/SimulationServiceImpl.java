@@ -1,10 +1,12 @@
 package team.traffic.service.impl;
 
 import team.traffic.domain.event.TrafficEvent;
+import team.traffic.domain.demand.DemandScenario;
 import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.EventConfig;
+import team.traffic.simulation.DemandRunStatistics;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.TrafficSimulator;
@@ -48,6 +50,16 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     public void initialize(List<VehicleConfig> vehicles, List<EventConfig> events) {
         cancelScheduledTicks();
         simulator.initialize(vehicles, events);
+        publishSnapshot();
+    }
+
+    @Override
+    public void initialize(
+            DemandScenario demandScenario,
+            List<VehicleConfig> vehicles,
+            List<EventConfig> events) {
+        cancelScheduledTicks();
+        simulator.initialize(demandScenario, vehicles, events);
         publishSnapshot();
     }
 
@@ -136,6 +148,11 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     @Override
     public List<CompletedTrip> getCompletedTrips() {
         return simulator.getCompletedTrips();
+    }
+
+    @Override
+    public DemandRunStatistics getDemandRunStatistics() {
+        return simulator.getDemandRunStatistics();
     }
 
     @Override

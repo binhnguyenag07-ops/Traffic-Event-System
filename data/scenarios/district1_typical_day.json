@@ -1,0 +1,142 @@
+{
+  "id": "district-1",
+  "name": "District 1 Typical Day",
+  "description": "Seeded relative-demand demo. Volumes use explicitly labelled assumptions, not observed traffic counts.",
+  "map": "../maps/district1_network.json",
+  "demandParameters": "../demand/default_assumptions.json",
+  "startTimeOfDay": "06:00",
+  "durationHours": 18,
+  "seed": 42,
+  "scale": 0.015,
+  "demandSources": [
+    {
+      "id": "homes",
+      "from": {
+        "kind": "BUILDING",
+        "types": ["RESIDENTIAL", "OTHER"]
+      },
+      "production": {
+        "kind": "POPULATION_DERIVED",
+        "tripsPerPersonPerDay": 1.8
+      },
+      "flows": [
+        {
+          "id": "commute-loop",
+          "purpose": "COMMUTE",
+          "share": 0.45,
+          "vehicleMix": [
+            {"type": "MOTORCYCLE", "share": 0.8},
+            {"type": "CAR", "share": 0.2}
+          ],
+          "curve": "MORNING_PEAK",
+          "completion": "RETURN_TO_ORIGIN",
+          "legs": [
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": ["OFFICE", "COMMERCIAL"]
+              },
+              "dwell": {
+                "kind": "RANGE",
+                "minSeconds": 28800,
+                "maxSeconds": 36000
+              }
+            }
+          ]
+        },
+        {
+          "id": "errand-loop",
+          "purpose": "ERRAND",
+          "share": 0.20,
+          "vehicleMix": [
+            {"type": "MOTORCYCLE", "share": 0.9},
+            {"type": "CAR", "share": 0.1}
+          ],
+          "curve": "MIDDAY",
+          "completion": "RETURN_TO_ORIGIN",
+          "legs": [
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": ["COMMERCIAL"]
+              },
+              "dwell": {"kind": "FIXED", "seconds": 600}
+            },
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": ["SCHOOL", "HOSPITAL"]
+              },
+              "dwell": {"kind": "RANGE", "minSeconds": 300, "maxSeconds": 1200}
+            }
+          ]
+        },
+        {
+          "id": "outbound-visit",
+          "purpose": "OUTBOUND_VISIT",
+          "share": 0.10,
+          "vehicleMix": [
+            {"type": "MOTORCYCLE", "share": 0.75},
+            {"type": "CAR", "share": 0.25}
+          ],
+          "curve": "DAYTIME",
+          "completion": "REMOVE_AT_LAST_STOP",
+          "legs": [
+            {"to": {"kind": "BOUNDARY", "side": "ANY"}}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "north-cordon",
+      "from": {"kind": "BOUNDARY", "side": "NORTH"},
+      "production": {
+        "kind": "ABSOLUTE",
+        "vehiclesPerDay": 7200
+      },
+      "flows": [
+        {
+          "id": "north-south-through",
+          "purpose": "THROUGH",
+          "share": 0.65,
+          "vehicleMix": [
+            {"type": "CAR", "share": 0.55},
+            {"type": "MOTORCYCLE", "share": 0.45}
+          ],
+          "curve": "FLAT",
+          "completion": "REMOVE_AT_LAST_STOP",
+          "legs": [
+            {"to": {"kind": "BOUNDARY", "side": "SOUTH"}}
+          ]
+        },
+        {
+          "id": "north-visitor",
+          "purpose": "VISITOR",
+          "share": 0.35,
+          "vehicleMix": [
+            {"type": "CAR", "share": 0.7},
+            {"type": "MOTORCYCLE", "share": 0.3}
+          ],
+          "curve": "DAYTIME",
+          "completion": "REMOVE_AT_LAST_STOP",
+          "legs": [
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": ["COMMERCIAL", "HOSPITAL"]
+              },
+              "dwell": {
+                "kind": "RANGE",
+                "minSeconds": 1800,
+                "maxSeconds": 7200
+              }
+            },
+            {"to": {"kind": "BOUNDARY", "side": "ANY"}}
+          ]
+        }
+      ]
+    }
+  ],
+  "events": [],
+  "vehicles": []
+}

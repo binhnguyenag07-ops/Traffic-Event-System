@@ -1,10 +1,12 @@
 package team.traffic.service;
 
 import team.traffic.domain.event.TrafficEvent;
+import team.traffic.domain.demand.DemandScenario;
 import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.simulation.EventConfig;
+import team.traffic.simulation.DemandRunStatistics;
 import team.traffic.simulation.SimulationClock;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
@@ -24,6 +26,12 @@ import java.util.function.Consumer;
 
 public interface SimulationService {
     void initialize(List<VehicleConfig> vehicles, List<EventConfig> events);
+    default void initialize(
+            DemandScenario demandScenario,
+            List<VehicleConfig> vehicles,
+            List<EventConfig> events) {
+        throw new UnsupportedOperationException("Demand scenarios are not supported.");
+    }
     void start();
     void pause();
     void resume();
@@ -53,6 +61,9 @@ public interface SimulationService {
     default List<TrafficSignal> getSignals() { return List.of(); }
     default List<CompletedTrip> getCompletedTrips() {
         return List.of();
+    }
+    default DemandRunStatistics getDemandRunStatistics() {
+        return DemandRunStatistics.empty();
     }
     default void setParameters(double simulationSecondsPerTick, long playbackIntervalMillis) {
         throw new UnsupportedOperationException("Simulation parameters are not supported.");

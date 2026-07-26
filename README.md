@@ -24,6 +24,9 @@ The repository currently includes:
   and event boundary, with a LIVE/HISTORY scrubber on the macro map;
 - lane-offset vehicle pose (latitude, longitude, heading), collision detection,
   emergency priority, real stop-line control, and bus dwell stops;
+- seeded building/boundary demand with open purpose ids, data-defined hourly
+  curves and vehicle mixes, exact return-to-origin conservation, multi-stop
+  plans, planned dwell, and explicit unroutable-plan reporting;
 - open-boundary demo traffic where completed vehicles exit and different
   same-type vehicles enter from reachable boundary roads;
 - traffic and algorithm statistics services;
@@ -140,7 +143,9 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `GET /api/events/road/{roadId}` | list events affecting one road |
 | `PUT /api/events/{id}/status` | activate or resolve event |
 | `DELETE /api/events/{id}` | remove event |
-| `POST /api/simulation/initialize` | load simulation vehicles/events |
+| `GET /api/scenarios` | list bundled complete run definitions |
+| `POST /api/scenarios/{id}/activate` | load a scenario map, demand, vehicles, and events |
+| `POST /api/simulation/initialize` | load generated demand plus optional scripted vehicles/events |
 | `POST /api/simulation/start` | start simulation |
 | `POST /api/simulation/pause` | pause simulation |
 | `POST /api/simulation/resume` | resume simulation |
@@ -167,15 +172,10 @@ Available map files:
 
 | File | Purpose |
 |---|---|
-| `data/sample_map.json` | small JSON loader example |
-| `data/sample_map.csv` | CSV equivalent of the sample map |
-| `data/district1_network.json` | default full-viewport District 1 arterial network |
-| `data/small_city.json` | real central District 1 landmark and street routing scenario |
-| `data/congestion_demo.json` | Week 6 congestion scenario |
-| `data/accident_demo.json` | Week 6 accident scenario |
-| `data/density_demo.json` | road-density scenario |
-| `data/demo_simulation.json` | reusable vehicles and event configuration |
-| `data/experiment_results.json` | reproducible experiment baseline |
+| `data/maps/district1_network.json` | default full-viewport District 1 network and buildings |
+| `data/demand/default_assumptions.json` | replaceable occupancy, attraction, decay, and hourly curves |
+| `data/scenarios/district1_typical_day.json` | bundled seeded multi-flow demand run |
+| `data/results/experiment_results.json` | reproducible experiment baseline |
 
 ### Units
 
@@ -324,7 +324,7 @@ Optional environment variables:
 | Variable | Default | Purpose |
 |---|---:|---|
 | `PORT` | `7070` | HTTP server port |
-| `MAP_FILE` | `data/district1_network.json` | initial scenario map |
+| `MAP_FILE` | `data/maps/district1_network.json` | initial map before a scenario is activated |
 | `VITE_TILE_URL` | OpenStreetMap | frontend tile provider URL |
 | `VITE_TILE_ATTRIBUTION` | OpenStreetMap attribution | tile attribution text |
 
@@ -338,6 +338,7 @@ Optional environment variables:
 - [Experiment results](docs/EXPERIMENT_RESULTS.md)
 - [Live demo guide](docs/DEMO_GUIDE.md)
 - [Planning overview](docs/PLANNING_OVERVIEW.md)
+- [Demand and scenario design](docs/DEMAND_AND_SCENARIO_DESIGN.md)
 - [Student A network and persistence notes](docs/planning/Binh-network-persistence.md)
 - [Student B routing notes](docs/planning/nguynie-routing-algorithms.md)
 - [Student C vehicle and event notes](docs/planning/Hyo-vehicle-traffic_event.md)

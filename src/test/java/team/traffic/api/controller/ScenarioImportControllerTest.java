@@ -12,6 +12,7 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import team.traffic.domain.demand.DemandScenario;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.LocationType;
@@ -65,6 +66,25 @@ class ScenarioImportControllerTest {
         assertThat(simulationService.network.containsIntersection("ORIGINAL")).isTrue();
     }
 
+    @Test
+    void activatingTheShippedScenarioInitializesItsDemandAgainstTheLoadedMap() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + app.port()
+                        + "/api/scenarios/district-1/activate"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("\"buildingCount\":1162")
+                .contains("\"scheduledTrips\"");
+        assertThat(simulationService.demandScenario).isNotNull();
+        assertThat(simulationService.network.getBuildingCount()).isEqualTo(1162);
+    }
+
     private HttpResponse<String> upload(String json) throws Exception {
         String boundary = "TrafficBoundary42";
         String body = "--" + boundary + "\r\n"
@@ -92,11 +112,19 @@ class ScenarioImportControllerTest {
 
     private static class CapturingSimulationService implements SimulationService {
         private RoadNetwork network;
+        private DemandScenario demandScenario;
         private CapturingSimulationService(RoadNetwork network) { this.network = network; }
         @Override public void replaceNetwork(RoadNetwork network) { this.network = network; }
         @Override public RoadNetwork getNetwork() { return network; }
         @Override public SimulationStatus getStatus() { return SimulationStatus.READY; }
         @Override public void initialize(List<team.traffic.simulation.VehicleConfig> vehicles, List<team.traffic.simulation.EventConfig> events) {}
+        @Override
+        public void initialize(
+                DemandScenario demandScenario,
+                List<team.traffic.simulation.VehicleConfig> vehicles,
+                List<team.traffic.simulation.EventConfig> events) {
+            this.demandScenario = demandScenario;
+        }
         @Override public void start() {}
         @Override public void pause() {}
         @Override public void resume() {}

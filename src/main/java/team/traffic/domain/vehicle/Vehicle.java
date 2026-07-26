@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import team.traffic.domain.demand.PlaceKind;
+import team.traffic.domain.demand.ResolvedPlace;
+import team.traffic.domain.demand.TripPlan;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
@@ -47,6 +50,10 @@ public abstract class Vehicle implements TrafficParticipant {
     private String destinationIntersectionId;
     private String originBuildingId;
     private String destinationBuildingId;
+    private TripPlan tripPlan;
+    private int currentTripLegIndex = -1;
+    private ResolvedPlace currentResolvedPlace;
+    private double dwellUntilSeconds = Double.NaN;
     private final RoutePlan routePlan = new RoutePlan();
     private final VehicleProfile profile;
     private double cruisingSpeedKph;
@@ -120,7 +127,7 @@ public abstract class Vehicle implements TrafficParticipant {
 
         try {
             RouteResult result;
-            if (destinationBuildingId == null) {
+            if (destinationBuildingId == null || tripPlan != null) {
                 RouteRequest request = new RouteRequest(
                         currentIntersectionId,
                         destinationIntersectionId,
@@ -183,7 +190,7 @@ public abstract class Vehicle implements TrafficParticipant {
             throw new IllegalArgumentException("Simulation seconds must be positive.");
         }
 
-        if (status == VehicleStatus.STOPPED) {
+        if (status == VehicleStatus.STOPPED || status == VehicleStatus.DWELLING) {
             instantaneousSpeedMps = 0.0;
             return Optional.empty();
         }
@@ -374,7 +381,7 @@ public abstract class Vehicle implements TrafficParticipant {
      */
     public Optional<JunctionApproach> planJunctionApproach(RoadNetwork roadNetwork, TrafficState trafficState) {
         Objects.requireNonNull(roadNetwork, "Road network must not be null.");
-        if (hasReachedDestination()) {
+        if (hasReachedDestination() || status == VehicleStatus.DWELLING) {
             return Optional.empty();
         }
         if (placement.isOnRoad()) {
@@ -631,6 +638,121 @@ public abstract class Vehicle implements TrafficParticipant {
 
     public String getDestinationBuildingId() {
         return destinationBuildingId;
+    }
+
+    /**
+     * Attaches a fully resolved multi-leg plan. Routing still uses the existing
+     * graph service, but it targets the exact access point chosen by demand.
+     */
+    public void assignTripPlan(TripPlan plan) {
+        if (plan == null) throw new IllegalArgumentException("Trip plan is required");
+        if (!plan.origin().accessIntersectionId().equals(currentIntersectionId)) {
+            throw new IllegalArgumentException(
+                    "Trip plan origin does not match vehicle current intersection");
+        }
+        this.tripPlan = plan;
+        this.currentTripLegIndex = 0;
+        this.currentResolvedPlace = plan.origin();
+        this.dwellUntilSeconds = Double.NaN;
+        this.originBuildingId = plan.origin().kind() == PlaceKind.BUILDING
+                ? plan.origin().id() : null;
+        applyDestination(plan.legs().get(0).to());
+        this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
+    }
+
+    /**
+     * Advances an arrived planned vehicle into dwell or its next leg.
+     *
+     * @return true only when the final leg of the whole journey is complete
+     */
+    public boolean updateTripPlanLifecycle(
+            double elapsedSeconds,
+            RoadNetwork roadNetwork,
+            RoutingService routingService) {
+        if (!Double.isFinite(elapsedSeconds) || elapsedSeconds < 0) {
+            throw new IllegalArgumentException("Elapsed seconds must be finite and non-negative");
+        }
+        if (tripPlan == null) return hasReachedDestination();
+
+        if (status == VehicleStatus.DWELLING) {
+            if (elapsedSeconds + 1e-9 < dwellUntilSeconds) return false;
+            dwellUntilSeconds = Double.NaN;
+            if (currentTripLegIndex == tripPlan.legs().size() - 1) {
+                status = VehicleStatus.ARRIVED;
+                return true;
+            }
+            return beginNextTripLeg(elapsedSeconds, roadNetwork, routingService);
+        }
+        if (!hasReachedDestination()) return false;
+
+        currentResolvedPlace = tripPlan.legs().get(currentTripLegIndex).to();
+        double dwellSeconds = tripPlan.legs().get(currentTripLegIndex).dwellSeconds();
+        if (dwellSeconds > 0) {
+            releaseRoad(roadNetwork);
+            instantaneousSpeedMps = 0;
+            dwellUntilSeconds = elapsedSeconds + dwellSeconds;
+            status = VehicleStatus.DWELLING;
+            return false;
+        }
+        if (currentTripLegIndex == tripPlan.legs().size() - 1) {
+            instantaneousSpeedMps = 0;
+            status = VehicleStatus.ARRIVED;
+            return true;
+        }
+        return beginNextTripLeg(elapsedSeconds, roadNetwork, routingService);
+    }
+
+    private boolean beginNextTripLeg(
+            double elapsedSeconds,
+            RoadNetwork roadNetwork,
+            RoutingService routingService) {
+        currentTripLegIndex++;
+        if (currentTripLegIndex >= tripPlan.legs().size()) {
+            status = VehicleStatus.ARRIVED;
+            return true;
+        }
+        applyDestination(tripPlan.legs().get(currentTripLegIndex).to());
+        routePlan.clear();
+        status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
+        requestRoute(roadNetwork, routingService);
+        // Consecutive resolved places can share one access node. Consume those
+        // zero-length legs immediately without creating a fake road movement.
+        if (hasReachedDestination()) {
+            return updateTripPlanLifecycle(elapsedSeconds, roadNetwork, routingService);
+        }
+        return false;
+    }
+
+    private void applyDestination(ResolvedPlace place) {
+        destinationIntersectionId = place.accessIntersectionId();
+        destinationBuildingId = place.kind() == PlaceKind.BUILDING ? place.id() : null;
+    }
+
+    public TripPlan getTripPlan() {
+        return tripPlan;
+    }
+
+    public int getCurrentTripLegIndex() {
+        return currentTripLegIndex;
+    }
+
+    public ResolvedPlace getCurrentResolvedPlace() {
+        return currentResolvedPlace;
+    }
+
+    public double getDwellUntilSeconds() {
+        return dwellUntilSeconds;
+    }
+
+    public boolean hasActiveTripPlan() {
+        return tripPlan != null && !isJourneyComplete();
+    }
+
+    public boolean isJourneyComplete() {
+        if (tripPlan == null) return hasReachedDestination();
+        return currentTripLegIndex == tripPlan.legs().size() - 1
+                && hasReachedDestination()
+                && status == VehicleStatus.ARRIVED;
     }
 
     /** Marks this vehicle as a building-to-building trip without breaking legacy intersection trips. */

@@ -14,6 +14,12 @@ public class VehicleDto {
     private String destinationIntersectionId;
     private String originBuildingId;
     private String destinationBuildingId;
+    private String tripPlanId;
+    private String tripPurpose;
+    private int currentTripLegIndex = -1;
+    private int tripLegCount;
+    private String currentPlaceId;
+    private Double dwellUntilSeconds;
     private VehicleStatus status;
     private double length;
     private double width;
@@ -68,6 +74,16 @@ public class VehicleDto {
         this.destinationIntersectionId = vehicle.getDestinationIntersectionId();
         this.originBuildingId = vehicle.getOriginBuildingId();
         this.destinationBuildingId = vehicle.getDestinationBuildingId();
+        if (vehicle.getTripPlan() != null) {
+            this.tripPlanId = vehicle.getTripPlan().id();
+            this.tripPurpose = vehicle.getTripPlan().purpose().value();
+            this.currentTripLegIndex = vehicle.getCurrentTripLegIndex();
+            this.tripLegCount = vehicle.getTripPlan().legs().size();
+            this.currentPlaceId = vehicle.getCurrentResolvedPlace() == null
+                    ? null : vehicle.getCurrentResolvedPlace().id();
+            this.dwellUntilSeconds = Double.isFinite(vehicle.getDwellUntilSeconds())
+                    ? vehicle.getDwellUntilSeconds() : null;
+        }
         this.status = vehicle.getStatus();
         this.length = vehicle.getLength();
         this.width = vehicle.getWidth();
@@ -105,6 +121,18 @@ public class VehicleDto {
     public void setOriginBuildingId(String originBuildingId) { this.originBuildingId = originBuildingId; }
     public String getDestinationBuildingId() { return destinationBuildingId; }
     public void setDestinationBuildingId(String destinationBuildingId) { this.destinationBuildingId = destinationBuildingId; }
+    public String getTripPlanId() { return tripPlanId; }
+    public void setTripPlanId(String tripPlanId) { this.tripPlanId = tripPlanId; }
+    public String getTripPurpose() { return tripPurpose; }
+    public void setTripPurpose(String tripPurpose) { this.tripPurpose = tripPurpose; }
+    public int getCurrentTripLegIndex() { return currentTripLegIndex; }
+    public void setCurrentTripLegIndex(int currentTripLegIndex) { this.currentTripLegIndex = currentTripLegIndex; }
+    public int getTripLegCount() { return tripLegCount; }
+    public void setTripLegCount(int tripLegCount) { this.tripLegCount = tripLegCount; }
+    public String getCurrentPlaceId() { return currentPlaceId; }
+    public void setCurrentPlaceId(String currentPlaceId) { this.currentPlaceId = currentPlaceId; }
+    public Double getDwellUntilSeconds() { return dwellUntilSeconds; }
+    public void setDwellUntilSeconds(Double dwellUntilSeconds) { this.dwellUntilSeconds = dwellUntilSeconds; }
     public VehicleStatus getStatus() { return status; }
     public void setStatus(VehicleStatus status) { this.status = status; }
     public double getLength() { return length; }

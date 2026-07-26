@@ -1,0 +1,76 @@
+{
+  "status": "ASSUMPTION",
+  "note": "Placeholder relative-demand inputs derived from no cited local survey. Replace these values during calibration; do not present generated counts as observed Ho Chi Minh City traffic.",
+  "distanceDecayBeta": 0.35,
+  "buildingTypes": {
+    "RESIDENTIAL": {
+      "occupantsPerSquareMetre": 0.035,
+      "fallbackOccupants": 10.0,
+      "attractionWeight": 0.75
+    },
+    "COMMERCIAL": {
+      "occupantsPerSquareMetre": 0.020,
+      "fallbackOccupants": 12.0,
+      "attractionWeight": 1.50
+    },
+    "OFFICE": {
+      "occupantsPerSquareMetre": 0.025,
+      "fallbackOccupants": 15.0,
+      "attractionWeight": 1.40
+    },
+    "SCHOOL": {
+      "occupantsPerSquareMetre": 0.060,
+      "fallbackOccupants": 80.0,
+      "attractionWeight": 1.25
+    },
+    "HOSPITAL": {
+      "occupantsPerSquareMetre": 0.040,
+      "fallbackOccupants": 60.0,
+      "attractionWeight": 1.30
+    },
+    "PARKING": {
+      "occupantsPerSquareMetre": 0.002,
+      "fallbackOccupants": 2.0,
+      "attractionWeight": 0.60
+    },
+    "INDUSTRIAL": {
+      "occupantsPerSquareMetre": 0.010,
+      "fallbackOccupants": 20.0,
+      "attractionWeight": 0.90
+    },
+    "OTHER": {
+      "occupantsPerSquareMetre": 0.015,
+      "fallbackOccupants": 6.0,
+      "attractionWeight": 0.45
+    }
+  },
+  "curves": {
+    "MORNING_PEAK": [
+      0.005, 0.005, 0.005, 0.005, 0.005, 0.005,
+      0.080, 0.200, 0.200, 0.095, 0.040, 0.030,
+      0.030, 0.025, 0.025, 0.025, 0.030, 0.060,
+      0.050, 0.030, 0.020, 0.015, 0.010, 0.005
+    ],
+    "MIDDAY": [
+      0.0041666667, 0.0041666667, 0.0041666667,
+      0.0041666667, 0.0041666667, 0.0041666667,
+      0.020, 0.030, 0.040, 0.050, 0.080, 0.120,
+      0.150, 0.150, 0.100, 0.070, 0.050, 0.035,
+      0.025, 0.020, 0.015, 0.010, 0.005, 0.005
+    ],
+    "DAYTIME": [
+      0.005, 0.005, 0.005, 0.005, 0.005, 0.005,
+      0.020, 0.030, 0.050, 0.090, 0.090, 0.090,
+      0.090, 0.090, 0.090, 0.090, 0.090, 0.050,
+      0.040, 0.025, 0.015, 0.010, 0.005, 0.005
+    ],
+    "FLAT": [
+      0.0416666667, 0.0416666667, 0.0416666667, 0.0416666667,
+      0.0416666667, 0.0416666667, 0.0416666667, 0.0416666667,
+      0.0416666667, 0.0416666667, 0.0416666667, 0.0416666667,
+      0.0416666667, 0.0416666667, 0.0416666667, 0.0416666667,
+      0.0416666667, 0.0416666667, 0.0416666667, 0.0416666667,
+      0.0416666667, 0.0416666667, 0.0416666667, 0.0416666667
+    ]
+  }
+}

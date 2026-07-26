@@ -13,6 +13,7 @@ import team.traffic.domain.scene.SignalSnapshot;
 import team.traffic.service.RoadNetworkService;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.history.SimulationFrame;
+import team.traffic.domain.vehicle.VehicleStatus;
 
 /**
  * Serves the lane-level scene around a point for the physical renderer.
@@ -93,6 +94,8 @@ public class PhysicalViewController {
 
     private static List<SceneVehicle> sceneVehicles(SimulationFrame frame) {
         return frame.vehicles().stream()
+                .filter(vehicle -> vehicle.status() != VehicleStatus.DWELLING
+                        && vehicle.status() != VehicleStatus.ARRIVED)
                 .filter(vehicle -> vehicle.latitude() != null && vehicle.longitude() != null)
                 .map(PhysicalViewController::toSceneVehicle)
                 .toList();

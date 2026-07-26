@@ -204,6 +204,42 @@ classDiagram
     Vehicle *-- TripRecord
 ```
 
+Demand generation and the resolved multi-leg runtime boundary:
+
+```mermaid
+classDiagram
+    class TripDemandModel {
+        <<interface>>
+        +tripsBeginningIn(from, to) List~TripPlan~
+    }
+    class GravityDemandModel
+    class ScriptedDemandModel
+    class DemandScenario
+    class DemandSource
+    class FlowSpec
+    class PlaceResolver
+    class TripPlan
+    class TripLeg
+    class DemandDrivenSpawner
+    class Vehicle
+    TripDemandModel <|.. GravityDemandModel
+    TripDemandModel <|.. ScriptedDemandModel
+    GravityDemandModel --> DemandScenario
+    DemandScenario *-- DemandSource
+    DemandSource *-- FlowSpec
+    GravityDemandModel --> PlaceResolver
+    GravityDemandModel --> TripPlan
+    TripPlan *-- TripLeg
+    DemandDrivenSpawner --> TripDemandModel
+    DemandDrivenSpawner --> Vehicle
+    Vehicle o-- TripPlan
+```
+
+`FlowSpec.purpose` is an open `PurposeId`, while destination selectors are
+resolved once into concrete places before a vehicle is spawned. The spawner is
+therefore independent of whether plans came from building gravity, a scripted
+list or a future OD matrix.
+
 Scene geometry, in `domain/scene`, derived from the network for the physical
 view and never stored:
 
