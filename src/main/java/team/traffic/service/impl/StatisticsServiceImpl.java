@@ -55,10 +55,32 @@ public class StatisticsServiceImpl implements StatisticsService {
         List<CompletedTrip> archivedTrips = simulationService.getCompletedTrips();
         var arrivedVehicles = vehicles.stream().filter(v -> v.getStatus() == VehicleStatus.ARRIVED).toList();
         stats.setTotalVehicles(vehicles.size());
+        stats.setDwellingVehicles((int) vehicles.stream()
+                .filter(v -> v.getStatus() == VehicleStatus.DWELLING).count());
+        stats.setRoadActiveVehicles((int) vehicles.stream()
+                .filter(v -> v.getStatus() != VehicleStatus.DWELLING
+                        && v.getStatus() != VehicleStatus.ARRIVED).count());
         stats.setArrivedVehicles(archivedTrips.size() + arrivedVehicles.size());
         stats.setMovingVehicles((int) vehicles.stream().filter(v -> v.getStatus() == VehicleStatus.MOVING).count());
         stats.setBlockedVehicles((int) vehicles.stream().filter(v -> v.getStatus() == VehicleStatus.BLOCKED).count());
         stats.setWaitingVehicles((int) vehicles.stream().filter(v -> v.getStatus() == VehicleStatus.WAITING).count());
+        stats.setActiveVehiclesByPurpose(vehicles.stream()
+                .filter(vehicle -> vehicle.getTripPlan() != null)
+                .filter(vehicle -> !vehicle.isJourneyComplete())
+                .collect(Collectors.toMap(
+                        vehicle -> vehicle.getTripPlan().purpose().value(),
+                        vehicle -> 1,
+                        Integer::sum)));
+        Map<String, Integer> completedByPurpose = new HashMap<>();
+        archivedTrips.stream()
+                .map(CompletedTrip::tripPurpose)
+                .filter(java.util.Objects::nonNull)
+                .forEach(purpose -> completedByPurpose.merge(purpose, 1, Integer::sum));
+        arrivedVehicles.stream()
+                .filter(vehicle -> vehicle.getTripPlan() != null)
+                .map(vehicle -> vehicle.getTripPlan().purpose().value())
+                .forEach(purpose -> completedByPurpose.merge(purpose, 1, Integer::sum));
+        stats.setCompletedTripsByPurpose(completedByPurpose);
         double totalTravelTime = archivedTrips.stream()
                 .mapToDouble(CompletedTrip::travelTimeSeconds)
                 .sum() + arrivedVehicles.stream()

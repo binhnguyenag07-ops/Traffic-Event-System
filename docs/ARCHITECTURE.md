@@ -9,12 +9,12 @@ current state on an OpenStreetMap basemap.
 
 | Layer | Responsibility |
 |---|---|
-| Domain | Roads/lane geometry, vehicles, signals, routes, positioned events, and statistics records |
+| Domain | Roads/lane geometry, vehicles, resolved demand plans, signals, routes, positioned events, and statistics records |
 | Routing | Interchangeable BFS, Dijkstra, and A* strategies |
-| Simulation | Seconds-based clock, sub-step dynamics, event overlays, immutable renderer-frame replay, diagnostics, and completed-trip history |
+| Simulation | Seconds-based clock, demand spawning, multi-leg/dwell lifecycle, sub-step dynamics, event overlays, immutable renderer-frame replay, diagnostics, and completed-trip history |
 | Services | Use-case boundaries for networks, routing, vehicles, events, simulation, and statistics |
 | API | Javalin controllers, DTOs, static frontend hosting, and the live SSE stream |
-| Persistence | JSON/CSV map loading, JSON export, validation, and synthetic grids |
+| Persistence | JSON/CSV map loading, complete scenario/demand loading, JSON export, validation, and synthetic grids |
 | Integration | Optional OSRM road geometry with a straight-line fallback |
 | Visualization | React/Leaflet macro map (roads, pressure, routes, incidents), controls, editor, statistics, and experiment comparison |
 
@@ -59,7 +59,8 @@ does not mutate the live simulation.
 Traffic-Event-System/
 |-- data/
 |   |-- maps/                     the District 1 road network (input)
-|   |-- scenarios/                run scripts (input) -- being redesigned
+|   |-- demand/                   replaceable parameter and curve tables
+|   |-- scenarios/                complete seeded runs (input)
 |   `-- results/                  generated output; traces land here
 |-- docs/                         architecture, class diagram, algorithms, API, demo, results
 |-- frontend/
@@ -86,6 +87,7 @@ Traffic-Event-System/
 |-- src/main/java/team/traffic/
 |   |-- api/                      server, routes, controllers, DTOs
 |   |-- domain/
+|   |   |-- demand/               sources, place resolution, plans, model strategies
 |   |   |-- network/              roads, intersections, buildings, geo points
 |   |   |-- vehicle/              hierarchy, dynamics, pose
 |   |   |-- scene/                lane geometry derived for the physical view
@@ -114,6 +116,13 @@ When React reconnects to an already `RUNNING` server, the dashboard restores its
 local boundary-fleet coordinator flag so arrived demo vehicles continue to be
 replaced; playback itself remains server-owned.
 
+Generated scenario traffic follows a separate backend-owned path:
+`JsonScenarioLoader` resolves a map and parameter catalog,
+`GravityDemandModel` deterministically expands source/flow data into exact
+`TripPlan`s, and `DemandDrivenSpawner` creates due vehicles. `Vehicle` advances
+the same identity through every resolved leg and dwell, while
+`RETURN_TO_ORIGIN` plans end at the exact concrete origin.
+
 ## Live data flow
 
 ```mermaid
@@ -123,6 +132,9 @@ flowchart LR
     SpawnPolicy -->|POST vehicle request| API
     API --> Services[Service interfaces]
     Services --> Simulator[TrafficSimulator]
+    Scenario[Scenario + parameter JSON] --> Demand[TripDemandModel]
+    Demand --> Spawner[DemandDrivenSpawner]
+    Spawner --> Simulator
     Simulator --> Graph[RoadNetwork]
     Simulator --> Tick[TickProcessor]
     Tick --> Dynamics[Lane + Krauss + MOBIL]
@@ -148,7 +160,7 @@ flowchart LR
 | Inheritance | `Vehicle` and `TrafficEvent` define shared abstract behavior |
 | Polymorphism | Routing strategies and event/vehicle subclasses are used through abstractions |
 | Abstraction | Controllers depend on service interfaces; routing uses `PathFindingStrategy` |
-| Strategy | BFS/Dijkstra/A*, car-following, lane-changing, and right-of-way policies |
+| Strategy | BFS/Dijkstra/A*, trip-demand models, car-following, lane-changing, and right-of-way policies |
 | Observer | `TrafficEventBus`, `TrafficEventListener`, and dynamic rerouting |
 | Factory | `VehicleFactory` creates car, motorcycle, bus, and emergency variants |
 | MVC-like separation | React view, API/controllers, services, and domain model |

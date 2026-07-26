@@ -7,7 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import team.traffic.domain.network.RoadNetwork;
-import team.traffic.persistence.JsonMapLoader;
+import team.traffic.persistence.JsonScenarioLoader;
 import team.traffic.service.RoadNetworkService;
 import team.traffic.service.SimulationService;
 import team.traffic.service.impl.MapImportService;
@@ -17,7 +17,7 @@ public class ScenarioController {
     private static final Map<String, Scenario> SCENARIOS = scenarios();
     private final RoadNetworkService networkService;
     private final SimulationService simulationService;
-    private final JsonMapLoader loader;
+    private final JsonScenarioLoader loader;
     private final MapImportService importService;
 
     public ScenarioController(RoadNetworkService networkService, SimulationService simulationService) {
@@ -28,7 +28,7 @@ public class ScenarioController {
             MapImportService importService) {
         this.networkService = networkService;
         this.simulationService = simulationService;
-        this.loader = new JsonMapLoader();
+        this.loader = new JsonScenarioLoader();
         this.importService = importService;
     }
 
@@ -68,13 +68,21 @@ public class ScenarioController {
             return;
         }
         try {
-            RoadNetwork network = loader.load(Path.of(scenario.file()).toString());
+            JsonScenarioLoader.LoadedScenario loaded = loader.load(Path.of(scenario.file()));
+            RoadNetwork network = loaded.network();
             networkService.replaceNetwork(network);
             simulationService.replaceNetwork(network);
+            loaded.demand().ifPresentOrElse(
+                    demand -> simulationService.initialize(
+                            demand, loaded.vehicles(), loaded.events()),
+                    () -> simulationService.initialize(loaded.vehicles(), loaded.events()));
             ctx.json(Map.of(
                     "scenario", scenario,
                     "intersectionCount", network.getIntersectionCount(),
-                    "roadCount", network.getRoadCount()));
+                    "roadCount", network.getRoadCount(),
+                    "buildingCount", network.getBuildingCount(),
+                    "demand", simulationService.getDemandRunStatistics(),
+                    "status", simulationService.getStatus().name()));
         } catch (Exception exception) {
             ctx.status(400).json(Map.of("error", "Failed to activate scenario: " + exception.getMessage()));
         }
@@ -82,8 +90,11 @@ public class ScenarioController {
 
     private static Map<String, Scenario> scenarios() {
         Map<String, Scenario> result = new LinkedHashMap<>();
-        result.put("district-1", new Scenario("district-1", "District 1 Live",
-                "Full visible-area arterial network", "data/maps/district1_network.json"));
+        result.put("district-1", new Scenario(
+                "district-1",
+                "District 1 Typical Day",
+                "District 1 network with seeded building and boundary demand",
+                "data/scenarios/district1_typical_day.json"));
         return Map.copyOf(result);
     }
 
