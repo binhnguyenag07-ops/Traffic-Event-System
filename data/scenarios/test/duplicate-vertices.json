@@ -1,0 +1,24 @@
+{
+  "id": "test-duplicate-vertices",
+  "name": "Repeated geometry points",
+  "description": "Same straight road, but the centreline repeats a point twice. The car must still hold one heading. A flick to north as it passes the middle means a zero-length segment is being used to compute the bearing.",
+  "map": "../../maps/test/duplicate-vertices.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 200,
+    "expect": "Same straight road, but the centreline repeats a point twice. The car must still hold one heading. A flick to north as it passes the middle means a zero-length segment is being used to compute the bearing."
+  },
+  "vehicles": [
+    {
+      "id": "v-dup",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    }
+  ],
+  "events": []
+}

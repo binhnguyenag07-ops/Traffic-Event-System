@@ -1,0 +1,638 @@
+{
+  "intersections": [
+    {
+      "id": "A",
+      "name": "A",
+      "x": -0.3,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.6972567,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "B",
+      "name": "B",
+      "x": -0.1,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.6990856,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "C",
+      "name": "C",
+      "x": 0.1,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.7009144,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "D",
+      "name": "D",
+      "x": 0.3,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.7027433,
+      "locationType": "NORMAL"
+    }
+  ],
+  "roads": [
+    {
+      "id": "ST1-F",
+      "name": "ST1-F",
+      "physicalRoadId": "ST1",
+      "startIntersectionId": "A",
+      "endIntersectionId": "B",
+      "distance": 0.2,
+      "speedLimit": 40,
+      "capacity": 200,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.6972567
+        ],
+        [
+          10.78,
+          106.6990856
+        ]
+      ]
+    },
+    {
+      "id": "ST1-R",
+      "name": "ST1-R",
+      "physicalRoadId": "ST1",
+      "startIntersectionId": "B",
+      "endIntersectionId": "A",
+      "distance": 0.2,
+      "speedLimit": 40,
+      "capacity": 200,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.6990856
+        ],
+        [
+          10.78,
+          106.6972567
+        ]
+      ]
+    },
+    {
+      "id": "ST2-F",
+      "name": "ST2-F",
+      "physicalRoadId": "ST2",
+      "startIntersectionId": "B",
+      "endIntersectionId": "C",
+      "distance": 0.19999,
+      "speedLimit": 40,
+      "capacity": 200,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.6990856
+        ],
+        [
+          10.78,
+          106.7009144
+        ]
+      ]
+    },
+    {
+      "id": "ST2-R",
+      "name": "ST2-R",
+      "physicalRoadId": "ST2",
+      "startIntersectionId": "C",
+      "endIntersectionId": "B",
+      "distance": 0.19999,
+      "speedLimit": 40,
+      "capacity": 200,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7009144
+        ],
+        [
+          10.78,
+          106.6990856
+        ]
+      ]
+    },
+    {
+      "id": "ST3-F",
+      "name": "ST3-F",
+      "physicalRoadId": "ST3",
+      "startIntersectionId": "C",
+      "endIntersectionId": "D",
+      "distance": 0.2,
+      "speedLimit": 40,
+      "capacity": 200,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7009144
+        ],
+        [
+          10.78,
+          106.7027433
+        ]
+      ]
+    },
+    {
+      "id": "ST3-R",
+      "name": "ST3-R",
+      "physicalRoadId": "ST3",
+      "startIntersectionId": "D",
+      "endIntersectionId": "C",
+      "distance": 0.2,
+      "speedLimit": 40,
+      "capacity": 200,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7027433
+        ],
+        [
+          10.78,
+          106.7009144
+        ]
+      ]
+    }
+  ],
+  "buildings": [
+    {
+      "id": "H0",
+      "name": "RESIDENTIAL H0",
+      "type": "RESIDENTIAL",
+      "x": -0.28,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.6974395,
+      "accessPoints": [
+        {
+          "id": "H0-A0",
+          "intersectionId": "A",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.6973298
+        ],
+        [
+          10.7803863,
+          106.6975493
+        ],
+        [
+          10.7806019,
+          106.6975493
+        ],
+        [
+          10.7806019,
+          106.6973298
+        ]
+      ]
+    },
+    {
+      "id": "H1",
+      "name": "RESIDENTIAL H1",
+      "type": "RESIDENTIAL",
+      "x": -0.23,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.6978968,
+      "accessPoints": [
+        {
+          "id": "H1-A0",
+          "intersectionId": "A",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.697787
+        ],
+        [
+          10.7803863,
+          106.6980065
+        ],
+        [
+          10.7806019,
+          106.6980065
+        ],
+        [
+          10.7806019,
+          106.697787
+        ]
+      ]
+    },
+    {
+      "id": "H2",
+      "name": "RESIDENTIAL H2",
+      "type": "RESIDENTIAL",
+      "x": -0.18,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.698354,
+      "accessPoints": [
+        {
+          "id": "H2-A0",
+          "intersectionId": "A",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.6982443
+        ],
+        [
+          10.7803863,
+          106.6984637
+        ],
+        [
+          10.7806019,
+          106.6984637
+        ],
+        [
+          10.7806019,
+          106.6982443
+        ]
+      ]
+    },
+    {
+      "id": "H3",
+      "name": "RESIDENTIAL H3",
+      "type": "RESIDENTIAL",
+      "x": -0.13,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.6988112,
+      "accessPoints": [
+        {
+          "id": "H3-A0",
+          "intersectionId": "A",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.6987015
+        ],
+        [
+          10.7803863,
+          106.698921
+        ],
+        [
+          10.7806019,
+          106.698921
+        ],
+        [
+          10.7806019,
+          106.6987015
+        ]
+      ]
+    },
+    {
+      "id": "H4",
+      "name": "RESIDENTIAL H4",
+      "type": "RESIDENTIAL",
+      "x": -0.08,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.6992684,
+      "accessPoints": [
+        {
+          "id": "H4-A0",
+          "intersectionId": "B",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.6991587
+        ],
+        [
+          10.7803863,
+          106.6993782
+        ],
+        [
+          10.7806019,
+          106.6993782
+        ],
+        [
+          10.7806019,
+          106.6991587
+        ]
+      ]
+    },
+    {
+      "id": "H5",
+      "name": "RESIDENTIAL H5",
+      "type": "RESIDENTIAL",
+      "x": -0.03,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.6997257,
+      "accessPoints": [
+        {
+          "id": "H5-A0",
+          "intersectionId": "B",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.6996159
+        ],
+        [
+          10.7803863,
+          106.6998354
+        ],
+        [
+          10.7806019,
+          106.6998354
+        ],
+        [
+          10.7806019,
+          106.6996159
+        ]
+      ]
+    },
+    {
+      "id": "H6",
+      "name": "RESIDENTIAL H6",
+      "type": "RESIDENTIAL",
+      "x": 0.02,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.7001829,
+      "accessPoints": [
+        {
+          "id": "H6-A0",
+          "intersectionId": "B",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.7000732
+        ],
+        [
+          10.7803863,
+          106.7002926
+        ],
+        [
+          10.7806019,
+          106.7002926
+        ],
+        [
+          10.7806019,
+          106.7000732
+        ]
+      ]
+    },
+    {
+      "id": "H7",
+      "name": "RESIDENTIAL H7",
+      "type": "RESIDENTIAL",
+      "x": 0.07,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.7006401,
+      "accessPoints": [
+        {
+          "id": "H7-A0",
+          "intersectionId": "C",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.7005304
+        ],
+        [
+          10.7803863,
+          106.7007498
+        ],
+        [
+          10.7806019,
+          106.7007498
+        ],
+        [
+          10.7806019,
+          106.7005304
+        ]
+      ]
+    },
+    {
+      "id": "H8",
+      "name": "RESIDENTIAL H8",
+      "type": "RESIDENTIAL",
+      "x": 0.12,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.7010973,
+      "accessPoints": [
+        {
+          "id": "H8-A0",
+          "intersectionId": "C",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.7009876
+        ],
+        [
+          10.7803863,
+          106.7012071
+        ],
+        [
+          10.7806019,
+          106.7012071
+        ],
+        [
+          10.7806019,
+          106.7009876
+        ]
+      ]
+    },
+    {
+      "id": "H9",
+      "name": "RESIDENTIAL H9",
+      "type": "RESIDENTIAL",
+      "x": 0.17,
+      "y": 0.055,
+      "latitude": 10.7804941,
+      "longitude": 106.7015546,
+      "accessPoints": [
+        {
+          "id": "H9-A0",
+          "intersectionId": "C",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7803863,
+          106.7014448
+        ],
+        [
+          10.7803863,
+          106.7016643
+        ],
+        [
+          10.7806019,
+          106.7016643
+        ],
+        [
+          10.7806019,
+          106.7014448
+        ]
+      ]
+    },
+    {
+      "id": "O0",
+      "name": "OFFICE O0",
+      "type": "OFFICE",
+      "x": 0.25,
+      "y": -0.055,
+      "latitude": 10.7795059,
+      "longitude": 106.7022861,
+      "accessPoints": [
+        {
+          "id": "O0-A0",
+          "intersectionId": "D",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7793532,
+          106.7021307
+        ],
+        [
+          10.7793532,
+          106.7024416
+        ],
+        [
+          10.7796586,
+          106.7024416
+        ],
+        [
+          10.7796586,
+          106.7021307
+        ]
+      ]
+    },
+    {
+      "id": "O1",
+      "name": "OFFICE O1",
+      "type": "OFFICE",
+      "x": 0.31,
+      "y": -0.055,
+      "latitude": 10.7795059,
+      "longitude": 106.7028348,
+      "accessPoints": [
+        {
+          "id": "O1-A0",
+          "intersectionId": "D",
+          "drivewayDistanceMetres": 20
+        }
+      ],
+      "footprint": [
+        [
+          10.7793532,
+          106.7026793
+        ],
+        [
+          10.7793532,
+          106.7029902
+        ],
+        [
+          10.7796586,
+          106.7029902
+        ],
+        [
+          10.7796586,
+          106.7026793
+        ]
+      ]
+    }
+  ],
+  "landCovers": [
+    {
+      "id": "L0",
+      "type": "RESIDENTIAL",
+      "polygon": [
+        [
+          10.7802695,
+          106.6994513
+        ],
+        [
+          10.7802695,
+          106.7005487
+        ],
+        [
+          10.7813475,
+          106.7005487
+        ],
+        [
+          10.7813475,
+          106.6994513
+        ]
+      ]
+    }
+  ]
+}

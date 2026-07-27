@@ -1,0 +1,42 @@
+{
+  "id": "test-asset-grid",
+  "name": "Every asset slot at once",
+  "description": "One building of each type, one land cover of each type, and one of each vehicle. Any flat coloured block is a texture that failed to load; any two types looking identical is a manifest pointing twice at the same file.",
+  "map": "../../maps/test/asset-grid.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 320,
+    "expect": "One building of each type, one land cover of each type, and one of each vehicle. Any flat coloured block is a texture that failed to load; any two types looking identical is a manifest pointing twice at the same file."
+  },
+  "vehicles": [
+    {
+      "id": "v-car",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-moto",
+      "type": "MOTORCYCLE",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-bus",
+      "type": "BUS",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-emg",
+      "type": "EMERGENCY",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    }
+  ],
+  "events": []
+}

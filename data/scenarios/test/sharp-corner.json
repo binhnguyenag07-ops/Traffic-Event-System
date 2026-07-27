@@ -1,0 +1,24 @@
+{
+  "id": "test-sharp-corner",
+  "name": "Right-angle corner",
+  "description": "Two 150 m legs meeting at 90 degrees inside one road. The painted lane must stay a constant width round the corner. A pinch or a crossed-over spike on the inside is the lane-offset maths folding back on itself.",
+  "map": "../../maps/test/sharp-corner.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.7806738,
+      106.6993141
+    ],
+    "radiusMetres": 220,
+    "expect": "Two 150 m legs meeting at 90 degrees inside one road. The painted lane must stay a constant width round the corner. A pinch or a crossed-over spike on the inside is the lane-offset maths folding back on itself."
+  },
+  "vehicles": [
+    {
+      "id": "v-corner",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    }
+  ],
+  "events": []
+}

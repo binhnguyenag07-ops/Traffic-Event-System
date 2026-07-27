@@ -1,0 +1,24 @@
+{
+  "id": "test-u-turn",
+  "name": "U-turn at a junction",
+  "description": "A two-way street with a junction in the middle. A vehicle sent back the way it came must swing round through an arc. If it flips 180 degrees on the spot in one frame, U-turns have no turning geometry.",
+  "map": "../../maps/test/u-turn.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 220,
+    "expect": "A two-way street with a junction in the middle. A vehicle sent back the way it came must swing round through an arc. If it flips 180 degrees on the spot in one frame, U-turns have no turning geometry."
+  },
+  "vehicles": [
+    {
+      "id": "v-uturn",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "A"
+    }
+  ],
+  "events": []
+}

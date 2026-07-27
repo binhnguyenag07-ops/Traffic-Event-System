@@ -1,6 +1,7 @@
 package team.traffic.api.dto;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
@@ -32,10 +33,13 @@ public class SimulationSnapshotDto {
         // position and heading; without one it carries progress along a road
         // only, and the client is left to place it.
         VehiclePoseResolver poseResolver = new VehiclePoseResolver();
+        var poses = network == null
+                ? Map.<String, team.traffic.domain.vehicle.pose.VehiclePose>of()
+                : poseResolver.resolveAll(snapshot.vehicles(), network);
         this.vehicles = snapshot.vehicles().stream()
                 .map(vehicle -> network == null
                         ? new VehicleDto(vehicle)
-                        : new VehicleDto(vehicle, poseResolver.resolve(vehicle, network).orElse(null)))
+                        : new VehicleDto(vehicle, poses.get(vehicle.getId())))
                 .collect(Collectors.toList());
         this.trafficEvents = snapshot.trafficEvents().stream()
                 .map(TrafficEventDto::new)

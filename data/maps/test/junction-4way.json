@@ -1,0 +1,269 @@
+{
+  "intersections": [
+    {
+      "id": "J",
+      "name": "J",
+      "x": 0,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "N",
+      "name": "N",
+      "x": 0,
+      "y": 0.16,
+      "latitude": 10.7814373,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "S",
+      "name": "S",
+      "x": 0,
+      "y": -0.16,
+      "latitude": 10.7785627,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "E",
+      "name": "E",
+      "x": 0.16,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.7014631,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "W",
+      "name": "W",
+      "x": -0.16,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.6985369,
+      "locationType": "NORMAL"
+    }
+  ],
+  "roads": [
+    {
+      "id": "ARM-N-F",
+      "name": "ARM-N-F",
+      "physicalRoadId": "ARM-N",
+      "startIntersectionId": "N",
+      "endIntersectionId": "J",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 120,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.7814373,
+          106.7
+        ],
+        [
+          10.78,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "ARM-N-R",
+      "name": "ARM-N-R",
+      "physicalRoadId": "ARM-N",
+      "startIntersectionId": "J",
+      "endIntersectionId": "N",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 120,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.7814373,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "ARM-S-F",
+      "name": "ARM-S-F",
+      "physicalRoadId": "ARM-S",
+      "startIntersectionId": "S",
+      "endIntersectionId": "J",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 120,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.7785627,
+          106.7
+        ],
+        [
+          10.78,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "ARM-S-R",
+      "name": "ARM-S-R",
+      "physicalRoadId": "ARM-S",
+      "startIntersectionId": "J",
+      "endIntersectionId": "S",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 120,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.7785627,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "ARM-E-F",
+      "name": "ARM-E-F",
+      "physicalRoadId": "ARM-E",
+      "startIntersectionId": "E",
+      "endIntersectionId": "J",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 120,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7014631
+        ],
+        [
+          10.78,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "ARM-E-R",
+      "name": "ARM-E-R",
+      "physicalRoadId": "ARM-E",
+      "startIntersectionId": "J",
+      "endIntersectionId": "E",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 120,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.78,
+          106.7014631
+        ]
+      ]
+    },
+    {
+      "id": "ARM-W-F",
+      "name": "ARM-W-F",
+      "physicalRoadId": "ARM-W",
+      "startIntersectionId": "W",
+      "endIntersectionId": "J",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 120,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.6985369
+        ],
+        [
+          10.78,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "ARM-W-R",
+      "name": "ARM-W-R",
+      "physicalRoadId": "ARM-W",
+      "startIntersectionId": "J",
+      "endIntersectionId": "W",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 120,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.78,
+          106.6985369
+        ]
+      ]
+    }
+  ],
+  "buildings": [],
+  "landCovers": []
+}
