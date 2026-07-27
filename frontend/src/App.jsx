@@ -7,6 +7,7 @@ import PhysicalScene from './physical/PhysicalScene'
 import { useTrafficDashboard } from './hooks/useTrafficDashboard'
 import { DEFAULT_PHYSICAL_ZOOM } from './mapViewport'
 import { isVehicleVisibleOnMap } from './vehicleVisibility'
+import { inspectorEntries } from './inspector'
 
 const PREFERENCES = [
   ['CONGESTION_AWARE', 'Traffic aware'],
@@ -45,14 +46,12 @@ function Inspector({ selected }) {
   if (!selected) {
     return <p className="empty-copy">Select a road, junction, vehicle, or event on the map to inspect it.</p>
   }
-  const entries = Object.entries(selected.data)
-    .filter(([, value]) => value !== null && typeof value !== 'object')
-    .slice(0, 9)
+  const entries = inspectorEntries(selected)
   return (
     <div className="inspector-grid">
       <span className="object-kind">{selected.kind}</span>
-      {entries.map(([key, value]) => (
-        <div key={key}><span>{key.replaceAll(/([A-Z])/g, ' $1')}</span><strong>{String(value)}</strong></div>
+      {entries.map(({ key, label, value }) => (
+        <div key={key}><span>{label}</span><strong>{String(value)}</strong></div>
       ))}
     </div>
   )

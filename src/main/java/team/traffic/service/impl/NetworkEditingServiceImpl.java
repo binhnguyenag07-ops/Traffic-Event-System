@@ -12,6 +12,7 @@ import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.network.JunctionMovement;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.exception.NetworkEditConflictException;
@@ -152,6 +153,31 @@ public class NetworkEditingServiceImpl implements NetworkEditingService {
         synchronized (simulator) {
             return mapSaver.toJson(simulator.getNetwork());
         }
+    }
+
+    @Override
+    public JunctionMovement upsertMovement(JunctionMovement movement) {
+        synchronized (simulator) {
+            requireEditable();
+            simulator.getNetwork().getMovementGraph().register(movement);
+        }
+        publish();
+        return movement;
+    }
+
+    @Override
+    public boolean removeMovement(
+            String junctionId,
+            String fromRoadId,
+            String toRoadId) {
+        boolean removed;
+        synchronized (simulator) {
+            requireEditable();
+            removed = simulator.getNetwork().getMovementGraph().remove(
+                    junctionId, fromRoadId, toRoadId);
+        }
+        if (removed) publish();
+        return removed;
     }
 
     private Road createRoad(String id, Intersection start, Intersection end, RoadCreationRequest request,

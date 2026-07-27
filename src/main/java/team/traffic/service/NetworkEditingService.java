@@ -7,6 +7,7 @@ import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.network.JunctionMovement;
 
 public interface NetworkEditingService {
     Intersection addIntersection(String id, String name, LocationType type, double latitude, double longitude);
@@ -16,6 +17,15 @@ public interface NetworkEditingService {
     Road updateRoadCondition(String id, RoadStatus status, double congestionLevel);
     ConnectedRoads findConnectedRoads(String intersectionId);
     String exportJson() throws IOException;
+    default JunctionMovement upsertMovement(JunctionMovement movement) {
+        throw new UnsupportedOperationException("Movement editing is not configured");
+    }
+    default boolean removeMovement(
+            String junctionId,
+            String fromRoadId,
+            String toRoadId) {
+        throw new UnsupportedOperationException("Movement editing is not configured");
+    }
 
     record RoadCreationRequest(String id, String reverseRoadId, String startIntersectionId,
             String endIntersectionId, double speedLimit, int capacity, boolean bidirectional,

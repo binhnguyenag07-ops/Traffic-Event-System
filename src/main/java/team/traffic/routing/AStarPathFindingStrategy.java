@@ -34,83 +34,9 @@ public class AStarPathFindingStrategy implements PathFindingStrategy {
 
     @Override
     public RouteResult findRoute(RoadNetwork network, RouteRequest request) {
-        long startTime = System.currentTimeMillis();
-        int visitedNodes = 0;
-
-        String startId = request.getStartIntersectionId();
-        String destId = request.getDestinationIntersectionId();
-        RoutePreference preference = request.getPreference();
-
-        if (startId.equals(destId)) {
-            Route route = new Route(Collections.emptyList(), 0, 0, 0);
-            return new RouteResult(route, NAME, System.currentTimeMillis() - startTime, 0);
-        }
-
-        Intersection destIntersection = network.getIntersections().get(destId);
-        if (destIntersection == null) {
-            throw new NoSuchElementException("Destination intersection not found: " + destId);
-        }
-
-        Map<String, Double> gScore = new HashMap<>();
-        Map<String, String> prev = new HashMap<>();
-        Map<String, String> prevRoad = new HashMap<>();
-        PriorityQueue<QueueEntry> openSet = new PriorityQueue<>(Comparator.comparingDouble(QueueEntry::score));
-        double maximumSpeed = network.getRoads().values().stream()
-                .mapToDouble(Road::getSpeedLimit)
-                .max()
-                .orElse(1.0);
-
-        gScore.put(startId, 0.0);
-
-        Intersection startIntersection = network.getIntersections().get(startId);
-        double h = estimateCost(startIntersection, destIntersection, maximumSpeed);
-        openSet.add(new QueueEntry(startId, h));
-
-        while (!openSet.isEmpty()) {
-            QueueEntry current = openSet.poll();
-            String currentId = current.intersectionId();
-            Intersection currentIntersection = network.getIntersection(currentId);
-            double expectedScore = gScore.getOrDefault(currentId, Double.POSITIVE_INFINITY)
-                    + estimateCost(currentIntersection, destIntersection, maximumSpeed);
-            if (current.score() > expectedScore) {
-                continue;
-            }
-            visitedNodes++;
-
-            if (currentId.equals(destId)) {
-                break;
-            }
-
-            List<Road> outgoing = network.findOutgoingRoads(currentId);
-            if (outgoing == null) continue;
-
-            for (Road road : outgoing) {
-                if (RouteBuilder.isRoadAvoidable(road, congestionThreshold)) continue;
-
-                String neighborId = road.getEndIntersectionId();
-                double edgeWeight = RouteBuilder.calculateEdgeWeight(road, preference);
-                double tentativeG = gScore.getOrDefault(currentId, Double.MAX_VALUE) + edgeWeight;
-
-                if (tentativeG < gScore.getOrDefault(neighborId, Double.MAX_VALUE)) {
-                    prev.put(neighborId, currentId);
-                    prevRoad.put(neighborId, road.getId());
-                    gScore.put(neighborId, tentativeG);
-
-                    Intersection neighborIntersection = network.getIntersections().get(neighborId);
-                    double heuristicValue = estimateCost(neighborIntersection, destIntersection, maximumSpeed);
-                    openSet.add(new QueueEntry(neighborId, tentativeG + heuristicValue));
-                }
-            }
-        }
-
-        if (!prev.containsKey(destId)) {
-            throw new NoSuchElementException("No route found from " + startId + " to " + destId);
-        }
-
-        Route route = RouteBuilder.reconstructRoute(network, startId, destId, prev, prevRoad, preference);
-
-        long elapsed = System.currentTimeMillis() - startTime;
-        return new RouteResult(route, NAME, elapsed, visitedNodes);
+        return EdgeStateSearch.find(
+                network, request, NAME, congestionThreshold,
+                EdgeStateSearch.Mode.ASTAR, heuristic);
     }
 
     private double estimateCost(Intersection from, Intersection destination, double maximumSpeed) {
@@ -121,5 +47,4 @@ public class AStarPathFindingStrategy implements PathFindingStrategy {
         return estimatedDistance / maximumSpeed;
     }
 
-    private record QueueEntry(String intersectionId, double score) {}
 }

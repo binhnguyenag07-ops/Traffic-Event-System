@@ -27,13 +27,22 @@ public final class DemandDrivenSpawner {
             TripDemandModel demandModel,
             RoadNetwork network,
             RoutingService routingService) {
+        this(demandModel, network, routingService, new VehicleFactory());
+    }
+
+    public DemandDrivenSpawner(
+            TripDemandModel demandModel,
+            RoadNetwork network,
+            RoutingService routingService,
+            VehicleFactory vehicleFactory) {
         if (demandModel == null) throw new IllegalArgumentException("Trip demand model is required");
         if (network == null) throw new IllegalArgumentException("Road network is required");
         if (routingService == null) throw new IllegalArgumentException("Routing service is required");
         this.demandModel = demandModel;
         this.network = network;
         this.routingService = routingService;
-        this.vehicleFactory = new VehicleFactory();
+        if (vehicleFactory == null) throw new IllegalArgumentException("Vehicle factory is required");
+        this.vehicleFactory = vehicleFactory;
         this.failedPlanIds.addAll(demandModel.generationFailedPlanIds());
     }
 

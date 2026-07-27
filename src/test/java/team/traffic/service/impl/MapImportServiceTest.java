@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.GeoPoint;
+import team.traffic.domain.network.MovementPermission;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.exception.InvalidMapException;
 import team.traffic.service.RoadGeometryProvider;
@@ -50,6 +51,53 @@ class MapImportServiceTest {
         assertThatThrownBy(() -> service.importJson("map.csv", input(validMap())))
                 .isInstanceOf(InvalidMapException.class)
                 .hasMessageContaining(".json");
+    }
+
+    @Test
+    void geometryEnrichmentPreservesRoadMetadataAndMovementRules() throws Exception {
+        MapImportService service = new MapImportService((start, end) ->
+                new RoadGeometryProvider.RoadGeometryResult(
+                        List.of(
+                                new GeoPoint(start.getLatitude(), start.getLongitude()),
+                                new GeoPoint(end.getLatitude(), end.getLongitude())),
+                        1.0,
+                        "STRAIGHT"));
+        String map = validMap().replace(
+                "\"roads\": [",
+                """
+                "junctionMovements": [
+                  {
+                    "junctionId":"B",
+                    "fromRoadId":"AB",
+                    "toRoadId":"BA",
+                    "direction":"U_TURN",
+                    "permission":"FORBIDDEN",
+                    "penaltySeconds":31
+                  }
+                ],
+                "roads": [""").replace(
+                "\"id\":\"AB\",\"startIntersectionId\"",
+                "\"id\":\"AB\",\"name\":\"Alpha\",\"physicalRoadId\":\"P\","
+                        + "\"laneCount\":2,\"laneWidthMetres\":3.2,"
+                        + "\"startIntersectionId\"")
+                .replace(
+                        "\"id\":\"BA\",\"startIntersectionId\"",
+                        "\"id\":\"BA\",\"name\":\"Alpha\",\"physicalRoadId\":\"P\","
+                                + "\"laneCount\":2,\"laneWidthMetres\":3.2,"
+                                + "\"startIntersectionId\"");
+
+        var result = service.importJson("metadata.json", input(map));
+
+        var road = result.network().getRoad("AB");
+        assertThat(road.getName()).isEqualTo("Alpha");
+        assertThat(road.getPhysicalRoadId()).isEqualTo("P");
+        assertThat(road.getLaneCount()).isEqualTo(2);
+        assertThat(road.getLaneWidthMetres()).isEqualTo(3.2);
+        assertThat(result.network().getMovementGraph()
+                .find("B", "AB", "BA"))
+                .get()
+                .extracting(movement -> movement.permission())
+                .isEqualTo(MovementPermission.FORBIDDEN);
     }
 
     private ByteArrayInputStream input(String value) {

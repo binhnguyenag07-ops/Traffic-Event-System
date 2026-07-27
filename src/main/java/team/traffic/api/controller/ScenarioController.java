@@ -72,6 +72,8 @@ public class ScenarioController {
             RoadNetwork network = loaded.network();
             networkService.replaceNetwork(network);
             simulationService.replaceNetwork(network);
+            simulationService.configureAdaptiveTraffic(loaded.adaptiveTraffic());
+            simulationService.configureDriverDecisionProfiles(loaded.driverProfiles());
             loaded.demand().ifPresentOrElse(
                     demand -> simulationService.initialize(
                             demand, loaded.vehicles(), loaded.events()),

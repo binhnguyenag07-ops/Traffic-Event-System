@@ -7,10 +7,23 @@ public record LaneChangeRequest(
         double desiredSpeedMps,
         double accelerationMps2,
         double decelerationMps2,
-        double timeStepSeconds) {
+        double timeStepSeconds,
+        LaneChangeIntent intent) {
+
+    public LaneChangeRequest(
+            TrafficParticipant vehicle,
+            RoadOccupancy occupancy,
+            double desiredSpeedMps,
+            double accelerationMps2,
+            double decelerationMps2,
+            double timeStepSeconds) {
+        this(vehicle, occupancy, desiredSpeedMps, accelerationMps2,
+                decelerationMps2, timeStepSeconds, LaneChangeIntent.DISCRETIONARY);
+    }
 
     public LaneChangeRequest {
         if (vehicle == null || occupancy == null) throw new IllegalArgumentException("Vehicle and occupancy are required.");
+        if (intent == null) throw new IllegalArgumentException("Lane-change intent is required.");
         if (!Double.isFinite(desiredSpeedMps) || desiredSpeedMps < 0
                 || !Double.isFinite(accelerationMps2) || accelerationMps2 <= 0
                 || !Double.isFinite(decelerationMps2) || decelerationMps2 <= 0

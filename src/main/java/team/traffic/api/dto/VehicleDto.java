@@ -6,6 +6,10 @@ import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.domain.routing.RoutePreference;
 import team.traffic.domain.vehicle.pose.VehiclePose;
 import java.util.List;
+import java.util.Map;
+import team.traffic.domain.vehicle.dynamics.WaitCause;
+import team.traffic.domain.vehicle.navigation.NavigationMode;
+import team.traffic.domain.vehicle.navigation.NavigationDecisionRecord;
 
 public class VehicleDto {
     private String id;
@@ -39,6 +43,20 @@ public class VehicleDto {
     private double distanceTravelledKm;
     private double travelTimeSeconds;
     private long waitingTicks;
+    private double waitingSeconds;
+    private Map<WaitCause, Double> waitingSecondsByCause;
+    private WaitCause waitCause;
+    private double waitCauseSeconds;
+    private String blockingResource;
+    private NavigationMode navigationMode;
+    private long knowledgeVersion;
+    private long routeVersion;
+    private String lastRerouteReason;
+    private Double lastRerouteAtSeconds;
+    private double nextStrategicDecisionAtSeconds;
+    private String nextPlannedMovement;
+    private NavigationDecisionRecord lastNavigationDecision;
+    private int legalUTurnsCompleted;
     private int routeRecalculationCount;
     private List<String> travelHistory;
     private double instantaneousSpeed;
@@ -103,6 +121,32 @@ public class VehicleDto {
         this.distanceTravelledKm = vehicle.getDistanceTravelledKm();
         this.travelTimeSeconds = vehicle.getTravelTimeSeconds();
         this.waitingTicks = vehicle.getWaitingTicks();
+        this.waitingSeconds = vehicle.getWaitingSeconds();
+        this.waitingSecondsByCause = vehicle.getTrip().getWaitingSecondsByCause();
+        this.waitCause = vehicle.getWaitState().cause();
+        double observedAt = vehicle.getLocalPerception()
+                .map(perception -> perception.observedAtSeconds())
+                .orElse(vehicle.getWaitState().sinceSeconds());
+        this.waitCauseSeconds = vehicle.getWaitState().isWaiting()
+                ? Math.max(0.0, observedAt - vehicle.getWaitState().sinceSeconds())
+                : 0.0;
+        this.blockingResource = vehicle.getWaitState().resource()
+                .map(resource -> resource.stableKey())
+                .orElse(null);
+        this.navigationMode = vehicle.getNavigationState().getMode();
+        this.knowledgeVersion = vehicle.getDriverKnowledge().getVersion();
+        this.routeVersion = vehicle.getRouteVersion();
+        this.lastRerouteReason = vehicle.getNavigationState().getLastRerouteReason();
+        this.lastRerouteAtSeconds = Double.isFinite(
+                vehicle.getNavigationState().getLastRerouteAtSeconds())
+                        ? vehicle.getNavigationState().getLastRerouteAtSeconds()
+                        : null;
+        this.nextStrategicDecisionAtSeconds =
+                vehicle.getNavigationState().getNextStrategicDecisionAtSeconds();
+        this.nextPlannedMovement = vehicle.getNextRoadId();
+        this.lastNavigationDecision =
+                vehicle.getNavigationState().getLastDecision();
+        this.legalUTurnsCompleted = vehicle.getLegalUTurnsCompleted();
         this.routeRecalculationCount = vehicle.getRouteRecalculationCount();
         this.travelHistory = vehicle.getTravelHistory();
         this.instantaneousSpeed = vehicle.getInstantaneousSpeedKph();
@@ -171,6 +215,36 @@ public class VehicleDto {
     public void setTravelTimeSeconds(double travelTimeSeconds) { this.travelTimeSeconds = travelTimeSeconds; }
     public long getWaitingTicks() { return waitingTicks; }
     public void setWaitingTicks(long waitingTicks) { this.waitingTicks = waitingTicks; }
+    public double getWaitingSeconds() { return waitingSeconds; }
+    public void setWaitingSeconds(double waitingSeconds) { this.waitingSeconds = waitingSeconds; }
+    public Map<WaitCause, Double> getWaitingSecondsByCause() { return waitingSecondsByCause; }
+    public void setWaitingSecondsByCause(Map<WaitCause, Double> waitingSecondsByCause) {
+        this.waitingSecondsByCause = waitingSecondsByCause;
+    }
+    public WaitCause getWaitCause() { return waitCause; }
+    public void setWaitCause(WaitCause waitCause) { this.waitCause = waitCause; }
+    public double getWaitCauseSeconds() { return waitCauseSeconds; }
+    public void setWaitCauseSeconds(double waitCauseSeconds) { this.waitCauseSeconds = waitCauseSeconds; }
+    public String getBlockingResource() { return blockingResource; }
+    public void setBlockingResource(String blockingResource) { this.blockingResource = blockingResource; }
+    public NavigationMode getNavigationMode() { return navigationMode; }
+    public void setNavigationMode(NavigationMode navigationMode) { this.navigationMode = navigationMode; }
+    public long getKnowledgeVersion() { return knowledgeVersion; }
+    public void setKnowledgeVersion(long knowledgeVersion) { this.knowledgeVersion = knowledgeVersion; }
+    public long getRouteVersion() { return routeVersion; }
+    public void setRouteVersion(long routeVersion) { this.routeVersion = routeVersion; }
+    public String getLastRerouteReason() { return lastRerouteReason; }
+    public void setLastRerouteReason(String lastRerouteReason) { this.lastRerouteReason = lastRerouteReason; }
+    public Double getLastRerouteAtSeconds() { return lastRerouteAtSeconds; }
+    public void setLastRerouteAtSeconds(Double lastRerouteAtSeconds) { this.lastRerouteAtSeconds = lastRerouteAtSeconds; }
+    public double getNextStrategicDecisionAtSeconds() { return nextStrategicDecisionAtSeconds; }
+    public void setNextStrategicDecisionAtSeconds(double value) { this.nextStrategicDecisionAtSeconds = value; }
+    public String getNextPlannedMovement() { return nextPlannedMovement; }
+    public void setNextPlannedMovement(String nextPlannedMovement) { this.nextPlannedMovement = nextPlannedMovement; }
+    public NavigationDecisionRecord getLastNavigationDecision() { return lastNavigationDecision; }
+    public void setLastNavigationDecision(NavigationDecisionRecord value) { this.lastNavigationDecision = value; }
+    public int getLegalUTurnsCompleted() { return legalUTurnsCompleted; }
+    public void setLegalUTurnsCompleted(int value) { this.legalUTurnsCompleted = value; }
     public int getRouteRecalculationCount() { return routeRecalculationCount; }
     public void setRouteRecalculationCount(int routeRecalculationCount) { this.routeRecalculationCount = routeRecalculationCount; }
     public List<String> getTravelHistory() { return travelHistory; }

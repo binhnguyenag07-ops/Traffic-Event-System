@@ -13,11 +13,14 @@ public abstract class TrafficEvent {
     private final double durationSeconds;
     private final double positionAlongRoad;
     private final Set<Integer> blockedLaneIndexes;
+    private EventOrigin origin;
+    private InformationPolicy informationPolicy;
     private TrafficEventStatus status;
     private RoadCondition previousRoadCondition;
 
     protected TrafficEvent(String id, String affectedRoadId, double startTimeSeconds, double durationSeconds) {
-        this(id, affectedRoadId, startTimeSeconds, durationSeconds, 0.5, Set.of());
+        this(id, affectedRoadId, startTimeSeconds, durationSeconds, 0.5, Set.of(),
+                EventOrigin.EMERGENT, InformationPolicy.broadcastOnActivation());
     }
 
     protected TrafficEvent(
@@ -27,6 +30,20 @@ public abstract class TrafficEvent {
             double durationSeconds,
             double positionAlongRoad,
             Set<Integer> blockedLaneIndexes) {
+        this(id, affectedRoadId, startTimeSeconds, durationSeconds,
+                positionAlongRoad, blockedLaneIndexes,
+                EventOrigin.EMERGENT, InformationPolicy.broadcastOnActivation());
+    }
+
+    protected TrafficEvent(
+            String id,
+            String affectedRoadId,
+            double startTimeSeconds,
+            double durationSeconds,
+            double positionAlongRoad,
+            Set<Integer> blockedLaneIndexes,
+            EventOrigin origin,
+            InformationPolicy informationPolicy) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Event id must not be blank.");
         }
@@ -57,6 +74,10 @@ public abstract class TrafficEvent {
         this.durationSeconds = durationSeconds;
         this.positionAlongRoad = positionAlongRoad;
         this.blockedLaneIndexes = Set.copyOf(lanes);
+        this.origin = origin == null ? EventOrigin.EMERGENT : origin;
+        this.informationPolicy = informationPolicy == null
+                ? InformationPolicy.broadcastOnActivation()
+                : informationPolicy;
         this.status = TrafficEventStatus.SCHEDULED;
     }
 
@@ -99,6 +120,32 @@ public abstract class TrafficEvent {
     /** Empty means every lane for events that create a physical obstruction. */
     public Set<Integer> getBlockedLaneIndexes() {
         return blockedLaneIndexes;
+    }
+
+    public EventOrigin getOrigin() {
+        return origin;
+    }
+
+    public InformationPolicy getInformationPolicy() {
+        return informationPolicy;
+    }
+
+    /**
+     * Applies scenario/operator publication metadata before activation.
+     * Physical event classes remain focused on road effects while the
+     * information channel remains configurable.
+     */
+    public void configurePublication(
+            EventOrigin origin,
+            InformationPolicy informationPolicy) {
+        if (status != TrafficEventStatus.SCHEDULED) {
+            throw new IllegalStateException(
+                    "Publication metadata cannot change after event activation.");
+        }
+        this.origin = origin == null ? EventOrigin.EMERGENT : origin;
+        this.informationPolicy = informationPolicy == null
+                ? InformationPolicy.broadcastOnActivation()
+                : informationPolicy;
     }
 
     /** @deprecated event time is measured in seconds; use {@link #getStartTimeSeconds()}. */
