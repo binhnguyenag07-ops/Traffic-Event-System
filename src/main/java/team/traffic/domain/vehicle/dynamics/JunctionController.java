@@ -2,6 +2,8 @@ package team.traffic.domain.vehicle.dynamics;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 
@@ -71,32 +73,66 @@ public final class JunctionController {
      * they were cleared.
      */
     public Set<String> resolve(JunctionEnvironment environment) {
+        Set<String> clearedVehicleIds = new LinkedHashSet<>();
+        for (JunctionDecision decision : resolveDecisions(environment).values()) {
+            if (decision.granted()) {
+                clearedVehicleIds.add(decision.approach().vehicleId());
+            }
+        }
+        return clearedVehicleIds;
+    }
+
+    /** Returns one auditable grant or denial for every registered approach. */
+    public Map<String, JunctionDecision> resolveDecisions(JunctionEnvironment environment) {
         if (environment == null) {
             throw new IllegalArgumentException("Junction environment is required.");
         }
 
         List<JunctionApproach> ordered = new ArrayList<>(approaches);
-        ordered.sort(rightOfWayPolicy::comparePriority);
+        ordered.sort((left, right) -> {
+            int reservationOrder = Boolean.compare(
+                    environment.isRecoveryReserved(right),
+                    environment.isRecoveryReserved(left));
+            return reservationOrder != 0
+                    ? reservationOrder
+                    : rightOfWayPolicy.comparePriority(left, right);
+        });
 
         List<JunctionApproach> cleared = new ArrayList<>();
-        Set<String> clearedVehicleIds = new LinkedHashSet<>();
+        Map<String, JunctionDecision> decisions = new LinkedHashMap<>();
         for (JunctionApproach candidate : ordered) {
+            if (environment.isRecoveryHeld(candidate)
+                    && !environment.isRecoveryReserved(candidate)) {
+                decisions.put(candidate.vehicleId(), JunctionDecision.denied(
+                        candidate, JunctionDenialReason.RECOVERY_HOLD));
+                continue;
+            }
             if (candidate.vehicle().getPriorityLevel() <= 0 && !environment.isSignalGreen(candidate)) {
+                decisions.put(candidate.vehicleId(), JunctionDecision.denied(
+                        candidate,
+                        JunctionDenialReason.RED_SIGNAL,
+                        environment.expectedSignalReleaseAt(candidate)));
                 continue;
             }
             if (conflictsWithCleared(candidate, cleared)) {
+                decisions.put(candidate.vehicleId(), JunctionDecision.denied(
+                        candidate, JunctionDenialReason.CONFLICTING_MOVEMENT));
                 continue;
             }
             if (!gapAcceptanceModel.hasAcceptableGap(candidate, environment)) {
+                decisions.put(candidate.vehicleId(), JunctionDecision.denied(
+                        candidate, JunctionDenialReason.UNSAFE_GAP));
                 continue;
             }
             if (!environment.hasPhysicalSpaceFor(candidate)) {
+                decisions.put(candidate.vehicleId(), JunctionDecision.denied(
+                        candidate, JunctionDenialReason.DOWNSTREAM_FULL));
                 continue;
             }
             cleared.add(candidate);
-            clearedVehicleIds.add(candidate.vehicleId());
+            decisions.put(candidate.vehicleId(), JunctionDecision.granted(candidate));
         }
-        return clearedVehicleIds;
+        return Map.copyOf(decisions);
     }
 
     private boolean conflictsWithCleared(JunctionApproach candidate, List<JunctionApproach> cleared) {

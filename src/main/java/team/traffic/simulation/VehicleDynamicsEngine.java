@@ -9,12 +9,18 @@ import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.dynamics.GapAcceptanceModel;
 import team.traffic.domain.vehicle.dynamics.MovementPlan;
+import team.traffic.domain.vehicle.dynamics.MotionOutcome;
+import team.traffic.domain.vehicle.dynamics.DefaultLocalPerceptionService;
+import team.traffic.domain.vehicle.dynamics.LocalPerceptionService;
 import team.traffic.domain.vehicle.dynamics.PriorityRightOfWayPolicy;
 import team.traffic.domain.vehicle.dynamics.RightOfWayPolicy;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
 import team.traffic.domain.signal.TrafficSignal;
+import team.traffic.simulation.deadlock.DeadlockCoordinator;
+import team.traffic.simulation.deadlock.DeadlockCycle;
+import team.traffic.simulation.deadlock.DeadlockMetrics;
 
 /**
  * Drives one simulation step of the microscopic vehicle model.
@@ -45,20 +51,53 @@ public class VehicleDynamicsEngine {
 
     private final RightOfWayPolicy rightOfWayPolicy;
     private final GapAcceptanceModel gapAcceptanceModel;
+    private final LocalPerceptionService perceptionService;
+    private DeadlockCoordinator deadlockCoordinator = new DeadlockCoordinator(
+            false,
+            AdaptiveTrafficConfig.defaults().deadlock());
 
     public VehicleDynamicsEngine() {
-        this(new PriorityRightOfWayPolicy(), new GapAcceptanceModel());
+        this(new PriorityRightOfWayPolicy(), new GapAcceptanceModel(),
+                new DefaultLocalPerceptionService());
     }
 
     public VehicleDynamicsEngine(RightOfWayPolicy rightOfWayPolicy, GapAcceptanceModel gapAcceptanceModel) {
+        this(rightOfWayPolicy, gapAcceptanceModel, new DefaultLocalPerceptionService());
+    }
+
+    public VehicleDynamicsEngine(
+            RightOfWayPolicy rightOfWayPolicy,
+            GapAcceptanceModel gapAcceptanceModel,
+            LocalPerceptionService perceptionService) {
         if (rightOfWayPolicy == null) {
             throw new IllegalArgumentException("Right-of-way policy is required.");
         }
         if (gapAcceptanceModel == null) {
             throw new IllegalArgumentException("Gap-acceptance model is required.");
         }
+        if (perceptionService == null) {
+            throw new IllegalArgumentException("Local perception service is required.");
+        }
         this.rightOfWayPolicy = rightOfWayPolicy;
         this.gapAcceptanceModel = gapAcceptanceModel;
+        this.perceptionService = perceptionService;
+    }
+
+    public void configureDeadlock(AdaptiveTrafficConfig adaptiveTrafficConfig) {
+        if (adaptiveTrafficConfig == null) {
+            throw new IllegalArgumentException("Adaptive traffic config is required.");
+        }
+        deadlockCoordinator = new DeadlockCoordinator(
+                adaptiveTrafficConfig.enabled(),
+                adaptiveTrafficConfig.deadlock());
+    }
+
+    public DeadlockMetrics getDeadlockMetrics() {
+        return deadlockCoordinator.metrics();
+    }
+
+    public List<DeadlockCycle> getDeadlockCycles() {
+        return deadlockCoordinator.cycles();
     }
 
     /**
@@ -146,6 +185,8 @@ public class VehicleDynamicsEngine {
                     rightOfWayPolicy,
                     gapAcceptanceModel,
                     new RoadDataRoadLayout());
+            deadlockCoordinator.applyTo(state);
+            observeVehicles(vehicles, state);
             arbitrateJunctions(network, vehicles, state);
             moveVehicles(network, vehicles, state, subStepSeconds);
             double stepEndSeconds = elapsedSeconds + (index + 1) * subStepSeconds;
@@ -159,9 +200,18 @@ public class VehicleDynamicsEngine {
                     rightOfWayPolicy,
                     gapAcceptanceModel,
                     new RoadDataRoadLayout());
+            deadlockCoordinator.observe(stepEndSeconds, network, vehicles, state);
             subStepObserver.accept(stepEndSeconds, state);
         }
         return state;
+    }
+
+    private void observeVehicles(List<Vehicle> vehicles, TrafficState state) {
+        for (Vehicle vehicle : vehicles) {
+            if (!isDormant(vehicle)) {
+                vehicle.recordLocalPerception(perceptionService.observe(vehicle, state));
+            }
+        }
     }
 
     private boolean overridesLegacyStep() {
@@ -200,15 +250,14 @@ public class VehicleDynamicsEngine {
             List<Vehicle> vehicles,
             TrafficState state,
             double subStepSeconds) {
-        Map<Vehicle, MovementPlan> plans = new LinkedHashMap<>();
+        Map<Vehicle, MotionOutcome> plans = new LinkedHashMap<>();
         for (Vehicle vehicle : vehicles) {
             if (isDormant(vehicle)) {
                 continue;
             }
-            vehicle.planMovement(network, state, subStepSeconds)
-                    .ifPresent(plan -> plans.put(vehicle, plan));
+            plans.put(vehicle, vehicle.planMotion(network, state, subStepSeconds));
         }
-        plans.forEach((vehicle, plan) -> vehicle.commitMovement(plan, network, state));
+        plans.forEach((vehicle, outcome) -> vehicle.commitMotion(outcome, network, state));
     }
 
     /** A vehicle that has finished its trip takes no further part in the step. */

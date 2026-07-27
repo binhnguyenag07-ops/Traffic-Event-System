@@ -11,6 +11,10 @@ import team.traffic.domain.demand.DemandScenario;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.VehicleConfig;
+import team.traffic.simulation.AdaptiveTrafficConfig;
+import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.vehicle.navigation.DriverDecisionProfile;
+import java.util.Map;
 
 /** Loads one complete run: map, generated demand, events and scripted vehicles. */
 public final class JsonScenarioLoader {
@@ -38,6 +42,10 @@ public final class JsonScenarioLoader {
         Optional<DemandScenario> demand = demandParser.parseOptional(root, network, baseDirectory);
         List<VehicleConfig> vehicles = ScenarioConfigParser.parseVehicles(root.get("vehicles"));
         List<EventConfig> events = ScenarioConfigParser.parseEvents(root.get("events"));
+        AdaptiveTrafficConfig adaptiveTraffic =
+                AdaptiveTrafficConfigParser.parse(root.get("adaptiveTraffic"));
+        Map<VehicleType, DriverDecisionProfile> driverProfiles =
+                DriverDecisionProfileParser.parse(root.get("driverProfiles"));
 
         return new LoadedScenario(
                 text(root, "id", fileStem(normalized)),
@@ -48,7 +56,9 @@ public final class JsonScenarioLoader {
                 network,
                 demand,
                 vehicles,
-                events);
+                events,
+                adaptiveTraffic,
+                driverProfiles);
     }
 
     static Path resolvePath(Path baseDirectory, String configured) {
@@ -94,11 +104,17 @@ public final class JsonScenarioLoader {
             RoadNetwork network,
             Optional<DemandScenario> demand,
             List<VehicleConfig> vehicles,
-            List<EventConfig> events) {
+            List<EventConfig> events,
+            AdaptiveTrafficConfig adaptiveTraffic,
+            Map<VehicleType, DriverDecisionProfile> driverProfiles) {
         public LoadedScenario {
             demand = demand == null ? Optional.empty() : demand;
             vehicles = List.copyOf(vehicles);
             events = List.copyOf(events);
+            if (adaptiveTraffic == null) {
+                adaptiveTraffic = AdaptiveTrafficConfig.defaults();
+            }
+            driverProfiles = driverProfiles == null ? Map.of() : Map.copyOf(driverProfiles);
         }
     }
 }

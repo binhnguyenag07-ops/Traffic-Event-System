@@ -29,6 +29,7 @@ Work designed but not yet built.
 | Document | Purpose |
 |---|---|
 | [SIMULATION_REALISM_PLAN.md](SIMULATION_REALISM_PLAN.md) | Renderer fixes, a map generator matching the backend, and a time-of-day origin–destination demand model. |
+| [ADAPTIVE_NAVIGATION_AND_DEADLOCK_DESIGN.md](ADAPTIVE_NAVIGATION_AND_DEADLOCK_DESIGN.md) | Local perception, imperfect driver knowledge, safe mid-route replanning, legal U-turns, and deterministic deadlock recovery. |
 
 ## Design records
 

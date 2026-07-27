@@ -3,6 +3,8 @@ package team.traffic.persistence;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.List;
+import team.traffic.domain.event.EventOrigin;
+import team.traffic.domain.event.InformationPolicy;
 import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.VehicleConfig;
 
@@ -70,9 +72,61 @@ public final class ScenarioConfigParser {
                     value,
                     causingVehicleId,
                     positionAlongRoad,
-                    blockedLaneIndexes));
+                    blockedLaneIndexes,
+                    enumValue(node, "origin", EventOrigin.class, EventOrigin.SCENARIO),
+                    informationPolicy(node.get("informationPolicy"))));
         }
         return List.copyOf(configs);
+    }
+
+    private static InformationPolicy informationPolicy(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return InformationPolicy.broadcastOnActivation();
+        }
+        String kindText;
+        Double publicationSeconds = null;
+        if (node.isTextual()) {
+            kindText = node.asText();
+        } else if (node.isObject()) {
+            kindText = textOrDefault(
+                    node, "kind", InformationPolicy.Kind.BROADCAST_ON_ACTIVATION.name());
+            publicationSeconds = nullableNumber(node, "publicationSeconds");
+        } else {
+            throw new IllegalArgumentException(
+                    "informationPolicy must be a string or object");
+        }
+        InformationPolicy.Kind kind;
+        try {
+            kind = InformationPolicy.Kind.valueOf(kindText.toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    "Unknown informationPolicy kind: " + kindText, exception);
+        }
+        return switch (kind) {
+            case LOCAL_ONLY -> InformationPolicy.localOnly();
+            case BROADCAST_ON_ACTIVATION -> InformationPolicy.broadcastOnActivation();
+            case ANNOUNCED_AT -> {
+                if (publicationSeconds == null) {
+                    throw new IllegalArgumentException(
+                            "ANNOUNCED_AT requires publicationSeconds");
+                }
+                yield InformationPolicy.announcedAt(publicationSeconds);
+            }
+        };
+    }
+
+    private static <E extends Enum<E>> E enumValue(
+            JsonNode node,
+            String field,
+            Class<E> type,
+            E defaultValue) {
+        String value = textOrDefault(node, field, defaultValue.name());
+        try {
+            return Enum.valueOf(type, value.toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    "Unknown " + field + ": " + value, exception);
+        }
     }
 
     private static double numberWithLegacyAlias(

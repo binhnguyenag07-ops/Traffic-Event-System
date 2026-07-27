@@ -43,6 +43,8 @@ public final class TrafficState implements JunctionEnvironment {
     private final Map<String, RoadOccupancy> occupancyCache = new HashMap<>();
     private final Map<String, JunctionController> controllers = new LinkedHashMap<>();
     private final Set<String> clearedVehicleIds = new HashSet<>();
+    private final Map<String, JunctionDecision> junctionDecisions = new LinkedHashMap<>();
+    private JunctionRecoveryControl recoveryControl = JunctionRecoveryControl.NONE;
     private Map<String, List<TrafficParticipant>> vehiclesByRoadId;
 
     private TrafficState(
@@ -148,6 +150,14 @@ public final class TrafficState implements JunctionEnvironment {
         return network;
     }
 
+    public List<TrafficEvent> getEvents() {
+        return events;
+    }
+
+    public java.util.Optional<TrafficSignal> signalAt(String junctionId) {
+        return java.util.Optional.ofNullable(signalsByJunctionId.get(junctionId));
+    }
+
     /** Physical occupancy of one road, or {@code null} for an unknown road. */
     public RoadOccupancy occupancyOf(String roadId) {
         if (roadId == null) {
@@ -230,9 +240,22 @@ public final class TrafficState implements JunctionEnvironment {
     /** Runs every junction's arbitration and records who may proceed. */
     public void resolveJunctions() {
         clearedVehicleIds.clear();
+        junctionDecisions.clear();
         for (JunctionController controller : controllers.values()) {
-            clearedVehicleIds.addAll(controller.resolve(this));
+            Map<String, JunctionDecision> decisions = controller.resolveDecisions(this);
+            junctionDecisions.putAll(decisions);
+            decisions.forEach((vehicleId, decision) -> {
+                if (decision.granted()) {
+                    clearedVehicleIds.add(vehicleId);
+                }
+            });
         }
+    }
+
+    public void applyRecoveryControl(JunctionRecoveryControl recoveryControl) {
+        this.recoveryControl = recoveryControl == null
+                ? JunctionRecoveryControl.NONE
+                : recoveryControl;
     }
 
     public boolean isCleared(String vehicleId) {
@@ -241,6 +264,14 @@ public final class TrafficState implements JunctionEnvironment {
 
     public Set<String> getClearedVehicleIds() {
         return Set.copyOf(clearedVehicleIds);
+    }
+
+    public java.util.Optional<JunctionDecision> junctionDecisionFor(String vehicleId) {
+        return java.util.Optional.ofNullable(junctionDecisions.get(vehicleId));
+    }
+
+    public Map<String, JunctionDecision> getJunctionDecisions() {
+        return Map.copyOf(junctionDecisions);
     }
 
     @Override
@@ -280,5 +311,32 @@ public final class TrafficState implements JunctionEnvironment {
         TrafficSignal signal = signalsByJunctionId.get(approach.junctionId());
         return signal == null || approach.fromRoad() == null
                 || signal.isGreenFor(approach.fromRoad().getId(), elapsedSeconds);
+    }
+
+    @Override
+    public java.util.OptionalDouble expectedSignalReleaseAt(
+            JunctionApproach approach) {
+        TrafficSignal signal = signalsByJunctionId.get(approach.junctionId());
+        if (signal == null || isSignalGreen(approach)) {
+            return java.util.OptionalDouble.empty();
+        }
+        double untilGreen = signal.secondsUntilGreenFor(
+                approach.fromRoad() == null
+                        ? null
+                        : approach.fromRoad().getId(),
+                elapsedSeconds);
+        return Double.isFinite(untilGreen)
+                ? java.util.OptionalDouble.of(elapsedSeconds + untilGreen)
+                : java.util.OptionalDouble.empty();
+    }
+
+    @Override
+    public boolean isRecoveryHeld(JunctionApproach approach) {
+        return recoveryControl.isHeld(approach);
+    }
+
+    @Override
+    public boolean isRecoveryReserved(JunctionApproach approach) {
+        return recoveryControl.isReserved(approach);
     }
 }

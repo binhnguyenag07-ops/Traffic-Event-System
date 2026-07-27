@@ -11,6 +11,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.JunctionMovement;
+import team.traffic.domain.network.MovementPermission;
+import team.traffic.domain.network.MovementProvenance;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
@@ -18,6 +21,8 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.network.Building;
 import team.traffic.domain.network.BuildingAccessPoint;
+import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.vehicle.dynamics.TurnDirection;
 
 public class MapSaver {
     private final ObjectMapper objectMapper;
@@ -53,6 +58,7 @@ public class MapSaver {
     static class MapData {
         public List<IntersectionData> intersections = new ArrayList<>();
         public List<RoadData> roads = new ArrayList<>();
+        public List<JunctionMovementData> junctionMovements = new ArrayList<>();
         public List<BuildingData> buildings = new ArrayList<>();
 
         // Copies domain objects into simple JSON-friendly data objects.
@@ -71,6 +77,16 @@ public class MapSaver {
                 mapData.roads.add(RoadData.from(road));
             }
 
+            List<JunctionMovement> movements =
+                    new ArrayList<>(roadNetwork.getMovementGraph().explicitMovements());
+            movements.sort(Comparator
+                    .comparing(JunctionMovement::junctionId)
+                    .thenComparing(movement -> movement.fromRoadId().orElse(""))
+                    .thenComparing(JunctionMovement::toRoadId));
+            for (JunctionMovement movement : movements) {
+                mapData.junctionMovements.add(JunctionMovementData.from(movement));
+            }
+
             List<Building> buildings = new ArrayList<>(roadNetwork.getBuildings().values());
             buildings.sort(Comparator.comparing(Building::getId));
             for (Building building : buildings) {
@@ -78,6 +94,32 @@ public class MapSaver {
             }
 
             return mapData;
+        }
+    }
+
+    static class JunctionMovementData {
+        public String junctionId;
+        public String fromRoadId;
+        public String toRoadId;
+        public TurnDirection direction;
+        public MovementPermission permission;
+        public List<VehicleType> allowedVehicleTypes;
+        public double penaltySeconds;
+        public MovementProvenance provenance;
+
+        static JunctionMovementData from(JunctionMovement movement) {
+            JunctionMovementData data = new JunctionMovementData();
+            data.junctionId = movement.junctionId();
+            data.fromRoadId = movement.fromRoadId().orElse(null);
+            data.toRoadId = movement.toRoadId();
+            data.direction = movement.direction();
+            data.permission = movement.permission();
+            data.allowedVehicleTypes = movement.allowedVehicleTypes().stream()
+                    .sorted()
+                    .toList();
+            data.penaltySeconds = movement.penaltySeconds();
+            data.provenance = movement.provenance();
+            return data;
         }
     }
 

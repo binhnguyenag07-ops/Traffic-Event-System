@@ -8,9 +8,14 @@ import team.traffic.service.SimulationService;
 import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.DemandRunStatistics;
 import team.traffic.simulation.SimulationSnapshot;
+import team.traffic.simulation.SimulationDiagnostics;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.TrafficSimulator;
 import team.traffic.simulation.VehicleConfig;
+import team.traffic.simulation.AdaptiveTrafficConfig;
+import team.traffic.domain.vehicle.navigation.DriverDecisionProfile;
+import team.traffic.domain.vehicle.VehicleType;
+import java.util.Map;
 import team.traffic.simulation.trace.VehicleTracePoint;
 import team.traffic.simulation.trace.VehicleTraceSummary;
 import team.traffic.simulation.trace.FundamentalDiagramPoint;
@@ -130,6 +135,24 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     @Override
     public SimulationSnapshot getSnapshot() {
         return simulator.getSnapshot();
+    }
+
+    @Override
+    public SimulationDiagnostics getDiagnostics() {
+        return simulator.getDiagnostics();
+    }
+
+    @Override
+    public void configureAdaptiveTraffic(AdaptiveTrafficConfig config) {
+        cancelScheduledTicks();
+        simulator.configureAdaptiveTraffic(config);
+    }
+
+    @Override
+    public void configureDriverDecisionProfiles(
+            Map<VehicleType, DriverDecisionProfile> profiles) {
+        cancelScheduledTicks();
+        simulator.configureDriverDecisionProfiles(profiles);
     }
 
     @Override

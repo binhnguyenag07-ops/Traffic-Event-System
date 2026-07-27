@@ -12,7 +12,10 @@ The repository currently includes:
 
 - road-network graph operations, physical-road identity, lane count/width, and density tracking;
 - JSON/CSV map loading, map saving, and synthetic grid-map generation;
-- route search with BFS, Dijkstra, A*, and congestion-aware route costs;
+- route search with BFS, Dijkstra, A*, congestion-aware route costs, and
+  incoming-road-aware movement restrictions;
+- deterministic driver knowledge, location-aware adaptive rerouting, legal
+  U-turns, cause-local stall handling, and strict-physics deadlock recovery;
 - microscopic Krauss car-following with deterministic per-driver variation,
   curve-speed limits, lane occupancy, MOBIL lane changes, and a compact
   motorcycle filtering strategy;
@@ -131,6 +134,9 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `POST /api/network/roads` | add a directed or two-way road |
 | `DELETE /api/network/roads/{id}` | remove an unoccupied road |
 | `PUT /api/network/roads/{id}/condition` | update road status and congestion |
+| `GET /api/network/movements` | list explicit and inferred legal junction movements |
+| `PUT /api/network/movements` | add or replace an explicit movement rule |
+| `DELETE /api/network/movements` | remove an explicit movement rule |
 | `GET /api/network/intersections/{id}/roads` | list incoming and outgoing roads |
 | `GET /api/network/export` | download the current network as JSON |
 | `POST /api/scenarios/import` | upload a geographic JSON map in multipart field `map` |
@@ -153,6 +159,7 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `POST /api/simulation/tick` | advance one tick |
 | `PUT /api/simulation/parameters` | set logical seconds per tick and playback interval |
 | `GET /api/simulation/snapshot` | current simulation snapshot |
+| `GET /api/simulation/diagnostics` | adaptive navigation, information, wait, U-turn, and deadlock evidence |
 | `GET /api/simulation/stream` | live snapshot stream using Server-Sent Events |
 | `GET /api/simulation/signals` | generated traffic-signal plans |
 | `GET /api/simulation/trace/frames` | retained authoritative frame timeline |
@@ -198,7 +205,10 @@ travelCost = distance / speedLimit
              * (1 + congestionLevel + vehicleDensity)
 ```
 
-A blocked, closed, or full road has an infinite routing cost.
+A blocked or closed road has an infinite routing cost. A road that is merely at
+its current storage capacity stays topologically routable and receives a soft
+queue delay; physical admission still rejects entry until space becomes
+available.
 
 The District 1 and Small City coordinates and street geometries are derived from
 OpenStreetMap data. They are stored locally so simulation
@@ -231,6 +241,10 @@ Use **Import JSON** in the header to load a real-map network. Imports require
 latitude/longitude inside the displayed HCMC operating area, are limited to
 2 MB, 600 junctions, and 1,200 directed roads, and replace the network only after the whole file validates. Stored road
 geometry is preserved; missing geometry uses OSRM with a straight fallback.
+Map JSON may persist explicit `junctionMovements` and `turnaroundPoints`.
+Movement rules can also be edited through the movement API while the simulation
+is paused. The same movement graph drives routing, junction admission, and
+physical lane-connector geometry.
 
 ## Statistics and Experiments
 
@@ -270,14 +284,54 @@ Use `-Dexec.args=--write` to refresh the baseline JSON and Markdown report.
       "durationSeconds": 50,
       "positionAlongRoad": 0.65,
       "blockedLaneIndexes": [0],
-      "causingVehicleId": "car-1"
+      "causingVehicleId": "car-1",
+      "origin": "SCENARIO",
+      "informationPolicy": {
+        "kind": "ANNOUNCED_AT",
+        "publicationSeconds": 10
+      }
     }
-  ]
+  ],
+  "adaptiveTraffic": {
+    "enabled": true,
+    "strategicCadenceSeconds": 2,
+    "routing": {
+      "maximumLookaheadRoads": 64,
+      "knowledgeCacheSeconds": 5,
+      "retryBackoffSeconds": [5, 15, 30, 60]
+    },
+    "uTurns": {
+      "networkPolicy": "EXPLICIT_OR_CONSERVATIVE_LOCAL_INFERENCE",
+      "defaultPenaltySeconds": 25
+    },
+    "deadlock": {
+      "scanIntervalSeconds": 5,
+      "confirmSeconds": 30,
+      "minimumProgressMetres": 1,
+      "reservationSeconds": 8,
+      "assistedRecovery": "DISABLED"
+    }
+  },
+  "driverProfiles": {
+    "CAR": {
+      "decision": {
+        "informationAccess": "CONNECTED_NAVIGATION",
+        "informationLatencySeconds": 3,
+        "reroutePatienceSeconds": 8,
+        "minimumExpectedSavingSeconds": 15,
+        "rerouteCooldownSeconds": 30,
+        "stallEscapeSeconds": 45,
+        "uTurnPolicy": "ONLY_WHEN_CURRENT_ROUTE_BLOCKED"
+      }
+    }
+  }
 }
 ```
 
 `startTick` and `durationTicks` remain accepted as input-only migration aliases;
-all responses and frontend controls use seconds.
+all responses and frontend controls use seconds. Omitted adaptive and driver
+fields use deterministic defaults; `assistedRecovery` currently accepts only
+`DISABLED` because the strict resolver never teleports or despawns traffic.
 
 Send it to:
 

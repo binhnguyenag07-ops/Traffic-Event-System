@@ -47,4 +47,53 @@ public final class TrafficSignal {
     public boolean isGreenFor(String incomingRoadId, double elapsedSeconds) {
         return incomingRoadId == null || phaseAt(elapsedSeconds).greenIncomingRoadIds().contains(incomingRoadId);
     }
+
+    /** Simulated seconds until the active phase changes. */
+    public double secondsUntilPhaseChange(double elapsedSeconds) {
+        if (!Double.isFinite(elapsedSeconds) || elapsedSeconds < 0) {
+            throw new IllegalArgumentException("Elapsed seconds must not be negative.");
+        }
+        double withinCycle = (elapsedSeconds + offsetSeconds) % cycleDurationSeconds;
+        for (SignalPhase phase : phases) {
+            if (withinCycle < phase.durationSeconds()) {
+                return phase.durationSeconds() - withinCycle;
+            }
+            withinCycle -= phase.durationSeconds();
+        }
+        return phases.get(phases.size() - 1).durationSeconds();
+    }
+
+    /** Simulated seconds until this incoming approach next receives green. */
+    public double secondsUntilGreenFor(
+            String incomingRoadId,
+            double elapsedSeconds) {
+        if (incomingRoadId == null) return 0.0;
+        if (!Double.isFinite(elapsedSeconds) || elapsedSeconds < 0) {
+            throw new IllegalArgumentException("Elapsed seconds must not be negative.");
+        }
+        double withinCycle = (elapsedSeconds + offsetSeconds) % cycleDurationSeconds;
+        int activeIndex = phases.size() - 1;
+        double remainingInActive = phases.get(activeIndex).durationSeconds();
+        for (int index = 0; index < phases.size(); index++) {
+            SignalPhase phase = phases.get(index);
+            if (withinCycle < phase.durationSeconds()) {
+                activeIndex = index;
+                remainingInActive = phase.durationSeconds() - withinCycle;
+                break;
+            }
+            withinCycle -= phase.durationSeconds();
+        }
+        if (phases.get(activeIndex).greenIncomingRoadIds().contains(incomingRoadId)) {
+            return 0.0;
+        }
+        double wait = remainingInActive;
+        for (int offset = 1; offset <= phases.size(); offset++) {
+            SignalPhase phase = phases.get((activeIndex + offset) % phases.size());
+            if (phase.greenIncomingRoadIds().contains(incomingRoadId)) {
+                return wait;
+            }
+            wait += phase.durationSeconds();
+        }
+        return Double.POSITIVE_INFINITY;
+    }
 }

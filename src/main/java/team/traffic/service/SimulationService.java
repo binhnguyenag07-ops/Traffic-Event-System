@@ -9,8 +9,13 @@ import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.DemandRunStatistics;
 import team.traffic.simulation.SimulationClock;
 import team.traffic.simulation.SimulationSnapshot;
+import team.traffic.simulation.SimulationDiagnostics;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.VehicleConfig;
+import team.traffic.simulation.AdaptiveTrafficConfig;
+import team.traffic.domain.vehicle.navigation.DriverDecisionProfile;
+import team.traffic.domain.vehicle.VehicleType;
+import java.util.Map;
 import team.traffic.simulation.trace.VehicleTracePoint;
 import team.traffic.simulation.trace.VehicleTraceSummary;
 import team.traffic.simulation.trace.FundamentalDiagramPoint;
@@ -56,6 +61,16 @@ public interface SimulationService {
         return SimulationClock.timeOfDayAt(getStartTimeOfDaySeconds(), getElapsedSeconds());
     }
     SimulationSnapshot getSnapshot();
+    default SimulationDiagnostics getDiagnostics() {
+        return null;
+    }
+    default void configureAdaptiveTraffic(AdaptiveTrafficConfig config) {
+        // Compatibility no-op for lightweight/read-only service adapters.
+    }
+    default void configureDriverDecisionProfiles(
+            Map<VehicleType, DriverDecisionProfile> profiles) {
+        // Compatibility no-op for lightweight/read-only service adapters.
+    }
     List<Vehicle> getVehicles();
     List<TrafficEvent> getEvents();
     default List<TrafficSignal> getSignals() { return List.of(); }

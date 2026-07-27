@@ -93,11 +93,32 @@ public class MapImportService {
             sources.compute(source, (ignored, count) -> count == null ? 1 : count + 1);
             RoadCondition condition = road.getCondition();
             result.addRoad(new Road(
-                    road.getId(), road.getStartIntersectionId(), road.getEndIntersectionId(),
-                    distance, road.getSpeedLimit(), road.getCapacity(), road.getCurrentVehicleCount(),
-                    new RoadCondition(condition.getCongestionLevel(), condition.getVehicleDensity(),
-                            condition.getRoadStatus()), geometry, road.getRoadClass()));
+                    road.getId(),
+                    road.getName(),
+                    road.getPhysicalRoadId(),
+                    road.getStartIntersectionId(),
+                    road.getEndIntersectionId(),
+                    distance,
+                    road.getSpeedLimit(),
+                    road.getCapacity(),
+                    road.getCurrentVehicleCount(),
+                    road.getLaneCount(),
+                    road.getLaneWidthMetres(),
+                    new RoadCondition(
+                            condition.getCongestionLevel(),
+                            condition.getVehicleDensity(),
+                            condition.getRoadStatus()),
+                    geometry,
+                    road.getRoadClass()));
         }
+        loaded.getBuildings().values().forEach(result::addBuilding);
+        loaded.getLandCovers().forEach(result::addLandCover);
+        loaded.getMovementGraph().explicitMovements()
+                .forEach(result.getMovementGraph()::register);
+        result.getMovementGraph().setUTurnPolicy(
+                loaded.getMovementGraph().getUTurnPolicy());
+        result.getMovementGraph().setInferredUTurnPenaltySeconds(
+                loaded.getMovementGraph().getInferredUTurnPenaltySeconds());
         Bounds bounds = bounds(result);
         return new ImportResult(result, Map.copyOf(sources), bounds);
     }

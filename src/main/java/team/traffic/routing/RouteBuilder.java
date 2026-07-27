@@ -16,20 +16,27 @@ public final class RouteBuilder {
     public static double calculateEdgeWeight(Road road, RoutePreference preference) {
         return switch (preference) {
             case SHORTEST_TIME -> road.getDistance() / road.getSpeedLimit();
-            case CONGESTION_AWARE -> road.calculateTravelCost();
+            case CONGESTION_AWARE -> road.calculateTraversableTravelCost();
             case MINIMUM_HOPS -> 1.0;
             default -> road.getDistance();
         };
     }
 
     public static boolean isRoadUsable(Road road) {
-        if (!road.isAvailable()) return false;
+        if (road == null || !road.isAvailable()) return false;
+        RoadStatus status = road.getRoadCondition().getRoadStatus();
+        return status != RoadStatus.BLOCKED && status != RoadStatus.CLOSED;
+    }
+
+    /** Graph legality without the momentary road-admission capacity check. */
+    public static boolean isRoadTraversable(Road road) {
+        if (road == null || !road.isRoutable()) return false;
         RoadStatus status = road.getRoadCondition().getRoadStatus();
         return status != RoadStatus.BLOCKED && status != RoadStatus.CLOSED;
     }
 
     public static boolean isRoadAvoidable(Road road, double congestionThreshold) {
-        if (!isRoadUsable(road)) return true;
+        if (!isRoadTraversable(road)) return true;
         return road.getRoadCondition().getCongestionLevel() > congestionThreshold;
     }
 
