@@ -1,0 +1,161 @@
+{
+  "intersections": [
+    {
+      "id": "A",
+      "name": "A",
+      "x": 0,
+      "y": -0.14,
+      "latitude": 10.7787424,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "J",
+      "name": "J",
+      "x": 0,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "B",
+      "name": "B",
+      "x": 0,
+      "y": 0.14,
+      "latitude": 10.7812576,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "W",
+      "name": "W",
+      "x": -0.14,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.6987198,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "E",
+      "name": "E",
+      "x": 0.14,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.7012802,
+      "locationType": "NORMAL"
+    }
+  ],
+  "roads": [
+    {
+      "id": "IN",
+      "name": "IN",
+      "physicalRoadId": "IN",
+      "startIntersectionId": "A",
+      "endIntersectionId": "J",
+      "distance": 0.14,
+      "speedLimit": 40,
+      "capacity": 200,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 1,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.7787424,
+          106.7
+        ],
+        [
+          10.78,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "OUT",
+      "name": "OUT",
+      "physicalRoadId": "OUT",
+      "startIntersectionId": "J",
+      "endIntersectionId": "B",
+      "distance": 0.14,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 1,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.7812576,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "CROSS-W",
+      "name": "CROSS-W",
+      "physicalRoadId": "CROSS-W",
+      "startIntersectionId": "W",
+      "endIntersectionId": "J",
+      "distance": 0.14,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 1,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.6987198
+        ],
+        [
+          10.78,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "CROSS-E",
+      "name": "CROSS-E",
+      "physicalRoadId": "CROSS-E",
+      "startIntersectionId": "J",
+      "endIntersectionId": "E",
+      "distance": 0.14,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 1,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.78,
+          106.7012802
+        ]
+      ]
+    }
+  ],
+  "buildings": [],
+  "landCovers": []
+}

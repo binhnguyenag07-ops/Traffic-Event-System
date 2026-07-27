@@ -1,0 +1,75 @@
+{
+  "id": "test-congestion-reroute",
+  "name": "Congestion: rerouting is correct here",
+  "description": "Two ways round a diamond, the left one jammed. Vehicles SHOULD switch to the right branch. This is the control case for the accident one: same mechanism, and here the movement is what we want.",
+  "map": "../../maps/test/congestion-reroute.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 260,
+    "expect": "Two ways round a diamond, the left one jammed. Vehicles SHOULD switch to the right branch. This is the control case for the accident one: same mechanism, and here the movement is what we want."
+  },
+  "vehicles": [
+    {
+      "id": "v-div-0",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "D"
+    },
+    {
+      "id": "v-div-1",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "D"
+    },
+    {
+      "id": "v-div-2",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "D"
+    },
+    {
+      "id": "v-div-3",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "D"
+    },
+    {
+      "id": "v-div-4",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "D"
+    },
+    {
+      "id": "v-div-5",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "D"
+    },
+    {
+      "id": "v-div-6",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "D"
+    },
+    {
+      "id": "v-div-7",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "D"
+    }
+  ],
+  "events": [
+    {
+      "id": "jam",
+      "type": "CONGESTION",
+      "affectedRoadId": "A-L",
+      "startTimeSeconds": 5,
+      "durationSeconds": 900,
+      "value": 0.9
+    }
+  ]
+}

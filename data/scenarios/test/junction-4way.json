@@ -1,0 +1,54 @@
+{
+  "id": "test-junction-4way",
+  "name": "Four-way junction with signals",
+  "description": "Traffic from all four arms. Signals must read as small glowing dots at each approach, and turning vehicles must follow a curve across the junction rather than cutting the corner in a straight line.",
+  "map": "../../maps/test/junction-4way.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 200,
+    "expect": "Traffic from all four arms. Signals must read as small glowing dots at each approach, and turning vehicles must follow a curve across the junction rather than cutting the corner in a straight line."
+  },
+  "vehicles": [
+    {
+      "id": "v-ns",
+      "type": "CAR",
+      "startIntersectionId": "N",
+      "destinationIntersectionId": "S"
+    },
+    {
+      "id": "v-sn",
+      "type": "CAR",
+      "startIntersectionId": "S",
+      "destinationIntersectionId": "N"
+    },
+    {
+      "id": "v-ew",
+      "type": "CAR",
+      "startIntersectionId": "E",
+      "destinationIntersectionId": "W"
+    },
+    {
+      "id": "v-we",
+      "type": "BUS",
+      "startIntersectionId": "W",
+      "destinationIntersectionId": "E"
+    },
+    {
+      "id": "v-ne",
+      "type": "MOTORCYCLE",
+      "startIntersectionId": "N",
+      "destinationIntersectionId": "E"
+    },
+    {
+      "id": "v-ws",
+      "type": "MOTORCYCLE",
+      "startIntersectionId": "W",
+      "destinationIntersectionId": "S"
+    }
+  ],
+  "events": []
+}

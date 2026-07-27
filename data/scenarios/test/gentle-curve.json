@@ -1,0 +1,24 @@
+{
+  "id": "test-gentle-curve",
+  "name": "Gentle curve: rotation must be smooth",
+  "description": "A 400 m radius bend. The car should rotate a little each frame. Stepwise jumps mean the heading is taken from whole segments instead of being sampled along the curve.",
+  "map": "../../maps/test/gentle-curve.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.7766235,
+      106.7
+    ],
+    "radiusMetres": 260,
+    "expect": "A 400 m radius bend. The car should rotate a little each frame. Stepwise jumps mean the heading is taken from whole segments instead of being sampled along the curve."
+  },
+  "vehicles": [
+    {
+      "id": "v-curve",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    }
+  ],
+  "events": []
+}

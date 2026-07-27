@@ -1,0 +1,32 @@
+{
+  "id": "test-stranded",
+  "name": "No way through",
+  "description": "The only road onward is closed and there is no detour. The vehicle must stop and stay stopped. It must not U-turn onto oncoming traffic, teleport, or drive through the closure.",
+  "map": "../../maps/test/stranded.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 200,
+    "expect": "The only road onward is closed and there is no detour. The vehicle must stop and stay stopped. It must not U-turn onto oncoming traffic, teleport, or drive through the closure."
+  },
+  "vehicles": [
+    {
+      "id": "v-stuck",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    }
+  ],
+  "events": [
+    {
+      "id": "closure",
+      "type": "ROAD_CLOSURE",
+      "affectedRoadId": "M-B",
+      "startTimeSeconds": 5,
+      "durationSeconds": 900
+    }
+  ]
+}

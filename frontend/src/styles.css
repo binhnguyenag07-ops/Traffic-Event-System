@@ -52,6 +52,14 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
 .import-notice { display: flex; align-items: center; gap: 12px; padding: 7px 24px; color: #174850; background: #ddf3f3; border-bottom: 1px solid #b8dddd; font-size: 11px; }
 .import-notice strong { color: #0b3036; }.import-notice span:last-child { margin-left: auto; }
 
+.lab-banner { display: flex; align-items: center; gap: 20px; padding: 10px 24px; color: #2b2410; background: #fdf3d6; border-bottom: 1px solid #e6d49a; }
+.lab-banner .lab-heading { flex: 0 0 auto; max-width: 300px; }
+.lab-banner h2 { margin: 1px 0 0; font-size: 14px; }
+.lab-banner p { flex: 1; margin: 0; font-size: 12px; line-height: 1.45; color: #4a3f1c; }
+.lab-nav { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+.lab-nav button { padding: 5px 10px; background: #fff; border: 1px solid #e0cf95; border-radius: 5px; font-size: 11px; }
+.lab-nav a { font-size: 11px; color: #6b5a22; }
+
 .global-error { display: flex; align-items: center; gap: 12px; padding: 8px 24px; color: #721f24; background: #fde7e4; border-bottom: 1px solid #f3c4c0; font-size: 12px; }
 .global-error span { flex: 1; }.global-error button { padding: 5px 10px; background: #fff; border-radius: 5px; }
 .workspace { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 1px; background: #becacd; }

@@ -118,6 +118,41 @@ function laneCorridor(points, width) {
   return [...left, ...right.reverse()]
 }
 
+/**
+ * The painted dividers of a road: one line between each pair of adjacent lanes.
+ *
+ * <p>Markings separate lanes, so they belong on the boundaries — not down the
+ * middle of each lane, which is exactly where the traffic drives. Dashing every
+ * centreline put a white line under every vehicle and made correctly placed
+ * traffic look like it was straddling the paint.</p>
+ *
+ * <p>The boundary is taken as the midline between two lane centrelines rather
+ * than by offsetting one of them sideways. Both come from the same road shape
+ * offset by different amounts, so they run point for point, and a midpoint
+ * needs no normals and cannot pick the wrong side.</p>
+ */
+export function laneDividers(lanes) {
+  const byRoad = new Map()
+  for (const lane of lanes || []) {
+    if (!byRoad.has(lane.roadId)) byRoad.set(lane.roadId, [])
+    byRoad.get(lane.roadId).push(lane)
+  }
+  const dividers = []
+  for (const group of byRoad.values()) {
+    group.sort((a, b) => a.laneIndex - b.laneIndex)
+    for (let index = 0; index + 1 < group.length; index += 1) {
+      const left = group[index].centreline
+      const right = group[index + 1].centreline
+      if (!left || !right || left.length !== right.length || left.length < 2) continue
+      dividers.push(left.map((point, at) => [
+        (point[0] + right[at][0]) / 2,
+        (point[1] + right[at][1]) / 2,
+      ]))
+    }
+  }
+  return dividers
+}
+
 /** Dashes along a polyline, so a lane divider reads as paint rather than a line. */
 function strokeDashed(graphics, points, style) {
   if (!points || points.length < 2) return
@@ -230,8 +265,8 @@ export function drawStatic(graphics, scene, assets = {}) {
     width: 2.8, color: CONNECTOR, cap: 'round', join: 'round',
   }))
 
-  scene.lanes?.forEach((lane) => {
-    strokeDashed(graphics, lane.centreline, { width: 0.16, color: LANE_DASH, alpha: 0.9 })
+  laneDividers(scene.lanes).forEach((divider) => {
+    strokeDashed(graphics, divider, { width: 0.16, color: LANE_DASH, alpha: 0.9 })
   })
 
 }
