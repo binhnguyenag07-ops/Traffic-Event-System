@@ -16,6 +16,9 @@ import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.domain.vehicle.pose.VehiclePose;
 import team.traffic.domain.vehicle.pose.VehiclePoseResolver;
+import team.traffic.domain.vehicle.dynamics.WaitCause;
+import team.traffic.domain.vehicle.navigation.NavigationDecisionRecord;
+import team.traffic.domain.vehicle.navigation.NavigationMode;
 import team.traffic.simulation.SimulationStatus;
 
 /**
@@ -67,7 +70,8 @@ public record SimulationFrame(
                 status,
                 vehicles == null ? List.of() : vehicles.stream()
                         .map(vehicle -> VehicleState.from(vehicle,
-                                poseResolver.resolve(vehicle, network).orElse(null)))
+                                poseResolver.resolve(vehicle, network).orElse(null),
+                                elapsedSeconds))
                         .toList(),
                 events == null ? List.of() : events.stream().map(EventState::from).toList(),
                 network.getRoads().values().stream().map(RoadState::from).toList(),
@@ -97,9 +101,24 @@ public record SimulationFrame(
             boolean inJunction,
             double lateralOffsetMetres,
             String junctionFromRoadId,
-            String junctionToRoadId) {
+            String junctionToRoadId,
+            WaitCause waitCause,
+            double waitCauseSeconds,
+            String blockingResource,
+            NavigationMode navigationMode,
+            long knowledgeVersion,
+            long routeVersion,
+            String lastRerouteReason,
+            Double lastRerouteAtSeconds,
+            double nextStrategicDecisionAtSeconds,
+            String nextPlannedMovement,
+            int legalUTurnsCompleted,
+            NavigationDecisionRecord lastNavigationDecision) {
 
-        static VehicleState from(Vehicle vehicle, VehiclePose pose) {
+        static VehicleState from(
+                Vehicle vehicle,
+                VehiclePose pose,
+                double elapsedSeconds) {
             boolean inJunction = pose != null && pose.inJunction();
             return new VehicleState(
                     vehicle.getId(),
@@ -122,7 +141,32 @@ public record SimulationFrame(
                     inJunction,
                     pose == null ? 0.0 : pose.lateralOffsetMetres(),
                     inJunction ? routeRoadIdAt(vehicle, -1) : null,
-                    inJunction ? routeRoadIdAt(vehicle, 0) : null);
+                    inJunction ? routeRoadIdAt(vehicle, 0) : null,
+                    vehicle.getWaitState().cause(),
+                    vehicle.getWaitState().isWaiting()
+                            ? Math.max(
+                                    0.0,
+                                    elapsedSeconds
+                                            - vehicle.getWaitState().sinceSeconds())
+                            : 0.0,
+                    vehicle.getWaitState().resource()
+                            .map(resource -> resource.stableKey())
+                            .orElse(null),
+                    vehicle.getNavigationState().getMode(),
+                    vehicle.getDriverKnowledge().getVersion(),
+                    vehicle.getRouteVersion(),
+                    vehicle.getNavigationState().getLastRerouteReason(),
+                    Double.isFinite(
+                            vehicle.getNavigationState()
+                                    .getLastRerouteAtSeconds())
+                            ? vehicle.getNavigationState()
+                                    .getLastRerouteAtSeconds()
+                            : null,
+                    vehicle.getNavigationState()
+                            .getNextStrategicDecisionAtSeconds(),
+                    vehicle.getNextRoadId(),
+                    vehicle.getLegalUTurnsCompleted(),
+                    vehicle.getNavigationState().getLastDecision());
         }
 
         private static String routeRoadIdAt(Vehicle vehicle, int offset) {

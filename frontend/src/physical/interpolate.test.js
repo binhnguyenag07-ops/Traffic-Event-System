@@ -46,6 +46,11 @@ describe('interpolateVehicles', () => {
     expect(drawn.laneIndex).toBe(2)
   })
 
+  it('renders safely before physical geometry has loaded', () => {
+    const [drawn] = interpolateVehicles([a0], [a1], 0.5, null)
+    expect(drawn).toMatchObject({ x: 5, y: 10, headingDegrees: 45 })
+  })
+
   it('follows a curved lane instead of cutting across its chord', () => {
     const source = {
       ...a0, roadId: 'R', roadProgress: 0, laneIndex: 0,

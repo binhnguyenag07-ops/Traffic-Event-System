@@ -100,6 +100,29 @@ public final class RoadOccupancy {
         return findLeaderAt(follower, follower.lateralExtent(), lateralClearanceMetres);
     }
 
+    /** Nearest laterally-overlapping vehicle ahead, excluding event obstructions. */
+    public TrafficParticipant nearestOverlappingLeader(
+            TrafficParticipant follower,
+            double lateralClearanceMetres) {
+        if (follower == null) return null;
+        double followerPosition = positionMetresOf(follower);
+        TrafficParticipant nearest = null;
+        double nearestPosition = Double.POSITIVE_INFINITY;
+        for (Lane lane : lanes) {
+            for (TrafficParticipant candidate : lane.getVehicles()) {
+                if (candidate == follower || candidate.getId().equals(follower.getId())) continue;
+                if (!follower.lateralExtent().overlaps(
+                        candidate.lateralExtent(), lateralClearanceMetres)) continue;
+                double candidatePosition = positionMetresOf(candidate);
+                if (candidatePosition >= followerPosition && candidatePosition < nearestPosition) {
+                    nearest = candidate;
+                    nearestPosition = candidatePosition;
+                }
+            }
+        }
+        return nearest;
+    }
+
     /**
      * The leader the follower would have if it were riding at
      * {@code offsetMetres}, used to judge a corridor before committing to it.

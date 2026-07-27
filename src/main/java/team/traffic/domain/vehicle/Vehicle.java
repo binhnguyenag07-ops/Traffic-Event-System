@@ -8,10 +8,15 @@ import team.traffic.domain.demand.PlaceKind;
 import team.traffic.domain.demand.ResolvedPlace;
 import team.traffic.domain.demand.TripPlan;
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.JunctionMovement;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.routing.RouteAnchor;
+import team.traffic.domain.routing.RouteCandidate;
+import team.traffic.domain.routing.RouteCost;
 import team.traffic.domain.routing.Route;
 import team.traffic.domain.routing.RoutePreference;
+import team.traffic.domain.routing.RouteReplacementResult;
 import team.traffic.domain.routing.RouteRequest;
 import team.traffic.domain.routing.RouteResult;
 import team.traffic.domain.routing.RouteStep;
@@ -21,19 +26,31 @@ import team.traffic.domain.vehicle.dynamics.FilteringLaneChangeModel;
 import team.traffic.domain.vehicle.dynamics.FilteringRules;
 import team.traffic.domain.vehicle.dynamics.FollowContext;
 import team.traffic.domain.vehicle.dynamics.LateralTarget;
+import team.traffic.domain.vehicle.dynamics.LocalPerception;
 import team.traffic.domain.vehicle.dynamics.JunctionApproach;
 import team.traffic.domain.vehicle.dynamics.KraussCarFollowingModel;
 import team.traffic.domain.vehicle.dynamics.Lane;
 import team.traffic.domain.vehicle.dynamics.LateralMotionModel;
 import team.traffic.domain.vehicle.dynamics.LeaderGap;
 import team.traffic.domain.vehicle.dynamics.MovementPlan;
+import team.traffic.domain.vehicle.dynamics.MotionOutcome;
 import team.traffic.domain.vehicle.dynamics.LaneChangeModel;
+import team.traffic.domain.vehicle.dynamics.LaneChangeIntent;
 import team.traffic.domain.vehicle.dynamics.LaneChangeRequest;
 import team.traffic.domain.vehicle.dynamics.MobilLaneChangeModel;
 import team.traffic.domain.vehicle.dynamics.RoadOccupancy;
 import team.traffic.domain.vehicle.dynamics.TrafficParticipant;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.domain.vehicle.dynamics.TurnDirection;
+import team.traffic.domain.vehicle.dynamics.JunctionDecision;
+import team.traffic.domain.vehicle.dynamics.JunctionDenialReason;
+import team.traffic.domain.vehicle.dynamics.WaitCause;
+import team.traffic.domain.vehicle.dynamics.WaitResource;
+import team.traffic.domain.vehicle.dynamics.WaitState;
+import team.traffic.domain.vehicle.navigation.DriverKnowledge;
+import team.traffic.domain.vehicle.navigation.NavigationState;
+import team.traffic.domain.vehicle.navigation.ProgressStallTracker;
+import team.traffic.domain.vehicle.navigation.StallState;
 import team.traffic.domain.vehicle.pose.PolylineGeometry;
 import team.traffic.service.RoutingService;
 
@@ -64,6 +81,12 @@ public abstract class Vehicle implements TrafficParticipant {
     private CarFollowingModel carFollowingModel;
     private LaneChangeModel laneChangeModel;
     private double instantaneousSpeedMps;
+    private WaitState waitState;
+    private final DriverKnowledge driverKnowledge = new DriverKnowledge();
+    private final NavigationState navigationState = new NavigationState();
+    private ProgressStallTracker stallTracker = new ProgressStallTracker();
+    private LocalPerception localPerception;
+    private LaneChangeIntent pendingLaneChangeIntent = LaneChangeIntent.DISCRETIONARY;
 
     protected Vehicle(
             String id,
@@ -95,6 +118,7 @@ public abstract class Vehicle implements TrafficParticipant {
         this.carFollowingModel = new KraussCarFollowingModel();
         this.laneChangeModel = new MobilLaneChangeModel();
         this.instantaneousSpeedMps = cruisingSpeedKph / KILOMETRES_PER_HOUR_PER_METRE_PER_SECOND;
+        this.waitState = WaitState.none(0.0);
     }
 
     public abstract VehicleType getType();
@@ -166,8 +190,23 @@ public abstract class Vehicle implements TrafficParticipant {
      * sequence in the right order, planning every vehicle before moving any.</p>
      */
     public void advance(RoadNetwork roadNetwork, TrafficState trafficState, double simulationSeconds) {
-        planMovement(roadNetwork, trafficState, simulationSeconds)
-                .ifPresent(plan -> commitMovement(plan, roadNetwork, trafficState));
+        commitMotion(
+                planMotion(roadNetwork, trafficState, simulationSeconds),
+                roadNetwork,
+                trafficState);
+    }
+
+    /** Plans either movement or an explicit zero-motion reason for this sub-step. */
+    public MotionOutcome planMotion(
+            RoadNetwork roadNetwork,
+            TrafficState trafficState,
+            double simulationSeconds) {
+        Optional<MovementPlan> movement = planMovement(
+                roadNetwork, trafficState, simulationSeconds);
+        double observedAt = trafficState.getElapsedSeconds();
+        WaitState plannedWait = inferWaitState(
+                movement, roadNetwork, trafficState, observedAt);
+        return new MotionOutcome(movement, plannedWait, observedAt, simulationSeconds);
     }
 
     /**
@@ -237,9 +276,11 @@ public abstract class Vehicle implements TrafficParticipant {
             if (LateralMotionModel.hasSettled(lateralOffsetMetres, targetOffsetMetres)) {
                 LateralTarget target = laneChangeModel.chooseTarget(new LaneChangeRequest(
                         this, roadOccupancy, desiredSpeedMps(road),
-                        profile.accelerationMps2(), profile.decelerationMps2(), simulationSeconds));
+                        profile.accelerationMps2(), profile.decelerationMps2(), simulationSeconds,
+                        pendingLaneChangeIntent));
                 targetLaneIndex = target.laneIndex();
                 targetOffsetMetres = target.offsetMetres();
+                pendingLaneChangeIntent = LaneChangeIntent.DISCRETIONARY;
             }
             plannedLateralOffsetMetres = LateralMotionModel.nextOffsetMetres(
                     lateralOffsetMetres,
@@ -373,6 +414,168 @@ public abstract class Vehicle implements TrafficParticipant {
         }
     }
 
+    /** Commits a plan and its cause-local waiting evidence as one outcome. */
+    public void commitMotion(
+            MotionOutcome outcome,
+            RoadNetwork roadNetwork,
+            TrafficState trafficState) {
+        if (outcome == null) {
+            return;
+        }
+        outcome.movement().ifPresent(plan -> commitMovement(plan, roadNetwork, trafficState));
+        stallTracker.update(
+                outcome,
+                localPerception == null
+                        ? team.traffic.domain.vehicle.dynamics.ExitReachability.UNKNOWN
+                        : localPerception.exitReachability());
+
+        if (status == VehicleStatus.ARRIVED) {
+            waitState = WaitState.none(outcome.observedAtSeconds() + outcome.durationSeconds());
+            return;
+        }
+
+        boolean meaningfulProgress = outcome.madeMeaningfulProgress(0.01);
+        WaitState reported = outcome.waitState();
+        if (meaningfulProgress || !reported.isWaiting()) {
+            waitState = WaitState.none(outcome.observedAtSeconds() + outcome.durationSeconds());
+            return;
+        }
+
+        if (outcome.movement().isEmpty()) {
+            trip.recordWaitingTick();
+        }
+        trip.recordWaiting(outcome.durationSeconds(), reported.cause());
+        double since = waitState.cause() == reported.cause()
+                        && waitState.resource().equals(reported.resource())
+                ? waitState.sinceSeconds()
+                : reported.sinceSeconds();
+        waitState = new WaitState(
+                reported.cause(),
+                since,
+                reported.resource(),
+                reported.expectedReleaseAtSeconds());
+        if (status != VehicleStatus.STOPPED
+                && status != VehicleStatus.DWELLING
+                && status != VehicleStatus.BLOCKED) {
+            status = VehicleStatus.WAITING;
+        }
+    }
+
+    private WaitState inferWaitState(
+            Optional<MovementPlan> movement,
+            RoadNetwork roadNetwork,
+            TrafficState trafficState,
+            double observedAtSeconds) {
+        if (status == VehicleStatus.DWELLING) {
+            java.util.OptionalDouble release = Double.isFinite(dwellUntilSeconds)
+                    ? java.util.OptionalDouble.of(Math.max(observedAtSeconds, dwellUntilSeconds))
+                    : java.util.OptionalDouble.empty();
+            return new WaitState(
+                    WaitCause.DWELL,
+                    observedAtSeconds,
+                    Optional.empty(),
+                    release);
+        }
+        if (status == VehicleStatus.STOPPED) {
+            return waiting(WaitCause.EVENT_STOPPED, observedAtSeconds, Optional.empty());
+        }
+        if (status == VehicleStatus.BLOCKED || getNextRouteStep() == null) {
+            return waiting(WaitCause.ROUTE_MISSING, observedAtSeconds, Optional.empty());
+        }
+
+        Optional<JunctionDecision> decision = trafficState.junctionDecisionFor(id);
+        if (movement.isEmpty()) {
+            if (decision.isPresent() && !decision.get().granted()) {
+                return waitFromDecision(decision.get(), observedAtSeconds);
+            }
+            RouteStep step = getNextRouteStep();
+            Road road = step == null ? null : roadNetwork.getRoad(step.getRoadId());
+            if (road == null || !road.isRoutable()) {
+                return waiting(WaitCause.ROAD_UNAVAILABLE, observedAtSeconds, Optional.empty());
+            }
+            return waiting(WaitCause.UNKNOWN, observedAtSeconds, Optional.empty());
+        }
+
+        MovementPlan plan = movement.get();
+        if (plan.travelMetres() >= 0.01 && plan.speedMps() >= QUEUEING_THRESHOLD_MPS) {
+            return WaitState.none(observedAtSeconds);
+        }
+        if (!plan.mayLeaveRoad()) {
+            if (decision.isPresent() && !decision.get().granted()) {
+                return waitFromDecision(decision.get(), observedAtSeconds);
+            }
+            RouteStep current = getNextRouteStep();
+            RouteStep following = routePlan.stepAt(1);
+            if (current != null && following != null) {
+                return waiting(
+                        WaitCause.DOWNSTREAM_FULL,
+                        observedAtSeconds,
+                        Optional.of(new WaitResource.JunctionMovement(
+                                current.getToIntersectionId(),
+                                current.getRoadId(),
+                                following.getRoadId())));
+            }
+            return waiting(
+                    WaitCause.DOWNSTREAM_FULL,
+                    observedAtSeconds,
+                    Optional.of(new WaitResource.RoadExit(plan.roadId())));
+        }
+
+        RoadOccupancy occupancy = trafficState.occupancyOf(plan.roadId());
+        Lane lane = occupancy == null ? null : occupancy.lane(getLaneIndex());
+        if (lane != null && !lane.getObstructions().isEmpty()) {
+            return waiting(
+                    WaitCause.LOCAL_OBSTRUCTION,
+                    observedAtSeconds,
+                    Optional.of(new WaitResource.LocalObstruction(
+                            lane.getObstructions().get(0).getId())));
+        }
+        team.traffic.domain.vehicle.dynamics.TrafficParticipant leader =
+                occupancy == null
+                        ? null
+                        : occupancy.nearestOverlappingLeader(
+                                this, lateralClearanceMetres());
+        return waiting(
+                WaitCause.LEADER,
+                observedAtSeconds,
+                leader == null
+                        ? Optional.empty()
+                        : Optional.of(new WaitResource.Leader(leader.getId())));
+    }
+
+    private WaitState waitFromDecision(
+            JunctionDecision decision,
+            double observedAtSeconds) {
+        JunctionApproach approach = decision.approach();
+        WaitCause cause = switch (decision.denialReason()) {
+            case RED_SIGNAL -> WaitCause.RED_SIGNAL;
+            case DOWNSTREAM_FULL -> WaitCause.DOWNSTREAM_FULL;
+            case UNSAFE_GAP, CONFLICTING_MOVEMENT -> WaitCause.JUNCTION_YIELD;
+            case RECOVERY_HOLD -> WaitCause.RECOVERY_HOLD;
+            case NONE -> WaitCause.NONE;
+        };
+        Optional<WaitResource> resource = Optional.of(new WaitResource.JunctionMovement(
+                approach.junctionId(),
+                approach.fromRoad() == null ? null : approach.fromRoad().getId(),
+                approach.toRoad().getId()));
+        return new WaitState(
+                cause,
+                observedAtSeconds,
+                resource,
+                decision.expectedReleaseAtSeconds());
+    }
+
+    private WaitState waiting(
+            WaitCause cause,
+            double observedAtSeconds,
+            Optional<WaitResource> resource) {
+        return new WaitState(
+                cause,
+                observedAtSeconds,
+                resource,
+                java.util.OptionalDouble.empty());
+    }
+
     /**
      * Describes this vehicle's intention to cross the junction it is standing
      * at, so the junction can rank it against the others waiting there. Returns
@@ -380,17 +583,34 @@ public abstract class Vehicle implements TrafficParticipant {
      * go.
      */
     public Optional<JunctionApproach> planJunctionApproach(RoadNetwork roadNetwork, TrafficState trafficState) {
+        return junctionApproach(roadNetwork, trafficState, true);
+    }
+
+    /** Side-effect-free recovery/deadlock inspection of the next legal movement. */
+    public Optional<JunctionApproach> previewJunctionApproach(
+            RoadNetwork roadNetwork,
+            TrafficState trafficState) {
+        return junctionApproach(roadNetwork, trafficState, false);
+    }
+
+    private Optional<JunctionApproach> junctionApproach(
+            RoadNetwork roadNetwork,
+            TrafficState trafficState,
+            boolean applyRuntimeEffects) {
         Objects.requireNonNull(roadNetwork, "Road network must not be null.");
+        Objects.requireNonNull(trafficState, "Traffic state must not be null.");
         if (hasReachedDestination() || status == VehicleStatus.DWELLING) {
             return Optional.empty();
         }
         if (placement.isOnRoad()) {
-            return planRoadExitApproach(roadNetwork);
+            return planRoadExitApproach(roadNetwork, applyRuntimeEffects);
         }
         if (shouldHoldAtJunction(currentIntersectionId, trafficState.getElapsedSeconds())) {
-            instantaneousSpeedMps = 0.0;
-            trip.recordWaitingTick();
-            status = VehicleStatus.WAITING;
+            if (applyRuntimeEffects) {
+                instantaneousSpeedMps = 0.0;
+                trip.recordWaitingTick();
+                status = VehicleStatus.WAITING;
+            }
             return Optional.empty();
         }
 
@@ -400,19 +620,22 @@ public abstract class Vehicle implements TrafficParticipant {
         }
 
         Road targetRoad = roadNetwork.getRoad(step.getRoadId());
-        if (targetRoad == null || !targetRoad.isAvailable()) {
+        if (targetRoad == null || !targetRoad.isRoutable()) {
             return Optional.empty();
         }
 
         RouteStep previousStep = routePlan.stepAt(-1);
         Road approachRoad = previousStep == null ? null : roadNetwork.getRoad(previousStep.getRoadId());
-        Intersection origin = previousStep == null
-                ? null
-                : roadNetwork.getIntersection(previousStep.getFromIntersectionId());
-        TurnDirection turnDirection = TurnDirection.of(
-                origin,
-                roadNetwork.getIntersection(currentIntersectionId),
-                roadNetwork.getIntersection(step.getToIntersectionId()));
+        Optional<JunctionMovement> legalMovement = roadNetwork.getMovementGraph().find(
+                roadNetwork,
+                currentIntersectionId,
+                approachRoad == null ? null : approachRoad.getId(),
+                targetRoad.getId()).filter(movement -> movement.allows(getType()));
+        if (legalMovement.isEmpty()) {
+            if (applyRuntimeEffects) status = VehicleStatus.BLOCKED;
+            return Optional.empty();
+        }
+        TurnDirection turnDirection = legalMovement.get().direction();
 
         return Optional.of(new JunctionApproach(
                 this,
@@ -424,7 +647,9 @@ public abstract class Vehicle implements TrafficParticipant {
                 trip.getWaitingTicks()));
     }
 
-    private Optional<JunctionApproach> planRoadExitApproach(RoadNetwork roadNetwork) {
+    private Optional<JunctionApproach> planRoadExitApproach(
+            RoadNetwork roadNetwork,
+            boolean applyRuntimeEffects) {
         RouteStep currentStep = getNextRouteStep();
         RouteStep followingStep = routePlan.stepAt(1);
         if (currentStep == null || followingStep == null) {
@@ -441,13 +666,19 @@ public abstract class Vehicle implements TrafficParticipant {
         }
 
         Road targetRoad = roadNetwork.getRoad(followingStep.getRoadId());
-        if (targetRoad == null || !targetRoad.isAvailable()) {
+        if (targetRoad == null || !targetRoad.isRoutable()) {
             return Optional.empty();
         }
-        TurnDirection turnDirection = TurnDirection.of(
-                roadNetwork.getIntersection(currentStep.getFromIntersectionId()),
-                roadNetwork.getIntersection(currentStep.getToIntersectionId()),
-                roadNetwork.getIntersection(followingStep.getToIntersectionId()));
+        Optional<JunctionMovement> legalMovement = roadNetwork.getMovementGraph().find(
+                roadNetwork,
+                currentStep.getToIntersectionId(),
+                approachRoad.getId(),
+                targetRoad.getId()).filter(movement -> movement.allows(getType()));
+        if (legalMovement.isEmpty()) {
+            if (applyRuntimeEffects) status = VehicleStatus.BLOCKED;
+            return Optional.empty();
+        }
+        TurnDirection turnDirection = legalMovement.get().direction();
         return Optional.of(new JunctionApproach(
                 this,
                 currentStep.getToIntersectionId(),
@@ -522,6 +753,14 @@ public abstract class Vehicle implements TrafficParticipant {
         double entryLaneCentreMetres = targetOccupancy == null
                 ? 0.0
                 : targetOccupancy.laneCentreOffsetMetres(entryLane);
+        RouteStep previousStep = routePlan.stepAt(-1);
+        boolean completesUTurn = previousStep != null
+                && roadNetwork.getMovementGraph().find(
+                        currentIntersectionId,
+                        previousStep.getRoadId(),
+                        step.getRoadId())
+                        .map(JunctionMovement::isUTurn)
+                        .orElse(false);
         releaseOccupiedRoad(roadNetwork);
         roadNetwork.recordVehicleEnteringRoad(step.getRoadId());
         placement.enter(
@@ -531,6 +770,10 @@ public abstract class Vehicle implements TrafficParticipant {
                 entryLane,
                 entryLaneCentreMetres);
         trafficState.invalidateOccupancy(road.getId());
+        if (completesUTurn) {
+            trip.recordLegalUTurnCompleted();
+            navigationState.markFollowingRoute();
+        }
         return true;
     }
 
@@ -600,10 +843,94 @@ public abstract class Vehicle implements TrafficParticipant {
             RoutingService routingService,
             RoutePreference preference) {
         trip.recordRouteRecalculation();
-        requestRoute(roadNetwork, routingService, preference);
+        if (placement.isOnRoad()) {
+            replaceOnRoadRoute(roadNetwork, routingService, preference);
+        } else {
+            requestRoute(roadNetwork, routingService, preference);
+        }
         if (routePlan.getLastAlgorithmName() != null) {
             routingService.recordRouteRecalculation(routePlan.getLastAlgorithmName());
         }
+    }
+
+    private void replaceOnRoadRoute(
+            RoadNetwork roadNetwork,
+            RoutingService routingService,
+            RoutePreference preference) {
+        RouteAnchor anchor = getRouteAnchor();
+        if (!(anchor instanceof RouteAnchor.OnRoad onRoad)) {
+            requestRoute(roadNetwork, routingService, preference);
+            return;
+        }
+        long sourceVersion = routePlan.getVersion();
+        try {
+            RouteResult result = routingService.findRoute(
+                    roadNetwork,
+                    new RouteRequest(
+                            onRoad.exitJunctionId(),
+                            destinationIntersectionId,
+                            preference));
+            if (result == null || result.getRoute() == null) {
+                status = VehicleStatus.BLOCKED;
+                return;
+            }
+            Route candidateRoute = result.getRoute();
+            Optional<JunctionMovement> firstMovement = candidateRoute.isEmpty()
+                    ? Optional.empty()
+                    : roadNetwork.getMovementGraph().find(
+                            roadNetwork,
+                            onRoad.exitJunctionId(),
+                            onRoad.roadId(),
+                            candidateRoute.getSteps().get(0).getRoadId());
+            RouteCandidate candidate = new RouteCandidate(
+                    candidateRoute,
+                    RouteCost.from(candidateRoute),
+                    firstMovement,
+                    RouteCandidate.fingerprintOf(candidateRoute),
+                    result.getAlgorithmName(),
+                    sourceVersion);
+            RouteReplacementResult replacement = replaceRemainingRoute(
+                    anchor, candidate, roadNetwork);
+            if (!replacement.replaced()) {
+                status = VehicleStatus.BLOCKED;
+            } else if (status == VehicleStatus.BLOCKED) {
+                status = VehicleStatus.WAITING;
+            }
+        } catch (NoSuchElementException exception) {
+            status = VehicleStatus.BLOCKED;
+        }
+    }
+
+    public RouteAnchor getRouteAnchor() {
+        if (placement.isOnRoad()) {
+            return new RouteAnchor.OnRoad(
+                    placement.getOccupiedRoadId(),
+                    placement.getProgress(),
+                    placement.getEndIntersectionId());
+        }
+        RouteStep previous = routePlan.stepAt(-1);
+        return new RouteAnchor.AtJunction(
+                currentIntersectionId,
+                Optional.ofNullable(previous == null ? null : previous.getRoadId()));
+    }
+
+    public RouteReplacementResult replaceRemainingRoute(
+            RouteAnchor expectedAnchor,
+            RouteCandidate candidate,
+            RoadNetwork network) {
+        if (!getRouteAnchor().equals(expectedAnchor)) {
+            return new RouteReplacementResult(
+                    RouteReplacementResult.Status.REJECTED_ANCHOR,
+                    "Vehicle moved after the route request was created.",
+                    routePlan.getVersion());
+        }
+        return routePlan.replaceRemaining(
+                expectedAnchor,
+                candidate,
+                network,
+                network.getMovementGraph(),
+                getType(),
+                destinationIntersectionId);
     }
 
     public void moveTo(String nextIntersectionId) {
@@ -828,6 +1155,12 @@ public abstract class Vehicle implements TrafficParticipant {
         return step == null ? null : step.getRoadId();
     }
 
+    /** Road after the occupied/current route step, if one remains. */
+    public String getFollowingRoadId() {
+        RouteStep step = routePlan.stepAt(placement.isOnRoad() ? 1 : 0);
+        return step == null ? null : step.getRoadId();
+    }
+
     public void addTravelTime(double simulationSeconds) {
         trip.addTravelTime(simulationSeconds);
     }
@@ -840,7 +1173,43 @@ public abstract class Vehicle implements TrafficParticipant {
     public double getDistanceTravelledKm() { return trip.getDistanceTravelledKm(); }
     public double getTravelTimeSeconds() { return trip.getTravelTimeSeconds(); }
     public long getWaitingTicks() { return trip.getWaitingTicks(); }
+    public double getWaitingSeconds() { return trip.getWaitingSeconds(); }
     public int getRouteRecalculationCount() { return trip.getRouteRecalculationCount(); }
+    public int getLegalUTurnsCompleted() { return trip.getLegalUTurnsCompleted(); }
+    public long getRouteVersion() { return routePlan.getVersion(); }
+    public WaitState getWaitState() { return waitState; }
+    public DriverKnowledge getDriverKnowledge() { return driverKnowledge; }
+    public NavigationState getNavigationState() { return navigationState; }
+    public StallState getStallState() { return stallTracker.snapshot(); }
+    public ProgressStallTracker getStallTracker() { return stallTracker; }
+
+    public void configureStallTracking(
+            double minimumProgressMetres,
+            java.util.List<Double> retryBackoffSeconds) {
+        if (retryBackoffSeconds == null || retryBackoffSeconds.isEmpty()) {
+            throw new IllegalArgumentException("Retry backoff is required.");
+        }
+        stallTracker = new ProgressStallTracker(
+                minimumProgressMetres,
+                retryBackoffSeconds.stream().mapToDouble(Double::doubleValue).toArray());
+    }
+    public Optional<LocalPerception> getLocalPerception() {
+        return Optional.ofNullable(localPerception);
+    }
+
+    public void recordLocalPerception(LocalPerception perception) {
+        if (perception == null) {
+            throw new IllegalArgumentException("Local perception is required.");
+        }
+        this.localPerception = perception;
+    }
+
+    public void requestLaneChangeIntent(LaneChangeIntent intent) {
+        if (intent == null) {
+            throw new IllegalArgumentException("Lane-change intent is required.");
+        }
+        pendingLaneChangeIntent = intent;
+    }
 
     /**
      * Vehicle length in metres.

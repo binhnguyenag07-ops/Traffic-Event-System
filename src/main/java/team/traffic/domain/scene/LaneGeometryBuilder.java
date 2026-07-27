@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.MovementPermission;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
@@ -39,6 +40,14 @@ public final class LaneGeometryBuilder {
     private static final double STOP_LINE_SETBACK_METRES = 3.0;
     /** Points sampled along each junction turning curve. */
     private static final int CONNECTOR_SAMPLE_COUNT = 8;
+    /**
+     * Below this endpoint separation there is no drawable gap to curve across.
+     * Trying to force a curve through the junction centre would make the path
+     * leave a lane endpoint and return to it, reversing its tangent.
+     */
+    private static final double MIN_CURVED_CONNECTOR_METRES = 0.25;
+    /** A sampled connector must never hide a near-reversal in one vertex. */
+    private static final double MAX_CONNECTOR_VERTEX_TURN_DEGREES = 90.0;
 
     private final RoadNetwork network;
     private final RoadLayout roadLayout;
@@ -128,8 +137,8 @@ public final class LaneGeometryBuilder {
 
     /**
      * Turning curves across one junction, one per lane pairing between each
-     * road arriving and each road leaving, skipping the U-turn back down the
-     * road just travelled.
+     * legal road transition. The authoritative movement graph therefore keeps
+     * routing, arbitration, and rendered U-turn geometry in agreement.
      */
     public List<LaneConnector> connectorsAt(String junctionId) {
         Intersection junction = network.getIntersection(junctionId);
@@ -141,7 +150,12 @@ public final class LaneGeometryBuilder {
         for (Road incoming : roadsEndingAt(junctionId)) {
             List<LaneGeometry> inLanes = lanesOf(incoming);
             for (Road outgoing : roadsStartingAt(junctionId)) {
-                if (isReverseOf(outgoing, incoming)) {
+                boolean movementExists = network.getMovementGraph()
+                        .find(junctionId, incoming.getId(), outgoing.getId())
+                        .filter(movement ->
+                                movement.permission() == MovementPermission.ALLOWED)
+                        .isPresent();
+                if (!movementExists) {
                     continue;
                 }
                 List<LaneGeometry> outLanes = lanesOf(outgoing);
@@ -204,13 +218,90 @@ public final class LaneGeometryBuilder {
         return crossSectionAt(road, shape, fraction);
     }
 
-    private LaneConnector connector(LaneGeometry from, LaneGeometry to, GeoPoint control) {
-        GeoPoint start = from.centreline().get(from.centreline().size() - 1);
-        GeoPoint end = to.centreline().get(0);
+    private LaneConnector connector(
+            LaneGeometry from, LaneGeometry to, GeoPoint junctionCentre) {
         return new LaneConnector(
                 from.roadId(), from.laneIndex(),
                 to.roadId(), to.laneIndex(),
-                quadraticBezier(start, control, end));
+                connectorCurve(from.centreline(), to.centreline(), junctionCentre));
+    }
+
+    /**
+     * Joins two lane centrelines without inventing a loop at their shared node.
+     *
+     * <p>The old quadratic used the geographic junction centre as its control
+     * point. Straight OSM ways are commonly split at that node, so their
+     * offset lane endpoints are coincident beside the centre. A quadratic from
+     * that point to the centre and back has a 180-degree tangent reversal even
+     * though the route goes straight.</p>
+     *
+     * <p>A cubic uses the actual incoming and outgoing lane tangents instead.
+     * Its handles are one third of the gap, which keeps a turn local to its
+     * junction. If imported tangents point away from the destination, the
+     * centre-controlled curve remains useful when it still advances along the
+     * chord. A direct connector is the final, loop-free fallback.</p>
+     */
+    private static List<GeoPoint> connectorCurve(
+            List<GeoPoint> incoming, List<GeoPoint> outgoing, GeoPoint junctionCentre) {
+        GeoPoint start = incoming.get(incoming.size() - 1);
+        GeoPoint end = outgoing.get(0);
+        double gapMetres = PolylineGeometry.lengthMetres(List.of(start, end));
+        if (gapMetres < MIN_CURVED_CONNECTOR_METRES) {
+            return List.of(start, end);
+        }
+
+        GeoPoint before = incoming.get(incoming.size() - 2);
+        GeoPoint after = outgoing.get(1);
+        double incomingSegmentMetres = PolylineGeometry.lengthMetres(List.of(before, start));
+        double outgoingSegmentMetres = PolylineGeometry.lengthMetres(List.of(end, after));
+        if (incomingSegmentMetres <= 0 || outgoingSegmentMetres <= 0) {
+            return List.of(start, end);
+        }
+
+        double handleMetres = gapMetres / 3.0;
+        GeoPoint firstControl = extendFrom(start, before, handleMetres / incomingSegmentMetres);
+        GeoPoint secondControl = extendFrom(end, after, handleMetres / outgoingSegmentMetres);
+        List<GeoPoint> candidate = cubicBezier(start, firstControl, secondControl, end);
+        if (isSafeConnectorCurve(candidate)) {
+            return candidate;
+        }
+
+        List<GeoPoint> centreCurve = quadraticBezier(start, junctionCentre, end);
+        return isSafeConnectorCurve(centreCurve) ? centreCurve : List.of(start, end);
+    }
+
+    /**
+     * Extends from {@code reference} away from {@code behind}. For the outgoing
+     * control point the arguments are reversed, placing it behind the endpoint
+     * along the outgoing tangent as a cubic Bézier requires.
+     */
+    private static GeoPoint extendFrom(GeoPoint reference, GeoPoint behind, double scale) {
+        return new GeoPoint(
+                reference.latitude() + (reference.latitude() - behind.latitude()) * scale,
+                reference.longitude() + (reference.longitude() - behind.longitude()) * scale);
+    }
+
+    private static List<GeoPoint> cubicBezier(
+            GeoPoint start, GeoPoint firstControl, GeoPoint secondControl, GeoPoint end) {
+        List<GeoPoint> curve = new ArrayList<>(CONNECTOR_SAMPLE_COUNT + 1);
+        for (int step = 0; step <= CONNECTOR_SAMPLE_COUNT; step++) {
+            double t = (double) step / CONNECTOR_SAMPLE_COUNT;
+            double oneMinusT = 1.0 - t;
+            double a = oneMinusT * oneMinusT * oneMinusT;
+            double b = 3 * oneMinusT * oneMinusT * t;
+            double c = 3 * oneMinusT * t * t;
+            double d = t * t * t;
+            curve.add(new GeoPoint(
+                    a * start.latitude()
+                            + b * firstControl.latitude()
+                            + c * secondControl.latitude()
+                            + d * end.latitude(),
+                    a * start.longitude()
+                            + b * firstControl.longitude()
+                            + c * secondControl.longitude()
+                            + d * end.longitude()));
+        }
+        return curve;
     }
 
     private static List<GeoPoint> quadraticBezier(GeoPoint start, GeoPoint control, GeoPoint end) {
@@ -226,6 +317,41 @@ public final class LaneGeometryBuilder {
                     a * start.longitude() + b * control.longitude() + c * end.longitude()));
         }
         return curve;
+    }
+
+    /**
+     * Rejects a cubic that doubles back along its start-to-end chord. This is a
+     * guard for malformed or extremely sharp imported geometry; legitimate
+     * left and right turns keep making forward progress along that chord.
+     */
+    private static boolean isSafeConnectorCurve(List<GeoPoint> curve) {
+        GeoPoint start = curve.get(0);
+        GeoPoint end = curve.get(curve.size() - 1);
+        double latitudeScale = Math.cos(Math.toRadians(
+                (start.latitude() + end.latitude()) / 2.0));
+        double chordNorth = end.latitude() - start.latitude();
+        double chordEast = (end.longitude() - start.longitude()) * latitudeScale;
+        Double previousBearing = null;
+        for (int index = 1; index < curve.size(); index++) {
+            GeoPoint previous = curve.get(index - 1);
+            GeoPoint current = curve.get(index);
+            double segmentNorth = current.latitude() - previous.latitude();
+            double segmentEast = (current.longitude() - previous.longitude()) * latitudeScale;
+            if (segmentNorth * chordNorth + segmentEast * chordEast < 0) {
+                return false;
+            }
+            if (PolylineGeometry.lengthMetres(List.of(previous, current)) <= 0) {
+                continue;
+            }
+            double bearing = PolylineGeometry.bearingBetween(previous, current);
+            if (previousBearing != null
+                    && Math.abs(PolylineGeometry.bearingDifference(previousBearing, bearing))
+                            > MAX_CONNECTOR_VERTEX_TURN_DEGREES) {
+                return false;
+            }
+            previousBearing = bearing;
+        }
+        return true;
     }
 
     private List<GeoPoint> offsetPolyline(List<GeoPoint> shape, double offsetMetres) {

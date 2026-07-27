@@ -1,8 +1,11 @@
 package team.traffic.domain.vehicle;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import team.traffic.domain.vehicle.dynamics.WaitCause;
 
 /**
  * What a vehicle accumulated over its journey: where it went, how far, how
@@ -19,7 +22,10 @@ public final class TripRecord {
     private double distanceTravelledKm;
     private double travelTimeSeconds;
     private long waitingTicks;
+    private double waitingSeconds;
+    private final Map<WaitCause, Double> waitingSecondsByCause = new EnumMap<>(WaitCause.class);
     private int routeRecalculationCount;
+    private int legalUTurnsCompleted;
 
     public TripRecord(String startIntersectionId) {
         if (startIntersectionId == null || startIntersectionId.isBlank()) {
@@ -53,8 +59,23 @@ public final class TripRecord {
         waitingTicks++;
     }
 
+    public void recordWaiting(double seconds, WaitCause cause) {
+        if (!Double.isFinite(seconds) || seconds < 0) {
+            throw new IllegalArgumentException("Waiting duration must be finite and non-negative.");
+        }
+        if (cause == null || cause == WaitCause.NONE || seconds == 0) {
+            return;
+        }
+        waitingSeconds += seconds;
+        waitingSecondsByCause.merge(cause, seconds, Double::sum);
+    }
+
     public void recordRouteRecalculation() {
         routeRecalculationCount++;
+    }
+
+    public void recordLegalUTurnCompleted() {
+        legalUTurnsCompleted++;
     }
 
     public List<String> getVisitedIntersections() {
@@ -73,7 +94,19 @@ public final class TripRecord {
         return waitingTicks;
     }
 
+    public double getWaitingSeconds() {
+        return waitingSeconds;
+    }
+
+    public Map<WaitCause, Double> getWaitingSecondsByCause() {
+        return Collections.unmodifiableMap(new EnumMap<>(waitingSecondsByCause));
+    }
+
     public int getRouteRecalculationCount() {
         return routeRecalculationCount;
+    }
+
+    public int getLegalUTurnsCompleted() {
+        return legalUTurnsCompleted;
     }
 }

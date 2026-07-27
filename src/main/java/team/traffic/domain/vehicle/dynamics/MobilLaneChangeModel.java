@@ -34,7 +34,7 @@ public final class MobilLaneChangeModel implements LaneChangeModel {
 
         double currentAcceleration = predictedAcceleration(vehicle, current.findLeaderFor(vehicle), request);
         int bestIndex = currentIndex;
-        double bestIncentive = thresholdFor(vehicle);
+        double bestIncentive = thresholdFor(vehicle, request.intent());
 
         for (int candidateIndex : adjacentLaneIndexes(currentIndex, request.occupancy().getLaneCount())) {
             Lane candidate = request.occupancy().lane(candidateIndex);
@@ -65,8 +65,16 @@ public final class MobilLaneChangeModel implements LaneChangeModel {
         return new int[] {current - 1, current + 1};
     }
 
-    private double thresholdFor(TrafficParticipant vehicle) {
-        return vehicle.getPriorityLevel() > 0 ? 0.0 : incentiveThresholdMps2;
+    private double thresholdFor(TrafficParticipant vehicle, LaneChangeIntent intent) {
+        if (vehicle.getPriorityLevel() > 0
+                || intent == LaneChangeIntent.OBSTRUCTION_AVOIDANCE
+                || intent == LaneChangeIntent.RECOVERY) {
+            return 0.0;
+        }
+        if (intent == LaneChangeIntent.ROUTE_PREPARATION) {
+            return incentiveThresholdMps2 * 0.5;
+        }
+        return incentiveThresholdMps2;
     }
 
     private static boolean safeForFollower(TrafficParticipant entering, Lane target) {

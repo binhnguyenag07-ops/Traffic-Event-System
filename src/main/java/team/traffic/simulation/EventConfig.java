@@ -1,5 +1,8 @@
 package team.traffic.simulation;
 
+import team.traffic.domain.event.EventOrigin;
+import team.traffic.domain.event.InformationPolicy;
+
 public record EventConfig(
         String id,
         String type,
@@ -9,10 +12,31 @@ public record EventConfig(
         Double value,
         String causingVehicleId,
         Double positionAlongRoad,
-        java.util.List<Integer> blockedLaneIndexes) {
+        java.util.List<Integer> blockedLaneIndexes,
+        EventOrigin origin,
+        InformationPolicy informationPolicy) {
 
     public EventConfig {
         blockedLaneIndexes = blockedLaneIndexes == null ? java.util.List.of() : java.util.List.copyOf(blockedLaneIndexes);
+        origin = origin == null ? EventOrigin.SCENARIO : origin;
+        informationPolicy = informationPolicy == null
+                ? InformationPolicy.broadcastOnActivation()
+                : informationPolicy;
+    }
+
+    public EventConfig(
+            String id,
+            String type,
+            String affectedRoadId,
+            double startTimeSeconds,
+            double durationSeconds,
+            Double value,
+            String causingVehicleId,
+            Double positionAlongRoad,
+            java.util.List<Integer> blockedLaneIndexes) {
+        this(id, type, affectedRoadId, startTimeSeconds, durationSeconds,
+                value, causingVehicleId, positionAlongRoad, blockedLaneIndexes,
+                EventOrigin.SCENARIO, InformationPolicy.broadcastOnActivation());
     }
 
     public EventConfig(String id, String type, String affectedRoadId,

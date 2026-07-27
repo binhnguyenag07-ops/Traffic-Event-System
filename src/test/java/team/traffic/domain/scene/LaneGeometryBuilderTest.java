@@ -149,6 +149,44 @@ class LaneGeometryBuilderTest {
     }
 
     @Test
+    void aStraightContinuationDoesNotDoubleBackThroughTheJunctionCentre() {
+        RoadNetwork network = crossroads();
+        LaneConnector straight = new LaneGeometryBuilder(network).connectorsAt("C").stream()
+                .filter(connector -> connector.fromRoadId().equals("NC"))
+                .filter(connector -> connector.toRoadId().equals("CS"))
+                .findFirst()
+                .orElseThrow();
+
+        GeoPoint start = straight.curve().get(0);
+        double furthestExcursion = straight.curve().stream()
+                .mapToDouble(point -> PolylineGeometry.lengthMetres(List.of(start, point)))
+                .max()
+                .orElseThrow();
+
+        // Both directed roads are the same straight street split at C. Their
+        // lane endpoints coincide beside the centre of the junction, so a
+        // connector must stay there; travelling to C and back makes its tangent
+        // reverse by 180 degrees and spins a rendered vehicle.
+        assertThat(furthestExcursion)
+                .as("a straight continuation must not leave and return to coincident lane endpoints")
+                .isLessThan(0.25);
+    }
+
+    @Test
+    void aRealTurnRetainsACurvedConnector() {
+        RoadNetwork network = crossroads();
+        LaneConnector turn = new LaneGeometryBuilder(network).connectorsAt("C").stream()
+                .filter(connector -> connector.fromRoadId().equals("NC"))
+                .filter(connector -> connector.toRoadId().equals("CE"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(turn.curve())
+                .as("preventing loops must not flatten legitimate turns")
+                .hasSizeGreaterThan(2);
+    }
+
+    @Test
     void aJunctionPavementEnclosesAnArea() {
         RoadNetwork network = crossroads();
 
