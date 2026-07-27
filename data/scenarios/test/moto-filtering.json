@@ -1,0 +1,78 @@
+{
+  "id": "test-moto-filtering",
+  "name": "Motorcycles filtering past a queue",
+  "description": "Cars and motorcycles share one 4.5 m lane. Motorcycles should end up abreast of the cars, not queued behind them, and must never overlap a car.",
+  "map": "../../maps/test/moto-filtering.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 160,
+    "expect": "Cars and motorcycles share one 4.5 m lane. Motorcycles should end up abreast of the cars, not queued behind them, and must never overlap a car."
+  },
+  "vehicles": [
+    {
+      "id": "v-car-0",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-car-1",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-car-2",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-car-3",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-moto-0",
+      "type": "MOTORCYCLE",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-moto-1",
+      "type": "MOTORCYCLE",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-moto-2",
+      "type": "MOTORCYCLE",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-moto-3",
+      "type": "MOTORCYCLE",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-moto-4",
+      "type": "MOTORCYCLE",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-moto-5",
+      "type": "MOTORCYCLE",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    }
+  ],
+  "events": []
+}

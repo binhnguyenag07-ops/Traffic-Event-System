@@ -1,0 +1,73 @@
+{
+  "intersections": [
+    {
+      "id": "A",
+      "name": "A",
+      "x": 0,
+      "y": -0.15,
+      "latitude": 10.7786525,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "B",
+      "name": "B",
+      "x": 0,
+      "y": 0.15,
+      "latitude": 10.7813475,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    }
+  ],
+  "roads": [
+    {
+      "id": "R1",
+      "name": "R1",
+      "physicalRoadId": "R1",
+      "startIntersectionId": "A",
+      "endIntersectionId": "B",
+      "distance": 0.30001,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 1,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.7786525,
+          106.7
+        ],
+        [
+          10.7795508,
+          106.7
+        ],
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.7804492,
+          106.7
+        ],
+        [
+          10.7813475,
+          106.7
+        ]
+      ]
+    }
+  ],
+  "buildings": [],
+  "landCovers": []
+}

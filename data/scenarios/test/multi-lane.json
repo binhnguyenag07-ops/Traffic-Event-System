@@ -1,0 +1,54 @@
+{
+  "id": "test-multi-lane",
+  "name": "Three lanes side by side",
+  "description": "Six cars on a three-lane road. They must sit on three distinct lane centres. Two sprites sharing one centre line, or a car half off the asphalt, is a lane-offset bug.",
+  "map": "../../maps/test/multi-lane.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 220,
+    "expect": "Six cars on a three-lane road. They must sit on three distinct lane centres. Two sprites sharing one centre line, or a car half off the asphalt, is a lane-offset bug."
+  },
+  "vehicles": [
+    {
+      "id": "v-lane-0",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-lane-1",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-lane-2",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-lane-3",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-lane-4",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-lane-5",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    }
+  ],
+  "events": []
+}

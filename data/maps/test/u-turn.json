@@ -1,0 +1,143 @@
+{
+  "intersections": [
+    {
+      "id": "A",
+      "name": "A",
+      "x": 0,
+      "y": -0.16,
+      "latitude": 10.7785627,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "M",
+      "name": "M",
+      "x": 0,
+      "y": 0,
+      "latitude": 10.78,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    },
+    {
+      "id": "B",
+      "name": "B",
+      "x": 0,
+      "y": 0.16,
+      "latitude": 10.7814373,
+      "longitude": 106.7,
+      "locationType": "NORMAL"
+    }
+  ],
+  "roads": [
+    {
+      "id": "R1-F",
+      "name": "R1-F",
+      "physicalRoadId": "R1",
+      "startIntersectionId": "A",
+      "endIntersectionId": "M",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.7785627,
+          106.7
+        ],
+        [
+          10.78,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "R1-R",
+      "name": "R1-R",
+      "physicalRoadId": "R1",
+      "startIntersectionId": "M",
+      "endIntersectionId": "A",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.7785627,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "R2-F",
+      "name": "R2-F",
+      "physicalRoadId": "R2",
+      "startIntersectionId": "M",
+      "endIntersectionId": "B",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.78,
+          106.7
+        ],
+        [
+          10.7814373,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "R2-R",
+      "name": "R2-R",
+      "physicalRoadId": "R2",
+      "startIntersectionId": "B",
+      "endIntersectionId": "M",
+      "distance": 0.16,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 2,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.7814373,
+          106.7
+        ],
+        [
+          10.78,
+          106.7
+        ]
+      ]
+    }
+  ],
+  "buildings": [],
+  "landCovers": []
+}

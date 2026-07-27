@@ -1,0 +1,30 @@
+{
+  "id": "test-two-way-offset",
+  "name": "Two-way road: carriageways must not overlap",
+  "description": "One physical street carrying both directions. The two streams must be drawn side by side with a visible gap. If they sit on top of each other the carriageway offset is not being applied.",
+  "map": "../../maps/test/two-way-offset.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 220,
+    "expect": "One physical street carrying both directions. The two streams must be drawn side by side with a visible gap. If they sit on top of each other the carriageway offset is not being applied."
+  },
+  "vehicles": [
+    {
+      "id": "v-north",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-south",
+      "type": "CAR",
+      "startIntersectionId": "B",
+      "destinationIntersectionId": "A"
+    }
+  ],
+  "events": []
+}

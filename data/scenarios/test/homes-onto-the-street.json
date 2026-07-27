@@ -1,0 +1,66 @@
+{
+  "id": "test-homes-onto-the-street",
+  "name": "Traffic pouring out of houses",
+  "description": "Ten houses along a residential street and two offices at the end, with demand generated from the houses themselves. Vehicles must appear at the junctions their driveways reach, join the correct carriageway, and head for the offices — not materialise in the middle of the road.",
+  "map": "../../maps/test/homes-onto-the-street.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 300,
+    "expect": "Ten houses along a residential street and two offices at the end, with demand generated from the houses themselves. Vehicles must appear at the junctions their driveways reach, join the correct carriageway, and head for the offices — not materialise in the middle of the road."
+  },
+  "demandParameters": "../../demand/default_assumptions.json",
+  "startTimeOfDay": "07:00",
+  "durationHours": 3,
+  "seed": 7,
+  "scale": 8,
+  "demandSources": [
+    {
+      "id": "houses",
+      "from": {
+        "kind": "BUILDING",
+        "types": [
+          "RESIDENTIAL"
+        ]
+      },
+      "production": {
+        "kind": "POPULATION_DERIVED",
+        "tripsPerPersonPerDay": 2
+      },
+      "flows": [
+        {
+          "id": "to-work",
+          "purpose": "COMMUTE",
+          "share": 0.9,
+          "vehicleMix": [
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.75
+            },
+            {
+              "type": "CAR",
+              "share": 0.25
+            }
+          ],
+          "curve": "MORNING_PEAK",
+          "completion": "REMOVE_AT_LAST_STOP",
+          "legs": [
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": [
+                  "OFFICE"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "vehicles": [],
+  "events": []
+}

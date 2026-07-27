@@ -1,0 +1,54 @@
+{
+  "id": "test-stop-line",
+  "name": "Queue at a stop line",
+  "description": "Cars queue at a signal. Every nose must stop short of the painted line and no two bodies may overlap. A car sitting half across the line means the sprite is centred on the bumper instead of set back from it.",
+  "map": "../../maps/test/stop-line.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 130,
+    "expect": "Cars queue at a signal. Every nose must stop short of the painted line and no two bodies may overlap. A car sitting half across the line means the sprite is centred on the bumper instead of set back from it."
+  },
+  "vehicles": [
+    {
+      "id": "v-queue-0",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-queue-1",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-queue-2",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-queue-3",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-queue-4",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-queue-5",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    }
+  ],
+  "events": []
+}
