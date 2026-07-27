@@ -20,7 +20,6 @@ import team.traffic.routing.AStarPathFindingStrategy;
 import team.traffic.routing.BfsPathFindingStrategy;
 import team.traffic.routing.DijkstraPathFindingStrategy;
 import team.traffic.routing.RoutingStrategyRegistry;
-import team.traffic.routing.DynamicReroutingListener;
 import team.traffic.service.impl.RoadNetworkServiceImpl;
 import team.traffic.service.impl.NetworkEditingServiceImpl;
 import team.traffic.service.impl.OsrmRoadGeometryProvider;
@@ -57,15 +56,14 @@ public class App {
         // Create services
         RoadNetworkServiceImpl networkService = new RoadNetworkServiceImpl(network);
         RoutingServiceImpl routingService = new RoutingServiceImpl(registry);
-        TrafficSimulator simulator = new TrafficSimulator(network, routingService, eventBus);
+        TrafficSimulator simulator = new TrafficSimulator(
+                network,
+                routingService,
+                eventBus,
+                team.traffic.simulation.AdaptiveTrafficConfig.defaults());
         SimulationServiceImpl simulationService = new SimulationServiceImpl(simulator);
         VehicleServiceImpl vehicleService = new VehicleServiceImpl(simulator, routingService);
         TrafficEventServiceImpl trafficEventService = new TrafficEventServiceImpl(eventBus, networkService, simulator);
-        DynamicReroutingListener reroutingListener = new DynamicReroutingListener(
-                simulator::getNetwork,
-                routingService,
-                () -> simulator.getVehicles());
-        eventBus.subscribe(reroutingListener);
 
         // Create controllers
         HealthController healthController = new HealthController();

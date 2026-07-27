@@ -15,6 +15,8 @@ import team.traffic.api.dto.VehicleTraceSummaryDto;
 import team.traffic.domain.demand.DemandScenario;
 import team.traffic.persistence.DemandScenarioParser;
 import team.traffic.persistence.ScenarioConfigParser;
+import team.traffic.persistence.AdaptiveTrafficConfigParser;
+import team.traffic.persistence.DriverDecisionProfileParser;
 import team.traffic.service.SimulationService;
 import team.traffic.simulation.EventConfig;
 import team.traffic.simulation.VehicleConfig;
@@ -40,6 +42,10 @@ public class SimulationController {
         app.post("/api/simulation/tick", this::tick);
         app.get("/api/simulation/status", this::getStatus);
         app.get("/api/simulation/snapshot", this::getSnapshot);
+        app.get("/api/simulation/diagnostics", ctx -> {
+            Object diagnostics = simulationService.getDiagnostics();
+            ctx.json(diagnostics == null ? Map.of() : diagnostics);
+        });
         app.get("/api/simulation/tick/current", this::getCurrentTick);
         app.get("/api/simulation/trace", this::getTraceSummary);
         app.get("/api/simulation/trace/frames", ctx -> ctx.json(simulationService.getFrameTimeline()));
@@ -76,6 +82,14 @@ public class SimulationController {
                     ScenarioConfigParser.parseVehicles(body.get("vehicles"));
             List<EventConfig> eventConfigs =
                     ScenarioConfigParser.parseEvents(body.get("events"));
+            if (body.has("adaptiveTraffic")) {
+                simulationService.configureAdaptiveTraffic(
+                        AdaptiveTrafficConfigParser.parse(body.get("adaptiveTraffic")));
+            }
+            if (body.has("driverProfiles")) {
+                simulationService.configureDriverDecisionProfiles(
+                        DriverDecisionProfileParser.parse(body.get("driverProfiles")));
+            }
             Optional<DemandScenario> demand = new DemandScenarioParser().parseOptional(
                     body,
                     simulationService.getNetwork(),

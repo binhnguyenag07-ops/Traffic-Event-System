@@ -16,6 +16,7 @@ public class RoadNetwork {
     private final Map<String, List<Road>> incomingRoads;
     private final Map<String, Building> buildings;
     private final List<LandCover> landCovers;
+    private final JunctionMovementGraph movementGraph;
 
     public RoadNetwork() {
         this.intersections = new LinkedHashMap<>();
@@ -24,6 +25,7 @@ public class RoadNetwork {
         this.incomingRoads = new LinkedHashMap<>();
         this.buildings = new LinkedHashMap<>();
         this.landCovers = new ArrayList<>();
+        this.movementGraph = new JunctionMovementGraph(this);
     }
 
     // Adds an intersection while preserving the graph-wide unique-id invariant.
@@ -95,6 +97,7 @@ public class RoadNetwork {
 
         outgoingRoads.get(removedRoad.getStartIntersectionId()).remove(removedRoad);
         incomingRoads.get(removedRoad.getEndIntersectionId()).remove(removedRoad);
+        movementGraph.removeRulesForRoad(roadId);
     }
 
     // Finds all directed roads starting from the given intersection.
@@ -253,6 +256,11 @@ public class RoadNetwork {
 
     public Map<String, Road> getRoads() {
         return Collections.unmodifiableMap(roads);
+    }
+
+    /** The single movement graph shared by routing, dynamics, and scene geometry. */
+    public JunctionMovementGraph getMovementGraph() {
+        return movementGraph;
     }
 
     public void addBuilding(Building building) {

@@ -5,6 +5,8 @@ import java.nio.file.Path;
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,6 +16,9 @@ import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.LandCover;
 import team.traffic.domain.network.LandCoverType;
 import team.traffic.domain.network.LocationType;
+import team.traffic.domain.network.JunctionMovement;
+import team.traffic.domain.network.MovementPermission;
+import team.traffic.domain.network.MovementProvenance;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
@@ -22,6 +27,8 @@ import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.network.Building;
 import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.network.BuildingType;
+import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.vehicle.dynamics.TurnDirection;
 import team.traffic.exception.InvalidMapException;
 
 public class JsonMapLoader implements MapLoader {
@@ -69,9 +76,46 @@ public class JsonMapLoader implements MapLoader {
         RoadNetwork roadNetwork = new RoadNetwork();
         addIntersections(roadNetwork, mapData.intersections);
         addRoads(roadNetwork, mapData.roads == null ? Collections.emptyList() : mapData.roads);
+        addTurnaroundPoints(
+                roadNetwork,
+                mapData.turnaroundPoints == null
+                        ? Collections.emptyList()
+                        : mapData.turnaroundPoints);
+        addJunctionMovements(
+                roadNetwork,
+                mapData.junctionMovements == null
+                        ? Collections.emptyList()
+                        : mapData.junctionMovements);
         addBuildings(roadNetwork, mapData.buildings == null ? Collections.emptyList() : mapData.buildings);
         addLandCovers(roadNetwork, mapData.landCovers == null ? Collections.emptyList() : mapData.landCovers);
         return roadNetwork;
+    }
+
+    private void addTurnaroundPoints(
+            RoadNetwork roadNetwork,
+            List<TurnaroundPointData> points) throws InvalidMapException {
+        TurnaroundPointNormalizer normalizer = new TurnaroundPointNormalizer();
+        for (int index = 0; index < points.size(); index++) {
+            try {
+                TurnaroundPointData data =
+                        requireEntry(points.get(index), "turnaroundPoint", index);
+                normalizer.normalize(
+                        roadNetwork,
+                        data.id,
+                        data.physicalRoadId,
+                        data.referenceRoadId,
+                        requireField(
+                                data.fractionAlongReferenceRoad,
+                                "fractionAlongReferenceRoad"),
+                        data.allowedVehicleTypes,
+                        data.penaltySeconds == null
+                                ? team.traffic.domain.network.JunctionMovementGraph
+                                        .DEFAULT_UTURN_PENALTY_SECONDS
+                                : data.penaltySeconds);
+            } catch (RuntimeException exception) {
+                throw invalidEntry("turnaroundPoint", index, exception);
+            }
+        }
     }
 
     private Path requireFilePath(String filePath) throws InvalidMapException {
@@ -105,6 +149,46 @@ public class JsonMapLoader implements MapLoader {
         }
     }
 
+    private void addJunctionMovements(
+            RoadNetwork roadNetwork,
+            List<JunctionMovementData> movements) throws InvalidMapException {
+        for (int index = 0; index < movements.size(); index++) {
+            try {
+                JunctionMovementData data =
+                        requireEntry(movements.get(index), "junctionMovement", index);
+                JunctionMovement movement = data.toMovement();
+                validateMovementReferences(roadNetwork, movement);
+                roadNetwork.getMovementGraph().register(movement);
+            } catch (RuntimeException exception) {
+                throw invalidEntry("junctionMovement", index, exception);
+            }
+        }
+    }
+
+    private static void validateMovementReferences(
+            RoadNetwork roadNetwork,
+            JunctionMovement movement) {
+        if (!roadNetwork.containsIntersection(movement.junctionId())) {
+            throw new IllegalArgumentException(
+                    "Junction does not exist: " + movement.junctionId());
+        }
+        Road target = roadNetwork.getRoad(movement.toRoadId());
+        if (target == null
+                || !movement.junctionId().equals(target.getStartIntersectionId())) {
+            throw new IllegalArgumentException(
+                    "Target road must leave the movement junction: "
+                            + movement.toRoadId());
+        }
+        movement.fromRoadId().ifPresent(fromRoadId -> {
+            Road source = roadNetwork.getRoad(fromRoadId);
+            if (source == null
+                    || !movement.junctionId().equals(source.getEndIntersectionId())) {
+                throw new IllegalArgumentException(
+                        "Source road must enter the movement junction: " + fromRoadId);
+            }
+        });
+    }
+
     private void addBuildings(RoadNetwork roadNetwork, List<BuildingData> buildings)
             throws InvalidMapException {
         for (int index = 0; index < buildings.size(); index++) {
@@ -133,8 +217,42 @@ public class JsonMapLoader implements MapLoader {
     static class MapData {
         public List<IntersectionData> intersections;
         public List<RoadData> roads;
+        public List<TurnaroundPointData> turnaroundPoints;
+        public List<JunctionMovementData> junctionMovements;
         public List<BuildingData> buildings;
         public List<LandCoverData> landCovers;
+    }
+
+    static class TurnaroundPointData {
+        public String id;
+        public String physicalRoadId;
+        public String referenceRoadId;
+        public Double fractionAlongReferenceRoad;
+        public Set<VehicleType> allowedVehicleTypes;
+        public Double penaltySeconds;
+    }
+
+    static class JunctionMovementData {
+        public String junctionId;
+        public String fromRoadId;
+        public String toRoadId;
+        public TurnDirection direction;
+        public MovementPermission permission;
+        public Set<VehicleType> allowedVehicleTypes;
+        public Double penaltySeconds;
+        public MovementProvenance provenance;
+
+        JunctionMovement toMovement() {
+            return new JunctionMovement(
+                    junctionId,
+                    Optional.ofNullable(fromRoadId),
+                    toRoadId,
+                    requireField(direction, "direction"),
+                    requireField(permission, "permission"),
+                    allowedVehicleTypes == null ? Set.of() : allowedVehicleTypes,
+                    penaltySeconds == null ? 0.0 : penaltySeconds,
+                    provenance == null ? MovementProvenance.EXPLICIT : provenance);
+        }
     }
 
     static class BuildingData {

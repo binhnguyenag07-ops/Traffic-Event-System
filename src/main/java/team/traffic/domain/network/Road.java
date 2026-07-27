@@ -136,7 +136,7 @@ public class Road {
      * range 0..1. Vehicle density is the traffic-load input to the cost formula,
      * so capacity usage is not multiplied into the cost a second time.</p>
      *
-     * @return positive infinity when the road cannot accept a route; otherwise
+     * @return positive infinity when the road is not traversable; otherwise
      *         free-flow hours multiplied by the road-condition cost multiplier
      */
     public double calculateTravelCost() {
@@ -144,6 +144,17 @@ public class Road {
             return Double.POSITIVE_INFINITY;
         }
 
+        return getFreeFlowTravelTimeHours() * condition.getTravelCostMultiplier();
+    }
+
+    /**
+     * Graph-search cost that ignores momentary admission capacity while still
+     * respecting permanent/static traversability.
+     */
+    public double calculateTraversableTravelCost() {
+        if (!isRoutable()) {
+            return Double.POSITIVE_INFINITY;
+        }
         return getFreeFlowTravelTimeHours() * condition.getTravelCostMultiplier();
     }
 
@@ -195,7 +206,12 @@ public class Road {
 
     // A road can be used only when it is open enough and still has capacity.
     public boolean isAvailable() {
-        return condition.isRoutable() && hasRemainingCapacity();
+        return isRoutable() && hasRemainingCapacity();
+    }
+
+    /** Static/event traversability, deliberately independent of momentary storage. */
+    public boolean isRoutable() {
+        return condition.isRoutable();
     }
 
     public boolean hasRemainingCapacity() {

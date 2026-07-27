@@ -1,6 +1,7 @@
 package team.traffic.domain.vehicle.dynamics;
 
 import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.vehicle.navigation.DriverDecisionProfile;
 
 /**
  * Driver-behaviour parameters that complement the physical vehicle profile.
@@ -41,7 +42,8 @@ public record DriverProfile(
         double speedFactor,
         double lateralAccelerationMps2,
         double politeness,
-        double maxLateralSpeedMps) {
+        double maxLateralSpeedMps,
+        DriverDecisionProfile decision) {
 
     /** SUMO's {@code maxSpeedLat} default, and the value used where none is given. */
     public static final double DEFAULT_MAX_LATERAL_SPEED_MPS = 1.0;
@@ -53,7 +55,8 @@ public record DriverProfile(
             double gapAcceptanceSeconds,
             double speedFactor) {
         this(minimumGapMetres, reactionTimeSeconds, imperfection,
-                gapAcceptanceSeconds, speedFactor, 2.5, 0.35, DEFAULT_MAX_LATERAL_SPEED_MPS);
+                gapAcceptanceSeconds, speedFactor, 2.5, 0.35,
+                DEFAULT_MAX_LATERAL_SPEED_MPS, DriverDecisionProfile.defaults());
     }
 
     public DriverProfile(
@@ -65,7 +68,22 @@ public record DriverProfile(
             double lateralAccelerationMps2,
             double politeness) {
         this(minimumGapMetres, reactionTimeSeconds, imperfection, gapAcceptanceSeconds,
-                speedFactor, lateralAccelerationMps2, politeness, DEFAULT_MAX_LATERAL_SPEED_MPS);
+                speedFactor, lateralAccelerationMps2, politeness,
+                DEFAULT_MAX_LATERAL_SPEED_MPS, DriverDecisionProfile.defaults());
+    }
+
+    public DriverProfile(
+            double minimumGapMetres,
+            double reactionTimeSeconds,
+            double imperfection,
+            double gapAcceptanceSeconds,
+            double speedFactor,
+            double lateralAccelerationMps2,
+            double politeness,
+            double maxLateralSpeedMps) {
+        this(minimumGapMetres, reactionTimeSeconds, imperfection, gapAcceptanceSeconds,
+                speedFactor, lateralAccelerationMps2, politeness,
+                maxLateralSpeedMps, DriverDecisionProfile.defaults());
     }
 
     public DriverProfile {
@@ -81,6 +99,9 @@ public record DriverProfile(
             throw new IllegalArgumentException("Politeness must be between 0 and 1.");
         }
         requirePositive("Maximum lateral speed", maxLateralSpeedMps);
+        if (decision == null) {
+            throw new IllegalArgumentException("Driver decision profile is required.");
+        }
     }
 
     /**
@@ -100,10 +121,14 @@ public record DriverProfile(
             throw new IllegalArgumentException("Vehicle type is required.");
         }
         return switch (type) {
-            case CAR -> new DriverProfile(2.5, 1.0, 0.5, 3.0, 1.0, 2.5, 0.35, 1.0);
-            case MOTORCYCLE -> new DriverProfile(0.8, 0.65, 0.35, 1.4, 1.05, 3.4, 0.15, 1.6);
-            case BUS -> new DriverProfile(3.0, 1.4, 0.4, 4.5, 0.95, 2.0, 0.6, 0.7);
-            case EMERGENCY -> new DriverProfile(2.0, 0.7, 0.1, 1.5, 1.3, 3.2, 0.0, 1.4);
+            case CAR -> new DriverProfile(2.5, 1.0, 0.5, 3.0, 1.0, 2.5, 0.35, 1.0,
+                    DriverDecisionProfile.forType(type));
+            case MOTORCYCLE -> new DriverProfile(0.8, 0.65, 0.35, 1.4, 1.05, 3.4, 0.15, 1.6,
+                    DriverDecisionProfile.forType(type));
+            case BUS -> new DriverProfile(3.0, 1.4, 0.4, 4.5, 0.95, 2.0, 0.6, 0.7,
+                    DriverDecisionProfile.forType(type));
+            case EMERGENCY -> new DriverProfile(2.0, 0.7, 0.1, 1.5, 1.3, 3.2, 0.0, 1.4,
+                    DriverDecisionProfile.forType(type));
         };
     }
 
@@ -121,7 +146,8 @@ public record DriverProfile(
                 base.speedFactor * factor(vehicleId, 5),
                 base.lateralAccelerationMps2 * factor(vehicleId, 6),
                 clamp01(base.politeness * factor(vehicleId, 7)),
-                base.maxLateralSpeedMps * factor(vehicleId, 8));
+                base.maxLateralSpeedMps * factor(vehicleId, 8),
+                base.decision.variedFor(vehicleId));
     }
 
     /**

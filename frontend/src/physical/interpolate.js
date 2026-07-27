@@ -157,8 +157,8 @@ function junctionAnchor(vehicle, connectors) {
 export function interpolateVehicles(previous, next, t, geometry = {}) {
   const fraction = clamp01(t)
   const before = new Map((previous || []).map((vehicle) => [vehicle.id, vehicle]))
-  const connectors = geometry.connectors || []
-  const lanes = geometry.lanes || []
+  const connectors = geometry?.connectors || []
+  const lanes = geometry?.lanes || []
 
   return (next || []).map((target) => {
     const source = before.get(target.id)

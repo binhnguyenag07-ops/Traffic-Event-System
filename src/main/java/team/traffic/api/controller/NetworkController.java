@@ -8,11 +8,18 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.network.Building;
+import team.traffic.domain.network.JunctionMovement;
+import team.traffic.domain.network.MovementPermission;
+import team.traffic.domain.network.MovementProvenance;
+import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.vehicle.dynamics.TurnDirection;
 import team.traffic.exception.NetworkEditConflictException;
 import team.traffic.service.NetworkEditingService;
 import team.traffic.service.RoadNetworkService;
 
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class NetworkController {
@@ -70,6 +77,9 @@ public class NetworkController {
             }
             ctx.json(roadToMap(road));
         });
+        app.get("/api/network/movements", ctx -> ctx.json(
+                networkService.getNetwork().getMovementGraph().explicitMovements()
+                        .stream().map(this::movementToMap).toList()));
         app.get("/api/network/buildings", ctx -> {
             RoadNetwork network = networkService.getNetwork();
             ctx.json(network.getBuildings().values().stream()
@@ -92,11 +102,58 @@ public class NetworkController {
         app.delete("/api/network/roads/{id}", ctx -> runEdit(ctx,
                 () -> { requireEditor().removeRoad(ctx.pathParam("id")); ctx.status(204); }));
         app.put("/api/network/roads/{id}/condition", this::updateCondition);
+        app.put("/api/network/movements", this::upsertMovement);
+        app.delete("/api/network/movements", this::removeMovement);
         app.get("/api/network/intersections/{id}/roads", this::connectedRoads);
         app.get("/api/network/export", ctx -> runEdit(ctx, () -> {
             ctx.header("Content-Disposition", "attachment; filename=traffic-network.json");
             ctx.contentType("application/json").result(requireEditor().exportJson());
         }));
+    }
+
+    private void upsertMovement(io.javalin.http.Context ctx) {
+        runEdit(ctx, () -> {
+            JunctionMovementRequest request =
+                    ctx.bodyAsClass(JunctionMovementRequest.class);
+            JunctionMovement movement = requireEditor().upsertMovement(
+                    new JunctionMovement(
+                            request.junctionId,
+                            Optional.ofNullable(request.fromRoadId),
+                            request.toRoadId,
+                            TurnDirection.valueOf(request.direction.toUpperCase()),
+                            request.permission == null
+                                    ? MovementPermission.ALLOWED
+                                    : MovementPermission.valueOf(
+                                            request.permission.toUpperCase()),
+                            request.allowedVehicleTypes == null
+                                    ? Set.of()
+                                    : request.allowedVehicleTypes.stream()
+                                            .map(value -> VehicleType.valueOf(
+                                                    value.toUpperCase()))
+                                            .collect(java.util.stream.Collectors.toSet()),
+                            request.penaltySeconds,
+                            MovementProvenance.EXPLICIT));
+            ctx.json(movementToMap(movement));
+        });
+    }
+
+    private void removeMovement(io.javalin.http.Context ctx) {
+        runEdit(ctx, () -> {
+            String junctionId = ctx.queryParam("junctionId");
+            String fromRoadId = ctx.queryParam("fromRoadId");
+            String toRoadId = ctx.queryParam("toRoadId");
+            if (junctionId == null || junctionId.isBlank()
+                    || toRoadId == null || toRoadId.isBlank()) {
+                throw new IllegalArgumentException(
+                        "junctionId and toRoadId are required");
+            }
+            if (!requireEditor().removeMovement(
+                    junctionId, fromRoadId, toRoadId)) {
+                ctx.status(404).json(Map.of("error", "Movement rule not found"));
+                return;
+            }
+            ctx.status(204);
+        });
     }
 
     private void addIntersection(io.javalin.http.Context ctx) {
@@ -224,6 +281,19 @@ public class NetworkController {
         return result;
     }
 
+    private Map<String, Object> movementToMap(JunctionMovement movement) {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("junctionId", movement.junctionId());
+        result.put("fromRoadId", movement.fromRoadId().orElse(null));
+        result.put("toRoadId", movement.toRoadId());
+        result.put("direction", movement.direction().name());
+        result.put("permission", movement.permission().name());
+        result.put("allowedVehicleTypes", movement.allowedVehicleTypes());
+        result.put("penaltySeconds", movement.penaltySeconds());
+        result.put("provenance", movement.provenance().name());
+        return result;
+    }
+
     public static class IntersectionCreationRequest {
         public String id;
         public String name;
@@ -250,5 +320,15 @@ public class NetworkController {
     public static class RoadConditionRequest {
         public String status;
         public double congestionLevel;
+    }
+
+    public static class JunctionMovementRequest {
+        public String junctionId;
+        public String fromRoadId;
+        public String toRoadId;
+        public String direction;
+        public String permission = "ALLOWED";
+        public java.util.List<String> allowedVehicleTypes = java.util.List.of();
+        public double penaltySeconds;
     }
 }

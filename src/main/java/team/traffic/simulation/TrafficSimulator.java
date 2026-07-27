@@ -39,14 +39,20 @@ import java.util.Collections;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.EnumMap;
 import java.util.Optional;
+import team.traffic.domain.vehicle.navigation.DriverDecisionProfile;
+import team.traffic.domain.vehicle.dynamics.WaitCause;
 
 public class TrafficSimulator {
     public static final double ARRIVED_RETENTION_SECONDS = 5.0;
     private RoadNetwork network;
     private final RoutingService routingService;
+    private final TrafficEventBus eventBus;
     private final VehicleFactory vehicleFactory;
-    private final TickProcessor tickProcessor;
+    private TickProcessor tickProcessor;
+    private AdaptiveTrafficConfig adaptiveTrafficConfig;
+    private long adaptiveScenarioSeed;
     private SimulationClock clock;
     private final VehicleTraceStore vehicleTraceStore;
     private final FlowRecorder flowRecorder;
@@ -58,6 +64,7 @@ public class TrafficSimulator {
     private List<TrafficSignal> signals;
     private final List<CompletedTrip> completedTrips;
     private final Map<String, Double> arrivedAtSeconds;
+    private final Map<WaitCause, Double> completedWaitingSecondsByCause;
     private List<VehicleConfig> vehicleConfigs;
     private List<EventConfig> eventConfigs;
     private TripDemandModel demandModel;
@@ -71,10 +78,19 @@ public class TrafficSimulator {
     }
 
     public TrafficSimulator(RoadNetwork network, RoutingService routingService, TrafficEventBus eventBus) {
+        this(network, routingService, eventBus, AdaptiveTrafficConfig.disabled());
+    }
+
+    public TrafficSimulator(
+            RoadNetwork network,
+            RoutingService routingService,
+            TrafficEventBus eventBus,
+            AdaptiveTrafficConfig adaptiveTrafficConfig) {
         this.network = network;
         this.routingService = routingService;
+        this.eventBus = eventBus;
         this.vehicleFactory = new VehicleFactory();
-        this.tickProcessor = new TickProcessor(routingService, eventBus);
+        configureTickProcessor(adaptiveTrafficConfig);
         this.clock = new SimulationClock();
         this.vehicleTraceStore = new VehicleTraceStore();
         this.flowRecorder = new FlowRecorder();
@@ -84,6 +100,7 @@ public class TrafficSimulator {
         this.signals = new ArrayList<>(SignalPlan.defaultSignals(network));
         this.completedTrips = new ArrayList<>();
         this.arrivedAtSeconds = new LinkedHashMap<>();
+        this.completedWaitingSecondsByCause = new EnumMap<>(WaitCause.class);
         this.vehicleConfigs = new ArrayList<>();
         this.eventConfigs = new ArrayList<>();
         this.simulationSecondsPerTick = TickProcessor.DEFAULT_SIMULATION_SECONDS_PER_TICK;
@@ -91,7 +108,65 @@ public class TrafficSimulator {
         resetFrameHistory();
     }
 
+    public synchronized void configureAdaptiveTraffic(AdaptiveTrafficConfig config) {
+        if (config == null) {
+            throw new IllegalArgumentException("Adaptive traffic config is required.");
+        }
+        if (status != SimulationStatus.READY) {
+            throw new IllegalStateException(
+                    "Adaptive traffic config can change only while the simulation is ready.");
+        }
+        configureTickProcessor(config, adaptiveScenarioSeed);
+        if (vehicles != null) {
+            vehicles.forEach(vehicleFactory::configureVehicle);
+        }
+    }
+
+    public synchronized AdaptiveTrafficConfig getAdaptiveTrafficConfig() {
+        return adaptiveTrafficConfig;
+    }
+
+    public synchronized void configureDriverDecisionProfiles(
+            Map<VehicleType, DriverDecisionProfile> profiles) {
+        if (status != SimulationStatus.READY) {
+            throw new IllegalStateException(
+                    "Driver profiles can change only while the simulation is ready.");
+        }
+        vehicleFactory.setDecisionProfiles(profiles);
+        if (vehicles != null) {
+            vehicles.forEach(vehicleFactory::configureVehicle);
+        }
+    }
+
+    private void configureTickProcessor(AdaptiveTrafficConfig config) {
+        configureTickProcessor(config, 0L);
+    }
+
+    private void configureTickProcessor(
+            AdaptiveTrafficConfig config,
+            long scenarioSeed) {
+        adaptiveTrafficConfig = config == null
+                ? AdaptiveTrafficConfig.disabled()
+                : config;
+        adaptiveScenarioSeed = scenarioSeed;
+        network.getMovementGraph().setUTurnPolicy(
+                adaptiveTrafficConfig.uTurns().networkPolicy());
+        network.getMovementGraph().setInferredUTurnPenaltySeconds(
+                adaptiveTrafficConfig.uTurns().defaultPenaltySeconds());
+        vehicleFactory.setScenarioSeed(scenarioSeed);
+        vehicleFactory.setStallTracking(
+                adaptiveTrafficConfig.deadlock().minimumProgressMetres(),
+                adaptiveTrafficConfig.routing().retryBackoffSeconds());
+        tickProcessor = new TickProcessor(
+                routingService,
+                eventBus,
+                new VehicleDynamicsEngine(),
+                adaptiveTrafficConfig,
+                scenarioSeed);
+    }
+
     public synchronized void initialize(List<VehicleConfig> vehicleConfigs, List<EventConfig> eventConfigs) {
+        configureTickProcessor(adaptiveTrafficConfig, 0L);
         initializeRun(
                 vehicleConfigs,
                 eventConfigs,
@@ -104,6 +179,7 @@ public class TrafficSimulator {
             List<VehicleConfig> vehicleConfigs,
             List<EventConfig> eventConfigs) {
         if (demandScenario == null) throw new IllegalArgumentException("Demand scenario is required");
+        configureTickProcessor(adaptiveTrafficConfig, demandScenario.seed());
         initializeRun(
                 vehicleConfigs,
                 eventConfigs,
@@ -123,6 +199,7 @@ public class TrafficSimulator {
             List<VehicleConfig> vehicleConfigs,
             List<EventConfig> eventConfigs) {
         if (demandModel == null) throw new IllegalArgumentException("Demand model is required");
+        configureTickProcessor(adaptiveTrafficConfig, 0L);
         initializeRun(vehicleConfigs, eventConfigs, demandModel, startTimeOfDaySeconds);
     }
 
@@ -144,9 +221,10 @@ public class TrafficSimulator {
         this.signals = new ArrayList<>(SignalPlan.defaultSignals(network));
         this.completedTrips.clear();
         this.arrivedAtSeconds.clear();
+        this.completedWaitingSecondsByCause.clear();
         this.demandSpawner = demandModel == null
                 ? null
-                : new DemandDrivenSpawner(demandModel, network, routingService);
+                : new DemandDrivenSpawner(demandModel, network, routingService, vehicleFactory);
         spawnDemandThrough(0);
         advancePlannedVehicleLifecycles(0);
         this.status = SimulationStatus.READY;
@@ -182,15 +260,17 @@ public class TrafficSimulator {
     public synchronized void reset() {
         resolveActiveEvents();
         releaseVehicleOccupancy();
+        configureTickProcessor(adaptiveTrafficConfig, adaptiveScenarioSeed);
         this.clock = new SimulationClock(demandStartTimeOfDaySeconds);
         this.vehicles = buildVehicles(this.vehicleConfigs);
         this.events = buildEvents(this.eventConfigs);
         this.signals = new ArrayList<>(SignalPlan.defaultSignals(network));
         this.completedTrips.clear();
         this.arrivedAtSeconds.clear();
+        this.completedWaitingSecondsByCause.clear();
         this.demandSpawner = demandModel == null
                 ? null
-                : new DemandDrivenSpawner(demandModel, network, routingService);
+                : new DemandDrivenSpawner(demandModel, network, routingService, vehicleFactory);
         spawnDemandThrough(0);
         advancePlannedVehicleLifecycles(0);
         this.status = SimulationStatus.READY;
@@ -264,6 +344,11 @@ public class TrafficSimulator {
     public synchronized SimulationSnapshot getSnapshot() {
         return new SimulationSnapshot(clock.getCurrentTick(), clock.getElapsedSeconds(),
                 status, vehicles, events, signals);
+    }
+
+    public synchronized SimulationDiagnostics getDiagnostics() {
+        return tickProcessor.getDiagnostics(
+                vehicles, completedWaitingSecondsByCause);
     }
 
     public synchronized VehicleTraceSummary getVehicleTraceSummary() {
@@ -369,6 +454,7 @@ public class TrafficSimulator {
 
     public synchronized void addVehicle(Vehicle vehicle) {
         if (vehicle != null && vehicles.stream().noneMatch(existing -> existing.getId().equals(vehicle.getId()))) {
+            vehicleFactory.configureVehicle(vehicle);
             vehicle.requestRoute(network, routingService);
             if (vehicle instanceof Bus bus) {
                 configureDefaultBusStops(bus);
@@ -399,6 +485,9 @@ public class TrafficSimulator {
                             ? null : vehicle.getTripPlan().purpose().value()));
         }
         arrivedAtSeconds.remove(vehicleId);
+        vehicle.getTrip().getWaitingSecondsByCause().forEach(
+                (cause, seconds) -> completedWaitingSecondsByCause.merge(
+                        cause, seconds, Double::sum));
         boolean removed = vehicles.remove(vehicle);
         if (removed) recordCurrentFrame();
         return removed;
@@ -415,11 +504,13 @@ public class TrafficSimulator {
         resolveActiveEvents();
         releaseVehicleOccupancy();
         network = replacement;
+        configureTickProcessor(adaptiveTrafficConfig, adaptiveScenarioSeed);
         vehicles = new ArrayList<>();
         events = new ArrayList<>();
         signals = new ArrayList<>(SignalPlan.defaultSignals(network));
         completedTrips.clear();
         arrivedAtSeconds.clear();
+        completedWaitingSecondsByCause.clear();
         vehicleConfigs = new ArrayList<>();
         eventConfigs = new ArrayList<>();
         demandModel = null;
@@ -652,7 +743,7 @@ public class TrafficSimulator {
         } catch (IllegalArgumentException e) {
             type = TrafficEventType.CONGESTION;
         }
-        return createEventWithId(
+        TrafficEvent event = createEventWithId(
                 config.id(),
                 type,
                 config.affectedRoadId(),
@@ -662,6 +753,8 @@ public class TrafficSimulator {
                 config.causingVehicleId(),
                 config.positionAlongRoad() == null ? 0.5 : config.positionAlongRoad(),
                 java.util.Set.copyOf(config.blockedLaneIndexes()));
+        event.configurePublication(config.origin(), config.informationPolicy());
+        return event;
     }
 
     /**

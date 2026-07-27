@@ -15,6 +15,11 @@ import team.traffic.domain.vehicle.dynamics.CollisionDetector;
 import team.traffic.domain.signal.TrafficSignal;
 import team.traffic.service.RoutingService;
 import team.traffic.observer.TrafficEventBus;
+import team.traffic.simulation.navigation.AdaptiveNavigationCoordinator;
+import team.traffic.simulation.navigation.AdaptiveNavigationMetrics;
+import team.traffic.simulation.navigation.TrafficInformationMetrics;
+import team.traffic.simulation.deadlock.DeadlockCycle;
+import team.traffic.simulation.deadlock.DeadlockMetrics;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,6 +35,7 @@ public class TickProcessor {
     private final TrafficEventBus eventBus;
     private final VehicleDynamicsEngine dynamicsEngine;
     private final CollisionDetector collisionDetector;
+    private final AdaptiveNavigationCoordinator navigationCoordinator;
     private final TrafficEventCoordinator eventCoordinator = new TrafficEventCoordinator();
     private final Map<String, Set<String>> stoppedVehicleIdsByEventId = new HashMap<>();
 
@@ -38,7 +44,8 @@ public class TickProcessor {
     }
 
     public TickProcessor(RoutingService routingService, TrafficEventBus eventBus) {
-        this(routingService, eventBus, new VehicleDynamicsEngine());
+        this(routingService, eventBus, new VehicleDynamicsEngine(),
+                AdaptiveTrafficConfig.disabled());
     }
 
     /** Creates a processor with a specific vehicle-dynamics engine. */
@@ -46,13 +53,33 @@ public class TickProcessor {
             RoutingService routingService,
             TrafficEventBus eventBus,
             VehicleDynamicsEngine dynamicsEngine) {
+        this(routingService, eventBus, dynamicsEngine, AdaptiveTrafficConfig.disabled());
+    }
+
+    public TickProcessor(
+            RoutingService routingService,
+            TrafficEventBus eventBus,
+            VehicleDynamicsEngine dynamicsEngine,
+            AdaptiveTrafficConfig adaptiveTrafficConfig) {
+        this(routingService, eventBus, dynamicsEngine, adaptiveTrafficConfig, 0L);
+    }
+
+    public TickProcessor(
+            RoutingService routingService,
+            TrafficEventBus eventBus,
+            VehicleDynamicsEngine dynamicsEngine,
+            AdaptiveTrafficConfig adaptiveTrafficConfig,
+            long scenarioSeed) {
         if (dynamicsEngine == null) {
             throw new IllegalArgumentException("Vehicle dynamics engine is required.");
         }
         this.routingService = routingService;
         this.eventBus = eventBus;
         this.dynamicsEngine = dynamicsEngine;
+        this.dynamicsEngine.configureDeadlock(adaptiveTrafficConfig);
         this.collisionDetector = new CollisionDetector();
+        this.navigationCoordinator = new AdaptiveNavigationCoordinator(
+                adaptiveTrafficConfig, scenarioSeed);
     }
 
     public void process(long currentTick, RoadNetwork network, List<Vehicle> vehicles, List<TrafficEvent> events) {
@@ -146,9 +173,11 @@ public class TickProcessor {
             }
         }
 
-        for (Vehicle vehicle : movable) {
-            if (vehicle.getStatus() == VehicleStatus.BLOCKED) {
-                vehicle.recomputeRoute(network, routingService);
+        if (!navigationCoordinator.isEnabled()) {
+            for (Vehicle vehicle : movable) {
+                if (vehicle.getStatus() == VehicleStatus.BLOCKED) {
+                    vehicle.recomputeRoute(network, routingService);
+                }
             }
         }
     }
@@ -220,8 +249,47 @@ public class TickProcessor {
                 network, movable, events, signals, simulationSecondsPerTick,
                 (stepEndSeconds, subStepState) -> {
                     publishPhysicalDensity(network, subStepState);
+                    navigationCoordinator.process(
+                            stepEndSeconds, network, movable, events, subStepState);
                     frameObserver.accept(stepEndSeconds);
                 });
+    }
+
+    public AdaptiveNavigationMetrics getAdaptiveNavigationMetrics() {
+        return navigationCoordinator.metrics();
+    }
+
+    public TrafficInformationMetrics getTrafficInformationMetrics() {
+        return navigationCoordinator.informationMetrics();
+    }
+
+    public DeadlockMetrics getDeadlockMetrics() {
+        return dynamicsEngine.getDeadlockMetrics();
+    }
+
+    public List<DeadlockCycle> getDeadlockCycles() {
+        return dynamicsEngine.getDeadlockCycles();
+    }
+
+    public SimulationDiagnostics getDiagnostics() {
+        return getDiagnostics(List.of());
+    }
+
+    public SimulationDiagnostics getDiagnostics(List<Vehicle> vehicles) {
+        return getDiagnostics(vehicles, Map.of());
+    }
+
+    public SimulationDiagnostics getDiagnostics(
+            List<Vehicle> vehicles,
+            Map<team.traffic.domain.vehicle.dynamics.WaitCause, Double>
+                    priorWaitingSecondsByCause) {
+        return SimulationDiagnostics.from(
+                getAdaptiveNavigationMetrics(),
+                getTrafficInformationMetrics(),
+                getDeadlockMetrics(),
+                getDeadlockCycles(),
+                vehicles,
+                priorWaitingSecondsByCause);
     }
 
     /**
