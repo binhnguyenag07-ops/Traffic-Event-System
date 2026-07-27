@@ -12,6 +12,8 @@ import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.routing.Route;
+import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.simulation.SimulationSnapshot;
@@ -23,6 +25,8 @@ class SimulationSnapshotDtoTest {
     void aSnapshotWithANetworkCarriesEachVehiclesMapPositionAndHeading() {
         RoadNetwork network = geographicNetwork();
         Vehicle vehicle = new Car("car-1", "A", "B");
+        vehicle.setCurrentRoute(new Route(
+                List.of(new RouteStep("A", "B", "AB", 1.1)), 1.1, 80.0, 1.1));
 
         SimulationSnapshotDto dto = new SimulationSnapshotDto(snapshotOf(vehicle), network);
 
@@ -31,6 +35,24 @@ class SimulationSnapshotDtoTest {
         assertThat(vehicleDto.getLongitude()).isCloseTo(106.700, within(1e-6));
         assertThat(vehicleDto.getHeadingDegrees()).isCloseTo(0.0, within(1.0));
         assertThat(vehicleDto.isInJunction()).isTrue();
+    }
+
+    @Test
+    void aVehicleWithNoRouteYetHasNoPositionAtAll() {
+        // Before it is routed a vehicle holds no road and has no road to wait on
+        // either, so there is nowhere honest to put it. Placing it on the
+        // junction's own coordinate used to stack every vehicle of a scenario
+        // into one heap on the opening frame; an absent position leaves it out
+        // of the drawing until it has somewhere to be.
+        RoadNetwork network = geographicNetwork();
+
+        SimulationSnapshotDto dto = new SimulationSnapshotDto(
+                snapshotOf(new Car("car-1", "A", "B")), network);
+
+        VehicleDto vehicleDto = dto.getVehicles().get(0);
+        assertThat(vehicleDto.getLatitude()).isNull();
+        assertThat(vehicleDto.getLongitude()).isNull();
+        assertThat(vehicleDto.getHeadingDegrees()).isNull();
     }
 
     @Test

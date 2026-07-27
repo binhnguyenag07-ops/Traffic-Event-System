@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { drawSignals, drawStatic, drawTrails } from './drawScene'
+import { drawSignals, drawStatic, drawTrails, laneDividers } from './drawScene'
 
 // A stand-in for a PixiJS Graphics that records what was asked of it. The real
 // one needs WebGL; what matters here is that the draw pass completes over
@@ -121,5 +121,42 @@ describe('drawTrails', () => {
     const graphics = fakeGraphics()
     expect(() => drawTrails(graphics, undefined)).not.toThrow()
     expect(graphics.calls.stroke).toBe(0)
+  })
+})
+
+describe('laneDividers', () => {
+  // A 2-lane road whose centres sit 3.5 m apart, both running due north.
+  const road = (roadId, laneIndex, x) => ({
+    roadId,
+    laneIndex,
+    widthMetres: 3.5,
+    centreline: [[x, 0], [x, 100]],
+  })
+
+  it('paints the boundary between two lanes, not either lane centre', () => {
+    const dividers = laneDividers([road('R', 0, -1.75), road('R', 1, 1.75)])
+
+    expect(dividers).toHaveLength(1)
+    // Markings separate lanes. A dash down a lane centre would sit exactly
+    // where the traffic drives, which is what made vehicles look like they
+    // were straddling the paint.
+    expect(dividers[0]).toEqual([[0, 0], [0, 100]])
+  })
+
+  it('gives a single-lane road no divider at all', () => {
+    expect(laneDividers([road('R', 0, 0)])).toEqual([])
+  })
+
+  it('never draws a divider between lanes of different roads', () => {
+    expect(laneDividers([road('LEFT', 0, -1.75), road('RIGHT', 0, 1.75)])).toEqual([])
+  })
+
+  it('produces one divider fewer than the lane count', () => {
+    const dividers = laneDividers([
+      road('R', 0, -3.5), road('R', 1, 0), road('R', 2, 3.5),
+    ])
+
+    expect(dividers).toHaveLength(2)
+    expect(dividers.map((line) => line[0][0])).toEqual([-1.75, 1.75])
   })
 })

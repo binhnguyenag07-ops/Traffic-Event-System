@@ -62,6 +62,10 @@ public record SimulationFrame(
             List<TrafficSignal> signals) {
         if (network == null) throw new IllegalArgumentException("Road network is required.");
         VehiclePoseResolver poseResolver = new VehiclePoseResolver();
+        // Resolved together, not one by one: vehicles waiting at a junction have
+        // to be strung out along their approach, and where one sits in that
+        // queue depends on the others.
+        var poses = poseResolver.resolveAll(vehicles, network);
         return new SimulationFrame(
                 timelineId,
                 frameId,
@@ -70,7 +74,7 @@ public record SimulationFrame(
                 status,
                 vehicles == null ? List.of() : vehicles.stream()
                         .map(vehicle -> VehicleState.from(vehicle,
-                                poseResolver.resolve(vehicle, network).orElse(null),
+                                poses.get(vehicle.getId()),
                                 elapsedSeconds))
                         .toList(),
                 events == null ? List.of() : events.stream().map(EventState::from).toList(),

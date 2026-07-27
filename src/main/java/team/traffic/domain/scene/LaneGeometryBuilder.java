@@ -8,6 +8,7 @@ import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.MovementPermission;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.vehicle.dynamics.Carriageway;
 import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
 import team.traffic.domain.vehicle.dynamics.RoadLayout;
 import team.traffic.domain.vehicle.pose.PolylineGeometry;
@@ -87,23 +88,12 @@ public final class LaneGeometryBuilder {
     }
 
     /**
-     * How far a road's carriageway sits from the shared centreline.
-     *
-     * <p>A two-way street is two directed roads over one line of geometry. Left
-     * centred, both sides land on that line and their traffic is drawn on top of
-     * itself — vehicles going opposite ways appear to occupy the same tarmac.
-     * Each direction is therefore pushed to its own side, and since the offset
-     * convention is positive to the right of travel, that is also the side
-     * traffic here drives on.</p>
-     *
-     * <p>A one-way road keeps the centreline: there is no opposing carriageway
-     * to make room for.</p>
+     * How far a road's carriageway sits from the shared centreline. Delegated so
+     * the painted lanes and the vehicles standing on them cannot disagree — see
+     * {@link Carriageway}.
      */
     private double carriagewayOffsetOf(Road road) {
-        if (!hasOpposite(road)) {
-            return 0.0;
-        }
-        return roadLayout.roadWidthMetresOf(road) / 2.0;
+        return Carriageway.offsetMetres(network, road, roadLayout);
     }
 
     /**
@@ -397,13 +387,7 @@ public final class LaneGeometryBuilder {
     }
 
     private boolean hasOpposite(Road road) {
-        return network.getRoads().values().stream().anyMatch(other -> isReverseOf(other, road));
-    }
-
-    private static boolean isReverseOf(Road candidate, Road road) {
-        return candidate != road
-                && candidate.getStartIntersectionId().equals(road.getEndIntersectionId())
-                && candidate.getEndIntersectionId().equals(road.getStartIntersectionId());
+        return Carriageway.hasOpposite(network, road);
     }
 
     private List<Road> roadsEndingAt(String junctionId) {

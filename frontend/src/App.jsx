@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import TrafficMap from './components/TrafficMap'
 import NetworkEditor from './components/NetworkEditor'
 import ExperimentPanel from './components/ExperimentPanel'
@@ -74,8 +74,54 @@ function physicalTargetFromUrl() {
   }
 }
 
+// `?lab=<scenarioId>` opens one physical-view test case: it activates that
+// scenario, drops straight into the lane view at the case's own centre, and
+// leaves the basemap out.
+//
+// No basemap because the test maps are metre-exact fiction laid over real
+// coordinates. An OpenStreetMap backdrop under them would invite comparing a
+// drawn lane against a street that has nothing to do with it, and the whole
+// value of these cases is that the correct picture is known in advance.
+function labIdFromUrl() {
+  if (typeof window === 'undefined') return null
+  const raw = new URLSearchParams(window.location.search).get('lab')
+  return raw && raw.trim() ? raw.trim() : null
+}
+
+/**
+ * What this case is supposed to show, and a way to step to the next one.
+ *
+ * The sentence is the point. A case nobody can grade is just a picture, so each
+ * one states what a correct render looks like before you go looking at it.
+ */
+function LabBanner({ scenario, cases }) {
+  if (!scenario) return null
+  const index = cases.findIndex((entry) => entry.id === scenario.id)
+  const go = (offset) => {
+    const next = cases[(index + offset + cases.length) % cases.length]
+    if (next) window.location.search = `?lab=${encodeURIComponent(next.id)}`
+  }
+  return (
+    <div className="lab-banner" role="status">
+      <div className="lab-heading">
+        <span className="eyebrow">
+          Physical view test {index + 1} of {cases.length}
+        </span>
+        <h2>{scenario.name}</h2>
+      </div>
+      <p>{scenario.lab?.expect || scenario.description}</p>
+      <div className="lab-nav">
+        <button onClick={() => go(-1)} disabled={cases.length < 2}>← Previous</button>
+        <button onClick={() => go(1)} disabled={cases.length < 2}>Next →</button>
+        <a href={window.location.pathname}>Leave the lab</a>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const dashboard = useTrafficDashboard()
+  const [labId] = useState(labIdFromUrl)
   const [initialPhysical] = useState(physicalTargetFromUrl)
   const [physicalOpen, setPhysicalOpen] = useState(Boolean(initialPhysical))
   const [mapViewport, setMapViewport] = useState(() => initialPhysical
@@ -110,6 +156,52 @@ export default function App() {
   const [draftPoint, setDraftPoint] = useState(null)
   const [highlightedRoadIds, setHighlightedRoadIds] = useState([])
   const mapFileRef = useRef(null)
+  const labStarted = useRef(false)
+
+  const labCases = useMemo(() => scenarios.filter((entry) => entry.lab), [scenarios])
+  const labScenario = labId ? scenarios.find((entry) => entry.id === labId) : null
+  // A lab case picked from the dropdown counts too, not only one named in the
+  // URL. Its map is synthetic, so the basemap underneath would show a street
+  // that has nothing to do with what is drawn on top of it.
+  const activeLab = labScenario
+    || scenarios.find((entry) => entry.id === activeScenario && entry.lab)
+    || null
+  const labMode = Boolean(activeLab)
+
+  // Activate the case once, as soon as the scenario list names it. Guarded by a
+  // ref rather than by comparing against activeScenario: activation resets the
+  // run, so re-firing would restart the case every time a frame arrived.
+  useEffect(() => {
+    if (!labScenario || labStarted.current) return
+    labStarted.current = true
+    const lab = labScenario.lab || {}
+    const [latitude, longitude] = lab.centre || []
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      setMapViewport({
+        latitude,
+        longitude,
+        zoom: DEFAULT_PHYSICAL_ZOOM,
+        radiusMetres: Number(lab.radiusMetres) || 220,
+      })
+    }
+    setPhysicalOpen(true)
+    dashboard.activateScenario(labScenario.id).catch(() => {})
+  }, [dashboard, labScenario])
+
+  // Picking a lab case from the dropdown drops into the lane view at that
+  // case's own centre, the same as arriving by URL.
+  useEffect(() => {
+    if (!activeLab || activeLab === labScenario) return
+    const [latitude, longitude] = activeLab.lab?.centre || []
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return
+    setMapViewport({
+      latitude,
+      longitude,
+      zoom: DEFAULT_PHYSICAL_ZOOM,
+      radiusMetres: Number(activeLab.lab?.radiusMetres) || 220,
+    })
+    setPhysicalOpen(true)
+  }, [activeLab, labScenario])
 
   const traffic = statistics.traffic || {}
   const activeEvents = snapshot.trafficEvents?.filter((event) => event.status === 'ACTIVE') || []
@@ -235,9 +327,11 @@ export default function App() {
         </div> : null}
       </div> : null}
 
+      <LabBanner scenario={activeLab} cases={labCases} />
+
       <section className="workspace">
         <div className="map-stage">
-          <TrafficMap
+          {!labMode && <TrafficMap
             intersections={intersections}
             roads={viewRoads}
             vehicles={visibleVehicles}
@@ -260,15 +354,19 @@ export default function App() {
               setMapViewport(viewport)
               setPhysicalOpen(true)
             }}
-          />
+          />}
           {physicalOpen && mapViewport && (
             <PhysicalScene
               viewport={mapViewport}
               onViewportChange={setMapViewport}
-              onClose={(viewport) => {
-                if (viewport) setMapViewport(viewport)
-                setPhysicalOpen(false)
-              }}
+              onClose={labMode
+                // Closing in the lab would leave an empty stage, since the
+                // basemap is not rendered here. Leave the lab instead.
+                ? () => { window.location.search = '' }
+                : (viewport) => {
+                  if (viewport) setMapViewport(viewport)
+                  setPhysicalOpen(false)
+                }}
             />
           )}
           <div className="map-metrics" aria-label={viewingHistory ? 'Historical traffic summary' : 'Live traffic summary'}>

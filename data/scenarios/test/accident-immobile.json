@@ -1,0 +1,41 @@
+{
+  "id": "test-accident-immobile",
+  "name": "Crashed vehicles must stay put",
+  "description": "An accident is declared 20 s in, naming both vehicles. From that moment until it clears they must not move one metre. If they drive away, something is releasing vehicles that an event stopped.",
+  "map": "../../maps/test/accident-immobile.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 200,
+    "expect": "An accident is declared 20 s in, naming both vehicles. From that moment until it clears they must not move one metre. If they drive away, something is releasing vehicles that an event stopped."
+  },
+  "vehicles": [
+    {
+      "id": "v-lead",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    },
+    {
+      "id": "v-follow",
+      "type": "CAR",
+      "startIntersectionId": "A",
+      "destinationIntersectionId": "B"
+    }
+  ],
+  "events": [
+    {
+      "id": "crash",
+      "type": "ACCIDENT",
+      "affectedRoadId": "R1",
+      "startTimeSeconds": 20,
+      "durationSeconds": 600,
+      "value": 0.8,
+      "causingVehicleId": "v-follow",
+      "positionAlongRoad": 0.5
+    }
+  ]
+}
