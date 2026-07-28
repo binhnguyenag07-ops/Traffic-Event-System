@@ -138,9 +138,14 @@ export function useTrafficDashboard() {
   }, [refreshLiveData, refreshNetwork])
 
   useEffect(() => {
-    Promise.all([scenarioApi.list(), routingApi.algorithms()])
-      .then(([nextScenarios, nextAlgorithms]) => {
+    Promise.all([scenarioApi.list(), scenarioApi.active(), routingApi.algorithms()])
+      .then(([nextScenarios, active, nextAlgorithms]) => {
         setScenarios(nextScenarios)
+        // Ask the server which scenario its network came from. Activating one
+        // replaces the network until something else does, so after a reload the
+        // client has no way to know from its own state — and guessing wrong
+        // meant a lab case was drawn over the basemap as if it were the city.
+        if (active?.id) setActiveScenario(active.id)
         setAlgorithms(nextAlgorithms)
       })
       .catch((nextError) => setError(nextError.message))
@@ -208,15 +213,25 @@ export function useTrafficDashboard() {
     clearDemoLifecycle()
     setLoading(true)
     setError('')
+    // Show the choice immediately and put it back if the server refuses. The
+    // picker is driven by this value, so setting it only after activating,
+    // refreshing the network and refreshing the live data left the dropdown
+    // snapped back to the previous scenario for the whole round trip — which
+    // reads as the click having been ignored.
+    let previousScenario = null
+    setActiveScenario((current) => {
+      previousScenario = current
+      return id
+    })
     try {
       await scenarioApi.activate(id)
-      setActiveScenario(id)
       setImportSummary(null)
       setRoute(null)
       setComparison([])
       setSelected(null)
       await Promise.all([refreshNetwork(), refreshLiveData()])
     } catch (nextError) {
+      setActiveScenario(previousScenario)
       setError(nextError.message)
     } finally {
       setLoading(false)
@@ -272,7 +287,17 @@ export function useTrafficDashboard() {
     setLoading(true)
     setError('')
     try {
-      await simulationApi.setParameters(3, 500)
+      // Half a second of simulation per tick. Three seconds per tick moved a
+      // vehicle 33 m between frames — twice the width of the junction it was
+      // crossing — so a turn was never observed, only inferred from the road
+      // before and the road after. Wall-clock speed is roughly unchanged; there
+      // are simply more, smaller steps.
+      //
+      // The playback interval is the server's floor, not a smaller number: it
+      // rejects anything under 250 ms, and because this is the first call in
+      // the sequence, asking for less threw before the simulation was ever
+      // initialised or started. The demo button did nothing at all.
+      await simulationApi.setParameters(0.5, 250)
       await simulationApi.initialize(demo.vehicles, demo.events)
       for (let tick = 0; tick < 4; tick += 1) {
         await simulationApi.tick()

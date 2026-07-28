@@ -17,6 +17,7 @@ import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.simulation.SimulationSnapshot;
+import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.simulation.SimulationStatus;
 
 class SimulationSnapshotDtoTest {
@@ -27,14 +28,16 @@ class SimulationSnapshotDtoTest {
         Vehicle vehicle = new Car("car-1", "A", "B");
         vehicle.setCurrentRoute(new Route(
                 List.of(new RouteStep("A", "B", "AB", 1.1)), 1.1, 80.0, 1.1));
+        driveOntoTheRoad(vehicle, network);
 
         SimulationSnapshotDto dto = new SimulationSnapshotDto(snapshotOf(vehicle), network);
 
         VehicleDto vehicleDto = dto.getVehicles().get(0);
-        assertThat(vehicleDto.getLatitude()).isCloseTo(10.770, within(1e-6));
-        assertThat(vehicleDto.getLongitude()).isCloseTo(106.700, within(1e-6));
+        // Just away from A, on the road, heading north up it.
+        assertThat(vehicleDto.getLatitude()).isCloseTo(10.770, within(1e-3));
+        assertThat(vehicleDto.getLongitude()).isCloseTo(106.700, within(1e-3));
         assertThat(vehicleDto.getHeadingDegrees()).isCloseTo(0.0, within(1.0));
-        assertThat(vehicleDto.isInJunction()).isTrue();
+        assertThat(vehicleDto.isInJunction()).isFalse();
     }
 
     @Test
@@ -73,6 +76,14 @@ class SimulationSnapshotDtoTest {
 
         assertThat(dto.getCruisingSpeedKph()).isEqualTo(50.0);
         assertThat(dto.getInstantaneousSpeed()).isCloseTo(18.0, within(1e-9));
+    }
+
+    /** One tick, which is all it takes to move a routed vehicle onto its first road. */
+    private static void driveOntoTheRoad(Vehicle vehicle, RoadNetwork network) {
+        TrafficState state = TrafficState.capture(0, network, List.of(vehicle));
+        vehicle.planJunctionApproach(network, state).ifPresent(state::requestCrossing);
+        state.resolveJunctions();
+        vehicle.advance(network, state, 1.0);
     }
 
     private static SimulationSnapshot snapshotOf(Vehicle vehicle) {

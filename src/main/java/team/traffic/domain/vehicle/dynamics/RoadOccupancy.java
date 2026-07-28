@@ -77,6 +77,27 @@ public final class RoadOccupancy {
         return best == null ? -1 : best.getLaneIndex();
     }
 
+    /**
+     * Lane to enter from an approach that was in {@code arrivingFromLaneIndex},
+     * keeping to that lane where it has room.
+     *
+     * <p>A driver crossing a junction holds their lane and changes afterwards if
+     * they need to. Picking purely by the largest gap meant a vehicle could
+     * leave the nearside lane of one road and appear in the offside lane of the
+     * next in the same instant, a whole lane width sideways with nothing in
+     * between. Drawn, that is a car sliding bodily across the junction; it was
+     * one of the ways traffic appeared to swing about at a four-way. Anything
+     * the vehicle really does need to do sideways now happens on the road
+     * afterwards, where the lateral motion model takes it a metre at a time.</p>
+     */
+    public int bestLaneForEntry(TrafficParticipant arriving, int arrivingFromLaneIndex) {
+        Lane held = lane(arrivingFromLaneIndex);
+        if (held != null && held.canAdmit(arriving)) {
+            return held.getLaneIndex();
+        }
+        return bestLaneForEntry(arriving);
+    }
+
     /** The strip of road a whole lane occupies, used to place obstructions. */
     public LateralExtent laneExtent(int laneIndex) {
         return new LateralExtent(laneCentreOffsetMetres(laneIndex), laneWidthMetres);

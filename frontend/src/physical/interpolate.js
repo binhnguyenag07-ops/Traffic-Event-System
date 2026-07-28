@@ -1,12 +1,20 @@
 // Smooths vehicle poses between two authoritative scenes.
 //
-// A straight x/y lerp is only correct on a straight road. At a junction it cuts
-// across the paved corner even though the scene already contains lane connector
-// curves. The helpers below sample the actual lane or connector polyline, while
-// still using the authoritative snapshots as the exact endpoints.
+// The one rule here: the backend's pose is the truth, and this file may only
+// choose the *path* taken between two of them. It may never invent a pose of
+// its own. An earlier version did — it anchored anything flagged `inJunction`
+// to the midpoint of its turning connector — and because that only triggered on
+// frames where the vehicle had not moved, a car queueing at a red light flipped
+// between the stop line and the middle of the junction several times a second.
+// That is what "the cars spin at four-way junctions" was.
+//
+// A straight x/y lerp is only correct on a straight road. Elsewhere the scene
+// already carries the right path: lane centrelines along a road, and turning
+// connectors across a junction. Both are sampled between the two authoritative
+// endpoints, so the drawn motion follows the tarmac without ever contradicting
+// the simulation.
 
 const EPSILON = 1e-6
-const CONNECTOR_HALF_SAMPLES = 8
 
 /** Shortest signed turn from one compass bearing to another, in degrees. */
 export function shortestTurn(fromDegrees, toDegrees) {
@@ -24,6 +32,26 @@ function distance(a, b) {
 
 function vehiclePoint(vehicle) {
   return [Number(vehicle.x), Number(vehicle.y)]
+}
+
+/**
+ * The road a pose physically stands on.
+ *
+ * <p>A vehicle waiting to cross holds no road of its own, but it is not
+ * nowhere: the backend parks it at the exit of the road it arrived on, still
+ * pointing the way it came. Treating that as "on the approach road" is what
+ * lets a queue at a red light interpolate along its lane like any other
+ * traffic, instead of being special-cased into the junction.</p>
+ */
+function roadOf(pose) {
+  if (pose.roadId) return pose.roadId
+  return pose.inJunction ? pose.junctionFromRoadId || null : null
+}
+
+/** How far along {@link roadOf} the pose sits. A waiting vehicle is at its exit. */
+function progressOf(pose) {
+  if (pose.roadId) return Number.isFinite(pose.roadProgress) ? pose.roadProgress : null
+  return pose.inJunction ? 1 : null
 }
 
 function cleanPath(points) {
@@ -70,12 +98,46 @@ function bearingAtPolyline(points, fraction, fallback) {
   ) % 360
 }
 
-function sampleRange(points, from, to) {
-  return Array.from({ length: CONNECTOR_HALF_SAMPLES + 1 }, (_, index) => (
-    pointAtPolyline(points, from + (to - from) * index / CONNECTOR_HALF_SAMPLES)
-  )).filter(Boolean)
+/**
+ * The part of a connector that actually lies between two poses.
+ *
+ * <p>Splicing a whole connector between two points assumes the vehicle is about
+ * to travel all of it. Once it is part-way across a junction that is false: the
+ * start of the curve is behind it, so the spliced path runs backwards to the
+ * junction mouth, round the full arc, and only then forwards to where the
+ * vehicle actually is. Interpolating along that path swings the vehicle through
+ * a reversal — the spin-then-straighten seen at every turn.</p>
+ *
+ * <p>Trimming to the nearest curve point at each end keeps the path monotone,
+ * so progress along it is always progress along the turn.</p>
+ */
+function trimCurve(curve, from, to) {
+  const path = cleanPath(curve)
+  if (path.length < 2) return [from, to]
+  const nearest = (point) => {
+    let best = 0
+    let bestDistance = Infinity
+    path.forEach((candidate, index) => {
+      const gap = distance(candidate, point)
+      if (gap < bestDistance) { bestDistance = gap; best = index }
+    })
+    return best
+  }
+  const start = nearest(from)
+  const end = nearest(to)
+  const middle = start <= end
+    ? path.slice(start, end + 1)
+    : path.slice(end, start + 1).reverse()
+  return [from, ...middle, to]
 }
 
+/**
+ * The connector joining two roads, preferring the one built for these lanes.
+ *
+ * <p>A wrong-lane connector is still better than a straight line across the
+ * corner, so a partial match is accepted — but only after every exact one has
+ * been considered.</p>
+ */
 function findConnector(connectors, fromRoadId, toRoadId, fromLane, toLane) {
   if (!fromRoadId || !toRoadId) return null
   const candidates = (connectors || []).filter((connector) => (
@@ -90,10 +152,10 @@ function findConnector(connectors, fromRoadId, toRoadId, fromLane, toLane) {
   })[0] || null
 }
 
-function findLane(lanes, source, target) {
-  const candidates = (lanes || []).filter((lane) => lane.roadId === target.roadId)
-  return candidates.find((lane) => lane.laneIndex === target.laneIndex)
-    || candidates.find((lane) => lane.laneIndex === source.laneIndex)
+function findLane(lanes, roadId, preferredIndex, fallbackIndex) {
+  const candidates = (lanes || []).filter((lane) => lane.roadId === roadId)
+  return candidates.find((lane) => lane.laneIndex === preferredIndex)
+    || candidates.find((lane) => lane.laneIndex === fallbackIndex)
     || null
 }
 
@@ -108,22 +170,27 @@ function followPath(target, path, fraction, fallbackHeading) {
   }
 }
 
-function lanePose(source, target, lane, fraction) {
-  const sourceProgress = clamp01(source.roadProgress)
-  const targetProgress = clamp01(target.roadProgress)
-  const progress = sourceProgress + (targetProgress - sourceProgress) * fraction
-  const sourceBase = pointAtPolyline(lane.centreline, sourceProgress)
-  const targetBase = pointAtPolyline(lane.centreline, targetProgress)
+/**
+ * Motion along one road, sampled from the lane the vehicle is in.
+ *
+ * <p>The centreline is the stable longitudinal path; the small endpoint
+ * corrections retain the vehicle's authoritative lateral position, including a
+ * motorcycle part-way through a lane change, and hold a queue exactly where the
+ * backend put it.</p>
+ */
+function lanePose(source, target, lane, sourceProgress, targetProgress, fraction) {
+  const from = clamp01(sourceProgress)
+  const to = clamp01(targetProgress)
+  const progress = from + (to - from) * fraction
+  const sourceBase = pointAtPolyline(lane.centreline, from)
+  const targetBase = pointAtPolyline(lane.centreline, to)
   const point = pointAtPolyline(lane.centreline, progress)
   if (!sourceBase || !targetBase || !point) return null
 
-  // The lane centreline is the stable longitudinal path. These small endpoint
-  // corrections retain the vehicle's authoritative lateral position, including
-  // a motorcycle or car part-way through a lane change.
-  const correctionX = (source.x - sourceBase[0])
-    + ((target.x - targetBase[0]) - (source.x - sourceBase[0])) * fraction
-  const correctionY = (source.y - sourceBase[1])
-    + ((target.y - targetBase[1]) - (source.y - sourceBase[1])) * fraction
+  const offsetX = (source.x - sourceBase[0])
+  const offsetY = (source.y - sourceBase[1])
+  const correctionX = offsetX + ((target.x - targetBase[0]) - offsetX) * fraction
+  const correctionY = offsetY + ((target.y - targetBase[1]) - offsetY) * fraction
   return {
     ...target,
     x: point[0] + correctionX,
@@ -134,19 +201,6 @@ function lanePose(source, target, lane, fraction) {
       source.headingDegrees + shortestTurn(source.headingDegrees, target.headingDegrees) * fraction,
     ),
   }
-}
-
-function junctionAnchor(vehicle, connectors) {
-  if (!vehicle?.inJunction) return vehicle
-  const connector = findConnector(
-    connectors,
-    vehicle.junctionFromRoadId,
-    vehicle.junctionToRoadId,
-    vehicle.laneIndex,
-    vehicle.laneIndex,
-  )
-  if (!connector) return vehicle
-  return followPath(vehicle, connector.curve, 0.5, vehicle.headingDegrees)
 }
 
 /**
@@ -162,76 +216,36 @@ export function interpolateVehicles(previous, next, t, geometry = {}) {
 
   return (next || []).map((target) => {
     const source = before.get(target.id)
-    if (!source) return junctionAnchor(target, connectors)
+    // Nothing to interpolate from. The authoritative pose is the only truth
+    // there is, and a vehicle drawn anywhere else on its first frame arrives
+    // with a jump.
+    if (!source) return target
 
-    const unchanged = source.x === target.x
-      && source.y === target.y
-      && source.headingDegrees === target.headingDegrees
-      && source.roadId === target.roadId
-      && source.inJunction === target.inJunction
-    if (unchanged) return junctionAnchor(target, connectors)
+    const fromRoadId = roadOf(source)
+    const toRoadId = roadOf(target)
 
-    if (source.roadId && source.roadId === target.roadId
-      && Number.isFinite(source.roadProgress) && Number.isFinite(target.roadProgress)) {
-      const lane = findLane(lanes, source, target)
-      const pose = lane && lanePose(source, target, lane, fraction)
-      if (pose) return pose
-    }
-
-    if (target.inJunction
-      && source.roadId === target.junctionFromRoadId
-      && target.junctionToRoadId) {
-      const connector = findConnector(
-        connectors,
-        target.junctionFromRoadId,
-        target.junctionToRoadId,
-        source.laneIndex,
-        target.laneIndex,
-      )
-      if (connector) {
-        return followPath(
-          target,
-          [vehiclePoint(source), ...sampleRange(connector.curve, 0, 0.5)],
-          fraction,
-          target.headingDegrees,
-        )
+    // Still on the same road — including a vehicle that has merely rolled up to
+    // its stop line, which has not turned and must not be drawn turning.
+    if (fromRoadId && fromRoadId === toRoadId) {
+      const sourceProgress = progressOf(source)
+      const targetProgress = progressOf(target)
+      if (sourceProgress !== null && targetProgress !== null) {
+        const lane = findLane(lanes, fromRoadId, target.laneIndex, source.laneIndex)
+        const pose = lane
+          && lanePose(source, target, lane, sourceProgress, targetProgress, fraction)
+        if (pose) return pose
       }
     }
 
-    if (source.inJunction
-      && source.junctionFromRoadId
-      && source.junctionToRoadId === target.roadId) {
+    // Crossing a junction: the two poses sit on either side of a turn, and the
+    // connector between those roads is the path the vehicle took.
+    if (fromRoadId && toRoadId && fromRoadId !== toRoadId) {
       const connector = findConnector(
-        connectors,
-        source.junctionFromRoadId,
-        source.junctionToRoadId,
-        source.laneIndex,
-        target.laneIndex,
-      )
+        connectors, fromRoadId, toRoadId, source.laneIndex, target.laneIndex)
       if (connector) {
         return followPath(
           target,
-          [...sampleRange(connector.curve, 0.5, 1), vehiclePoint(target)],
-          fraction,
-          target.headingDegrees,
-        )
-      }
-    }
-
-    // A fast playback may skip the one frame where the vehicle is explicitly
-    // in the junction. The road ids still identify the complete connector.
-    if (source.roadId && target.roadId && source.roadId !== target.roadId) {
-      const connector = findConnector(
-        connectors,
-        source.roadId,
-        target.roadId,
-        source.laneIndex,
-        target.laneIndex,
-      )
-      if (connector) {
-        return followPath(
-          target,
-          [vehiclePoint(source), ...connector.curve, vehiclePoint(target)],
+          trimCurve(connector.curve, vehiclePoint(source), vehiclePoint(target)),
           fraction,
           target.headingDegrees,
         )
