@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TrafficMap from './components/TrafficMap'
 import NetworkEditor from './components/NetworkEditor'
 import ExperimentPanel from './components/ExperimentPanel'
@@ -94,12 +94,12 @@ function labIdFromUrl() {
  * The sentence is the point. A case nobody can grade is just a picture, so each
  * one states what a correct render looks like before you go looking at it.
  */
-function LabBanner({ scenario, cases }) {
+function LabBanner({ scenario, cases, onSelectCase, onLeave, busy }) {
   if (!scenario) return null
   const index = cases.findIndex((entry) => entry.id === scenario.id)
   const go = (offset) => {
     const next = cases[(index + offset + cases.length) % cases.length]
-    if (next) window.location.search = `?lab=${encodeURIComponent(next.id)}`
+    if (next) onSelectCase(next.id)
   }
   return (
     <div className="lab-banner" role="status">
@@ -111,9 +111,19 @@ function LabBanner({ scenario, cases }) {
       </div>
       <p>{scenario.lab?.expect || scenario.description}</p>
       <div className="lab-nav">
-        <button onClick={() => go(-1)} disabled={cases.length < 2}>← Previous</button>
-        <button onClick={() => go(1)} disabled={cases.length < 2}>Next →</button>
-        <a href={window.location.pathname}>Leave the lab</a>
+        {/* Stepping between cases activates the next one in place. It used to
+            assign window.location.search, reloading the whole page to change
+            one scenario — which threw away the loaded network, the Pixi
+            context and the run, and read as the app hanging. */}
+        <button onClick={() => go(-1)} disabled={busy || cases.length < 2}>← Previous</button>
+        <button onClick={() => go(1)} disabled={busy || cases.length < 2}>Next →</button>
+        {/* Leaving means activating a real scenario, not clearing the URL. The
+            lab hides the basemap because a test map is metre-exact fiction laid
+            over real coordinates; while the server still has one loaded there
+            is nothing honest to go back to. Clearing the URL alone reloaded
+            straight back into the lab, because lab mode is inferred from
+            whichever scenario the server holds. */}
+        <button onClick={onLeave} disabled={busy}>Leave the lab</button>
       </div>
     </div>
   )
@@ -121,7 +131,7 @@ function LabBanner({ scenario, cases }) {
 
 export default function App() {
   const dashboard = useTrafficDashboard()
-  const [labId] = useState(labIdFromUrl)
+  const [labId, setLabId] = useState(labIdFromUrl)
   const [initialPhysical] = useState(physicalTargetFromUrl)
   const [physicalOpen, setPhysicalOpen] = useState(Boolean(initialPhysical))
   const [mapViewport, setMapViewport] = useState(() => initialPhysical
@@ -168,40 +178,86 @@ export default function App() {
     || null
   const labMode = Boolean(activeLab)
 
-  // Activate the case once, as soon as the scenario list names it. Guarded by a
-  // ref rather than by comparing against activeScenario: activation resets the
-  // run, so re-firing would restart the case every time a frame arrived.
+  // Activate the case named in the URL once. Guarded by a ref rather than by
+  // comparing against activeScenario: activation resets the run, so re-firing
+  // would restart the case every time a frame arrived.
   useEffect(() => {
     if (!labScenario || labStarted.current) return
     labStarted.current = true
-    const lab = labScenario.lab || {}
-    const [latitude, longitude] = lab.centre || []
+    dashboard.activateScenario(labScenario.id).catch(() => {})
+  }, [dashboard, labScenario])
+
+  // Where the live case wants the camera, or null if it does not say. A case
+  // with no usable centre gets no viewport, and so never opens the lane view on
+  // nothing: in the lab the basemap is hidden too, so a scene with nowhere to
+  // point is simply a blank stage.
+  const labViewport = useMemo(() => {
+    const [latitude, longitude] = activeLab?.lab?.centre || []
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+    return {
+      latitude,
+      longitude,
+      zoom: DEFAULT_PHYSICAL_ZOOM,
+      radiusMetres: Number(activeLab.lab.radiusMetres) || 220,
+    }
+  }, [activeLab])
+
+  // Whichever case is live — named in the URL or picked from the list — drops
+  // into the lane view at its own centre. This has to re-fire when the case
+  // changes: it used to run only for a case that was not the one in the URL, so
+  // stepping between cases left every later one framed on the first one's
+  // centre and radius.
+  useEffect(() => {
+    if (!labViewport) return
+    setMapViewport(labViewport)
+    setPhysicalOpen(true)
+  }, [labViewport])
+
+  // Every in-session scenario change goes through here, from the picker and
+  // from the lab's own Previous/Next.
+  //
+  // The camera is aimed in the same act as the switch, deliberately. The lane
+  // view reads its viewport once when it mounts and is rebuilt whenever the
+  // scenario changes, so if the aim arrived in a later render than the switch
+  // it would rebuild against the outgoing case's centre and go on polling
+  // there — the new case selected, named in the banner, and nowhere on screen.
+  // Both updates in one event handler means one commit, and one rebuild with
+  // the right target.
+  //
+  // The URL is cleared at the same time: a ?lab= parameter outranks the active
+  // scenario when deciding which case is live, so leaving it set pinned the
+  // banner to the case arrived on however many times you stepped past it.
+  const chooseScenario = useCallback((id) => {
+    const target = scenarios.find((entry) => entry.id === id)
+    const [latitude, longitude] = target?.lab?.centre || []
     if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
       setMapViewport({
         latitude,
         longitude,
         zoom: DEFAULT_PHYSICAL_ZOOM,
-        radiusMetres: Number(lab.radiusMetres) || 220,
+        radiusMetres: Number(target.lab.radiusMetres) || 220,
       })
+      setPhysicalOpen(true)
     }
-    setPhysicalOpen(true)
-    dashboard.activateScenario(labScenario.id).catch(() => {})
-  }, [dashboard, labScenario])
+    setLabId(null)
+    labStarted.current = true
+    window.history.replaceState(null, '', window.location.pathname)
+    dashboard.activateScenario(id).catch(() => {})
+  }, [dashboard, scenarios])
 
-  // Picking a lab case from the dropdown drops into the lane view at that
-  // case's own centre, the same as arriving by URL.
-  useEffect(() => {
-    if (!activeLab || activeLab === labScenario) return
-    const [latitude, longitude] = activeLab.lab?.centre || []
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return
-    setMapViewport({
-      latitude,
-      longitude,
-      zoom: DEFAULT_PHYSICAL_ZOOM,
-      radiusMetres: Number(activeLab.lab?.radiusMetres) || 220,
-    })
-    setPhysicalOpen(true)
-  }, [activeLab, labScenario])
+  // Leaving the lab has to put a real scenario back on the server. Lab mode is
+  // inferred from whichever scenario is loaded, so merely clearing the URL and
+  // reloading landed straight back in the lab it was trying to leave — with the
+  // basemap still suppressed and the lane view reopening itself.
+  const leaveLab = useCallback(() => {
+    const real = scenarios.find((entry) => !entry.lab)
+    setLabId(null)
+    labStarted.current = true
+    window.history.replaceState(null, '', window.location.pathname)
+    setPhysicalOpen(false)
+    setMapViewport(null)
+    if (real) dashboard.activateScenario(real.id).catch(() => {})
+  }, [dashboard, scenarios])
 
   const traffic = statistics.traffic || {}
   const activeEvents = snapshot.trafficEvents?.filter((event) => event.status === 'ACTIVE') || []
@@ -305,7 +361,7 @@ export default function App() {
                 rendering fixture looks like the map broke rather than like a
                 deliberate choice. */}
             <select value={activeScenario} disabled={loading}
-              onChange={(event) => dashboard.activateScenario(event.target.value)}>
+              onChange={(event) => chooseScenario(event.target.value)}>
               {scenarios.filter((scenario) => !scenario.lab).map((scenario) => (
                 <option key={scenario.id} value={scenario.id}>{scenario.name}</option>
               ))}
@@ -340,7 +396,13 @@ export default function App() {
         </div> : null}
       </div> : null}
 
-      <LabBanner scenario={activeLab} cases={labCases} />
+      <LabBanner
+        scenario={activeLab}
+        cases={labCases}
+        onSelectCase={chooseScenario}
+        onLeave={leaveLab}
+        busy={loading}
+      />
 
       <section className="workspace">
         <div className="map-stage">
@@ -370,6 +432,13 @@ export default function App() {
           />}
           {physicalOpen && mapViewport && (
             <PhysicalScene
+              // A new scenario is a new world, so the scene is rebuilt rather
+              // than re-aimed. Its camera, origin and radius are read once at
+              // mount and never from the prop again, so without this it went on
+              // polling the previous case's centre and radius after a switch —
+              // drawing the old patch of map, or nothing at all, while the
+              // banner and the picker both showed the new case.
+              key={activeScenario}
               viewport={mapViewport}
               onViewportChange={setMapViewport}
               onClose={labMode

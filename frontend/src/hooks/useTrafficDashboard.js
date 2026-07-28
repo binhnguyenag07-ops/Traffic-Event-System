@@ -213,15 +213,25 @@ export function useTrafficDashboard() {
     clearDemoLifecycle()
     setLoading(true)
     setError('')
+    // Show the choice immediately and put it back if the server refuses. The
+    // picker is driven by this value, so setting it only after activating,
+    // refreshing the network and refreshing the live data left the dropdown
+    // snapped back to the previous scenario for the whole round trip — which
+    // reads as the click having been ignored.
+    let previousScenario = null
+    setActiveScenario((current) => {
+      previousScenario = current
+      return id
+    })
     try {
       await scenarioApi.activate(id)
-      setActiveScenario(id)
       setImportSummary(null)
       setRoute(null)
       setComparison([])
       setSelected(null)
       await Promise.all([refreshNetwork(), refreshLiveData()])
     } catch (nextError) {
+      setActiveScenario(previousScenario)
       setError(nextError.message)
     } finally {
       setLoading(false)
