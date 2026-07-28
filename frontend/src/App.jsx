@@ -300,9 +300,22 @@ export default function App() {
         </div>
         <div className="scenario-switcher">
           <label><span>Scenario</span>
+            {/* Test cases are grouped apart from the real runs. Listed together
+                they read as alternative cities, and picking a fifteen-metre
+                rendering fixture looks like the map broke rather than like a
+                deliberate choice. */}
             <select value={activeScenario} disabled={loading}
               onChange={(event) => dashboard.activateScenario(event.target.value)}>
-              {scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
+              {scenarios.filter((scenario) => !scenario.lab).map((scenario) => (
+                <option key={scenario.id} value={scenario.id}>{scenario.name}</option>
+              ))}
+              {labCases.length > 0 && (
+                <optgroup label="Physical view test cases">
+                  {labCases.map((scenario) => (
+                    <option key={scenario.id} value={scenario.id}>{scenario.name}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </label>
           <input ref={mapFileRef} className="visually-hidden" type="file" accept="application/json,.json"

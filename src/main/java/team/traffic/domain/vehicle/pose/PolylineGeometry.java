@@ -162,6 +162,16 @@ public final class PolylineGeometry {
         return (turned % 360.0 + 360.0) % 360.0;
     }
 
+    /**
+     * Moves a geographic point {@code metres} along a compass bearing. Negative
+     * distances move backwards along it.
+     */
+    public static GeoPoint advanceMetres(GeoPoint point, double headingDegrees, double metres) {
+        // Sideways from a heading turned back a quarter turn is straight along
+        // the original heading, so the one projection serves both.
+        return offsetMetres(point, headingDegrees - 90.0, metres);
+    }
+
     /** Shifts a geographic point sideways by a metric distance. */
     public static GeoPoint offsetMetres(GeoPoint point, double headingDegrees, double lateralOffsetMetres) {
         if (point == null || !Double.isFinite(lateralOffsetMetres) || lateralOffsetMetres == 0) {

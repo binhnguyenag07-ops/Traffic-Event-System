@@ -29,7 +29,25 @@ import java.util.Set;
 import java.util.function.DoubleConsumer;
 
 public class TickProcessor {
-    public static final double DEFAULT_SIMULATION_SECONDS_PER_TICK = 10.0;
+    /**
+     * Simulation time advanced per tick.
+     *
+     * <p>This is a rendering constraint as much as a modelling one, and it was
+     * set as though it were only the latter. At ten seconds a vehicle at the
+     * 40 km/h limit covers 111 m between two consecutive frames — further than
+     * the length of the junction it is crossing. Measured on the four-way test
+     * case, not one of 22 sampled vehicle-frames caught a vehicle inside a
+     * junction: they passed clean through between observations. Nothing
+     * downstream could then draw a turn, because there was no turn recorded to
+     * draw, and the renderer was left to bridge a right-angle corner and 111 m
+     * of road in a single interpolation.</p>
+     *
+     * <p>Half a second puts that step at about 5.5 m, comfortably shorter than
+     * a junction is wide, so a crossing is observed several times while it
+     * happens. The cost is more ticks for the same simulated hour; the
+     * alternative is a lane-level view that cannot show a vehicle turning.</p>
+     */
+    public static final double DEFAULT_SIMULATION_SECONDS_PER_TICK = 0.5;
     private static final double TIME_EPSILON_SECONDS = 1e-9;
     private final RoutingService routingService;
     private final TrafficEventBus eventBus;
