@@ -17,6 +17,7 @@ import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.routing.Route;
 import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Car;
+import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.simulation.history.SimulationFrame;
@@ -71,13 +72,13 @@ class VehiclePoseResolverTest {
     }
 
     @Test
-    void aVehicleThatHasNotStartedFacesTheRoadItIsAboutToTake() {
-        VehiclePose pose = resolver.resolve(car, network).orElseThrow();
-
-        assertThat(pose.inJunction()).isTrue();
-        assertThat(pose.roadId()).isNull();
-        assertThat(pose.headingDegrees()).isCloseTo(0.0, within(1.0));
-        assertThat(pose.latitude()).isCloseTo(10.770, within(1e-9));
+    void aVehicleThatHasNotStartedIsNotDrawnAtAll() {
+        // It holds no road, and the simulation means that literally: it is
+        // absent from the road's occupancy, so car-following cannot see it and
+        // the collision test skips it. Drawing it on the tarmac anyway made
+        // traffic drive straight through it, and made it jump backwards to
+        // progress zero the moment it really entered.
+        assertThat(resolver.resolve(car, network)).isEmpty();
     }
 
     @Test
@@ -89,13 +90,56 @@ class VehiclePoseResolverTest {
         assertThat(pose.inJunction()).isTrue();
         // It came up AB heading north; it must not snap round to any other bearing.
         assertThat(pose.headingDegrees()).isCloseTo(0.0, within(1.0));
-        assertThat(pose.latitude()).isCloseTo(10.780, within(1e-9));
         assertThat(pose.longitude()).isCloseTo(106.700, within(1e-9));
     }
 
     @Test
-    void everyVehicleHasAPoseAtEveryMomentOfItsTrip() {
-        for (int tick = 0; tick < 40; tick++) {
+    void aVehicleWaitingToCrossHoldsAtTheStopLineRatherThanInTheJunction() {
+        driveUntilWaitingAt("B");
+
+        VehiclePose pose = resolver.resolve(car, network).orElseThrow();
+
+        // Junction B is at latitude 10.780. Waiting on that exact coordinate put
+        // the vehicle in the middle of the crossing — and at a four-way, on the
+        // same point as the leading vehicle of all three other approaches. It
+        // now holds clear of the crossing, by as much of it as there is.
+        double metresShortOfJunction = (10.780 - pose.latitude()) * 111_320.0;
+        double junctionRadius = new RoadExtent(network, new RoadDataRoadLayout())
+                .junctionRadiusMetres("B");
+        assertThat(junctionRadius).isPositive();
+        assertThat(metresShortOfJunction).isCloseTo(junctionRadius, within(0.01));
+    }
+
+    @Test
+    void aQueueAtAStopLineFormsBehindTheVehicleThatArrivedFirst() {
+        Car second = new Car("car-2", "A", "C");
+        second.setCurrentRoute(new Route(
+                List.of(new RouteStep("A", "B", "AB", 1.0), new RouteStep("B", "C", "BC", 1.0)),
+                2.2, 1.0, 1.0));
+        driveUntilWaitingAt("B");
+        for (int tick = 0; tick < 60 && second.getOccupiedRoadId() != null
+                || second.getNextRouteStepIndex() == 0; tick++) {
+            TrafficState state = TrafficState.capture(tick, network, List.of(car, second));
+            second.planJunctionApproach(network, state).ifPresent(state::requestCrossing);
+            state.resolveJunctions();
+            second.advance(network, state, 10.0);
+            if (second.getOccupiedRoadId() == null && second.getNextRouteStepIndex() > 0) break;
+        }
+
+        var poses = resolver.resolveAll(List.of(second, car), network);
+
+        // The first to arrive stands nearer the junction, whatever order the
+        // list happens to be in and whatever the ids sort to.
+        assertThat(poses.get("car-1").latitude()).isGreaterThan(poses.get("car-2").latitude());
+    }
+
+    @Test
+    void aVehicleHasAPoseAtEveryMomentOnceItHasMovedOff() {
+        // Once away it must never blink out — including while it holds no road,
+        // waiting to cross a junction. A gap there would read on screen as the
+        // vehicle teleporting across the crossing.
+        drive(1);
+        for (int tick = 1; tick < 40; tick++) {
             assertThat(resolver.resolve(car, network))
                     .as("pose at tick %d", tick)
                     .isPresent();

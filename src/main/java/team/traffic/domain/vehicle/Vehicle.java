@@ -742,7 +742,9 @@ public abstract class Vehicle implements TrafficParticipant {
         }
 
         RoadOccupancy targetOccupancy = trafficState.occupancyOf(road.getId());
-        int entryLane = targetOccupancy == null ? 0 : targetOccupancy.bestLaneForEntry(this);
+        int entryLane = targetOccupancy == null
+                ? 0
+                : targetOccupancy.bestLaneForEntry(this, placement.getLastLaneIndex());
         if (entryLane < 0) {
             instantaneousSpeedMps = 0;
             trip.recordWaitingTick();
@@ -1138,6 +1140,14 @@ public abstract class Vehicle implements TrafficParticipant {
     @Override
     public int getLaneIndex() {
         return placement.getLaneIndex();
+    }
+
+    /**
+     * The lane held on the current road, or on the one just left while the
+     * vehicle waits at a junction. See {@link RoadPlacement#getLastLaneIndex()}.
+     */
+    public int getLastLaneIndex() {
+        return placement.getLastLaneIndex();
     }
 
     /**

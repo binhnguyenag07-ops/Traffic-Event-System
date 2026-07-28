@@ -242,8 +242,16 @@ class TrafficSimulatorTest {
         assertThat(simulator.getVehicles()).extracting(vehicleItem -> vehicleItem.getId())
                 .containsExactly("car-1");
 
-        simulator.advanceTick();
-        simulator.advanceTick();
+        // Retention is measured in seconds, so the number of ticks needed
+        // depends on how much time each one carries. Derived rather than
+        // hardcoded: written as "two more ticks" it silently stopped covering
+        // the retention window the moment the step got shorter.
+        int ticks = (int) Math.ceil(
+                (TrafficSimulator.ARRIVED_RETENTION_SECONDS + 1.0)
+                        / TickProcessor.DEFAULT_SIMULATION_SECONDS_PER_TICK);
+        for (int tick = 0; tick < ticks; tick++) {
+            simulator.advanceTick();
+        }
 
         assertThat(simulator.getVehicles()).isEmpty();
         assertThat(simulator.getCompletedTrips()).extracting(trip -> trip.vehicleId())

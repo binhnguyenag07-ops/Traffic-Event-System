@@ -27,6 +27,7 @@ public final class RoadPlacement {
     private int laneIndex;
     private double lateralOffsetMetres;
     private double lateralTargetOffsetMetres;
+    private int lastLaneIndex;
 
     /** Whether the vehicle holds a road at all, as opposed to waiting at a junction. */
     public boolean isOnRoad() {
@@ -62,10 +63,20 @@ public final class RoadPlacement {
         this.laneIndex = laneIndex;
         this.lateralOffsetMetres = laneCentreOffsetMetres;
         this.lateralTargetOffsetMetres = laneCentreOffsetMetres;
+        this.lastLaneIndex = laneIndex;
     }
 
-    /** Gives up the road and every value that only meant something while on it. */
+    /**
+     * Gives up the road and every value that only meant something while on it.
+     *
+     * <p>All but one: the lane held is remembered. A vehicle queueing to cross a
+     * junction holds no road, and clearing its lane along with everything else
+     * put every waiting vehicle in lane zero — so on a three-lane approach the
+     * whole queue was drawn in the nearside lane regardless of which one it had
+     * actually driven up in.</p>
+     */
     public void release() {
+        lastLaneIndex = laneIndex;
         occupiedRoadId = null;
         startIntersectionId = null;
         endIntersectionId = null;
@@ -111,6 +122,16 @@ public final class RoadPlacement {
 
     public int getLaneIndex() {
         return laneIndex;
+    }
+
+    /**
+     * The lane the vehicle is in, or was in on the road it has just left.
+     *
+     * <p>For anything that has to draw or reason about a vehicle waiting at a
+     * junction, which is off-road but emphatically not lane-less.</p>
+     */
+    public int getLastLaneIndex() {
+        return isOnRoad() ? laneIndex : lastLaneIndex;
     }
 
     public double getLateralOffsetMetres() {

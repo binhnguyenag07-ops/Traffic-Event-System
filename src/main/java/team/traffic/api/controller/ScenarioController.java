@@ -25,6 +25,20 @@ import team.traffic.service.impl.OsrmRoadGeometryProvider;
 public class ScenarioController {
     private static final Path SCENARIO_ROOT = Path.of("data", "scenarios");
     private static final ObjectMapper DESCRIBER = new ObjectMapper();
+
+    /**
+     * Which scenario the loaded network came from.
+     *
+     * <p>The client used to assume this, and the assumption survived a reload
+     * while the server's network did not: activating a lab case replaces the
+     * network for good, so a refreshed page believed it was showing District 1
+     * while the server held a fifteen-metre test map. It drew the test map on
+     * the basemap and District 1 never appeared. Only the server knows, so the
+     * server says.</p>
+     *
+     * <p>Starts as the scenario whose map {@code App} loads at boot.</p>
+     */
+    private static volatile String activeScenarioId = "district-1";
     private final RoadNetworkService networkService;
     private final SimulationService simulationService;
     private final JsonScenarioLoader loader;
@@ -44,6 +58,7 @@ public class ScenarioController {
 
     public void registerRoutes(Javalin app) {
         app.get("/api/scenarios", ctx -> ctx.json(scenarios().values()));
+        app.get("/api/scenarios/active", ctx -> ctx.json(Map.of("id", activeScenarioId)));
         app.post("/api/scenarios/{id}/activate", this::activate);
         app.post("/api/scenarios/import", this::importMap);
     }
@@ -58,6 +73,9 @@ public class ScenarioController {
             MapImportService.ImportResult imported = importService.importJson(upload.filename(), input);
             simulationService.replaceNetwork(imported.network());
             networkService.replaceNetwork(imported.network());
+            // An uploaded map belongs to no registered scenario, so nothing
+            // downstream should treat it as one.
+            activeScenarioId = "imported";
             ctx.json(Map.of(
                     "filename", upload.filename(),
                     "intersectionCount", imported.network().getIntersectionCount(),
@@ -88,6 +106,7 @@ public class ScenarioController {
                     demand -> simulationService.initialize(
                             demand, loaded.vehicles(), loaded.events()),
                     () -> simulationService.initialize(loaded.vehicles(), loaded.events()));
+            activeScenarioId = scenario.id();
             ctx.json(Map.of(
                     "scenario", scenario,
                     "intersectionCount", network.getIntersectionCount(),

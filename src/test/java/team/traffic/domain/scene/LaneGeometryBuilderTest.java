@@ -13,7 +13,9 @@ import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
+import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
 import team.traffic.domain.vehicle.pose.PolylineGeometry;
+import team.traffic.domain.vehicle.pose.RoadExtent;
 
 /**
  * Lane geometry is only useful if a lane ends up where its traffic runs, so
@@ -149,7 +151,7 @@ class LaneGeometryBuilderTest {
     }
 
     @Test
-    void aStraightContinuationDoesNotDoubleBackThroughTheJunctionCentre() {
+    void aStraightContinuationRunsStraightAcrossTheJunction() {
         RoadNetwork network = crossroads();
         LaneConnector straight = new LaneGeometryBuilder(network).connectorsAt("C").stream()
                 .filter(connector -> connector.fromRoadId().equals("NC"))
@@ -157,19 +159,51 @@ class LaneGeometryBuilderTest {
                 .findFirst()
                 .orElseThrow();
 
-        GeoPoint start = straight.curve().get(0);
-        double furthestExcursion = straight.curve().stream()
-                .mapToDouble(point -> PolylineGeometry.lengthMetres(List.of(start, point)))
-                .max()
+        // Both directed roads are the same straight street split at C, so the
+        // connector across it must be a straight line from one stop line to the
+        // other — never a detour to the node and back, which reverses its
+        // tangent and spins a rendered vehicle.
+        assertEveryStepAdvancesAlongTheChord(straight, "a straight continuation");
+        double junctionRadius = new RoadExtent(network, new RoadDataRoadLayout())
+                .junctionRadiusMetres("C");
+        assertThat(PolylineGeometry.lengthMetres(straight.curve()))
+                .as("it should span the junction, both stop lines included")
+                .isCloseTo(2 * junctionRadius, within(0.2));
+    }
+
+    @Test
+    void aRightTurnCurvesForwardsRatherThanDoublingBackOverTheJunction() {
+        RoadNetwork network = crossroads();
+
+        // A right turn is the case that used to invert. A lane is the road shape
+        // pushed sideways, so the southbound approach ends on one side of the
+        // node and the westbound exit begins on the other; joining those two
+        // points sent the vehicle backwards through a 180 degree reversal.
+        LaneConnector rightTurn = new LaneGeometryBuilder(network).connectorsAt("C").stream()
+                .filter(connector -> connector.fromRoadId().equals("NC"))
+                .filter(connector -> connector.toRoadId().equals("CW"))
+                .findFirst()
                 .orElseThrow();
 
-        // Both directed roads are the same straight street split at C. Their
-        // lane endpoints coincide beside the centre of the junction, so a
-        // connector must stay there; travelling to C and back makes its tangent
-        // reverse by 180 degrees and spins a rendered vehicle.
-        assertThat(furthestExcursion)
-                .as("a straight continuation must not leave and return to coincident lane endpoints")
-                .isLessThan(0.25);
+        assertEveryStepAdvancesAlongTheChord(rightTurn, "a right turn");
+    }
+
+    /** No segment of a connector may point against its own start-to-end chord. */
+    private static void assertEveryStepAdvancesAlongTheChord(LaneConnector connector, String what) {
+        List<GeoPoint> curve = connector.curve();
+        GeoPoint start = curve.get(0);
+        GeoPoint end = curve.get(curve.size() - 1);
+        double chordBearing = PolylineGeometry.bearingBetween(start, end);
+        for (int index = 1; index < curve.size(); index++) {
+            GeoPoint from = curve.get(index - 1);
+            GeoPoint to = curve.get(index);
+            if (PolylineGeometry.lengthMetres(List.of(from, to)) <= 0) continue;
+            double turn = Math.abs(PolylineGeometry.bearingDifference(
+                    chordBearing, PolylineGeometry.bearingBetween(from, to)));
+            assertThat(turn)
+                    .as("%s must never travel against its own chord (segment %d)", what, index)
+                    .isLessThan(90.0);
+        }
     }
 
     @Test
