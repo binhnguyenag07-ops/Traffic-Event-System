@@ -23,9 +23,9 @@ describe('interpolateVehicles', () => {
     expect(drawn.headingDegrees).toBe(45)
   })
 
-  it('draws the exact newer frame at t = 0 and t = 1', () => {
-    expect(interpolateVehicles([a0], [a1], 0)[0].x).toBe(0)
-    expect(interpolateVehicles([a0], [a1], 1)[0].x).toBe(10)
+  it('preserves both authoritative endpoint poses at t = 0 and t = 1', () => {
+    expect(interpolateVehicles([a0], [a1], 0)[0]).toEqual(a0)
+    expect(interpolateVehicles([a0], [a1], 1)[0]).toEqual(a1)
   })
 
   it('draws a newly appeared vehicle at its own position, not faded in', () => {
@@ -154,6 +154,81 @@ describe('a junction, using only what the backend says', () => {
     }
   })
 
+  it('never replaces authoritative endpoint headings with connector tangents', () => {
+    const source = { ...waiting, headingDegrees: 179.25 }
+    const target = { ...departing, headingDegrees: 91.75 }
+
+    expect(interpolateVehicles([source], [target], 0, geometry)[0]).toEqual(source)
+    expect(interpolateVehicles([source], [target], 1, geometry)[0]).toEqual(target)
+  })
+
+  it('turns smoothly at every sampled animation step', () => {
+    const poses = Array.from({ length: 41 }, (_, index) => (
+      interpolateVehicles([waiting], [departing], index / 40, geometry)[0]
+    ))
+
+    for (let index = 1; index < poses.length; index += 1) {
+      expect(Math.abs(shortestTurn(
+        poses[index - 1].headingDegrees,
+        poses[index].headingDegrees,
+      ))).toBeLessThan(6)
+    }
+  })
+
+  it('uses only the connector for the exact simulated lane pairing', () => {
+    const laneOneSource = { ...waiting, laneIndex: 1 }
+    const laneOneTarget = { ...departing, laneIndex: 1 }
+    const [drawn] = interpolateVehicles(
+      [laneOneSource], [laneOneTarget], 0.5, geometry)
+
+    // Geometry only contains lane 0 -> lane 0. Falling back to a stable chord is
+    // preferable to pulling a lane-1 vehicle sideways onto somebody else's arc.
+    expect(drawn.x).toBeCloseTo(
+      (laneOneSource.x + laneOneTarget.x) / 2,
+      6,
+    )
+    expect(drawn.y).toBeCloseTo(
+      (laneOneSource.y + laneOneTarget.y) / 2,
+      6,
+    )
+  })
+
+  it('rejects a connector whose endpoint tangent points backwards', () => {
+    const unsafeGeometry = {
+      ...geometry,
+      connectors: [{
+        ...geometry.connectors[0],
+        curve: [[-1.75, 0], [-1.75, 1], [0, -1.75]],
+      }],
+    }
+    const [drawn] = interpolateVehicles([waiting], [departing], 0.5, unsafeGeometry)
+
+    expect(drawn.x).toBeCloseTo((waiting.x + departing.x) / 2, 6)
+    expect(drawn.y).toBeCloseTo((waiting.y + departing.y) / 2, 6)
+    expect(Math.abs(shortestTurn(waiting.headingDegrees, drawn.headingDegrees)))
+      .toBeLessThan(60)
+  })
+
+  it('keeps the complete connector before entering a short outgoing road', () => {
+    // The target is deliberately closer to the connector start than its end.
+    // Nearest-point trimming used to select the start for both endpoints and
+    // erase the whole turning arc.
+    const shortRoadTarget = {
+      ...departing,
+      x: -1.6,
+      y: -0.1,
+      headingDegrees: 90,
+      roadProgress: 0.49,
+    }
+    const poses = [0.25, 0.5, 0.75].map((t) => (
+      interpolateVehicles([waiting], [shortRoadTarget], t, geometry)[0]
+    ))
+
+    // At least one intermediate pose must enter the south/east turn rather than
+    // all three lying on the direct source-target chord.
+    expect(poses.some((pose) => pose.y < -0.5)).toBe(true)
+  })
+
   it('stays inside the corner instead of cutting across it', () => {
     const [half] = interpolateVehicles([waiting], [departing], 0.5, geometry)
     const straightY = waiting.y + (departing.y - waiting.y) * 0.5
@@ -174,5 +249,78 @@ describe('a junction, using only what the backend says', () => {
         .toBeLessThan(60)
       expect(poses[index].y).toBeLessThanOrEqual(poses[index - 1].y + 1e-6)
     }
+  })
+
+  it('follows a curved approach before the connector instead of cutting through a block', () => {
+    const curvedApproach = {
+      ...geometry,
+      lanes: [
+        {
+          roadId: 'AB',
+          laneIndex: 0,
+          centreline: [[0, 10], [0, 5], [-1.75, 0]],
+        },
+        geometry.lanes[1],
+      ],
+    }
+    const earlier = {
+      ...approaching,
+      x: 0,
+      y: 10,
+      roadProgress: 0.6,
+    }
+
+    const [drawn] = interpolateVehicles([earlier], [departing], 0.25, curvedApproach)
+
+    // A direct chord to the target has x=0.2 here. The mapped path first follows
+    // the vertical lane and therefore remains on x=0 until it reaches the bend.
+    expect(drawn.x).toBeCloseTo(0, 6)
+    expect(drawn.y).toBeGreaterThan(5)
+  })
+})
+
+describe('U-turn heading ambiguity', () => {
+  const source = {
+    id: 'u', type: 'CAR', roadId: 'IN', roadProgress: 0.9, laneIndex: 0,
+    inJunction: false, x: 1, y: -1, headingDegrees: 0,
+  }
+  const target = {
+    id: 'u', type: 'CAR', roadId: 'OUT', roadProgress: 0.1, laneIndex: 0,
+    inJunction: false, x: -1, y: -1, headingDegrees: 180,
+  }
+  const geometry = {
+    lanes: [
+      { roadId: 'IN', laneIndex: 0, centreline: [[1, -10], [1, 0]] },
+      { roadId: 'OUT', laneIndex: 0, centreline: [[-1, 0], [-1, -10]] },
+    ],
+    connectors: [{
+      fromRoadId: 'IN',
+      toRoadId: 'OUT',
+      fromLane: 0,
+      toLane: 0,
+      // North -> west -> south: negative compass-bearing curvature.
+      curve: [
+        [1, 0],
+        [0.9239, 0.3827],
+        [0.7071, 0.7071],
+        [0.3827, 0.9239],
+        [0, 1],
+        [-0.3827, 0.9239],
+        [-0.7071, 0.7071],
+        [-0.9239, 0.3827],
+        [-1, 0],
+      ],
+    }],
+  }
+
+  it('rotates with a counter-clockwise connector instead of spinning right', () => {
+    const [middle] = interpolateVehicles([source], [target], 0.5, geometry)
+
+    expect(shortestTurn(source.headingDegrees, middle.headingDegrees))
+      .toBeCloseTo(-90, 6)
+    expect(middle.x).toBeCloseTo(0, 1)
+    expect(middle.y).toBeGreaterThan(0.9)
+    expect(interpolateVehicles([source], [target], 0, geometry)[0]).toEqual(source)
+    expect(interpolateVehicles([source], [target], 1, geometry)[0]).toEqual(target)
   })
 })

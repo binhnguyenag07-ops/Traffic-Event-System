@@ -15,6 +15,9 @@
 // the simulation.
 
 const EPSILON = 1e-6
+const polylineMetricsCache = new WeakMap()
+const laneIndexCache = new WeakMap()
+const connectorIndexCache = new WeakMap()
 
 /** Shortest signed turn from one compass bearing to another, in degrees. */
 export function shortestTurn(fromDegrees, toDegrees) {
@@ -32,6 +35,23 @@ function distance(a, b) {
 
 function vehiclePoint(vehicle) {
   return [Number(vehicle.x), Number(vehicle.y)]
+}
+
+function authoritativeHeading(source, target, fraction, turnHintDegrees = 0) {
+  // Smoothstep makes angular velocity zero at both authoritative frames. That
+  // prevents a visible jerk when the next render interval begins, while still
+  // guaranteeing that neither endpoint can be replaced by a geometry tangent.
+  let turn = shortestTurn(source.headingDegrees, target.headingDegrees)
+  // Exactly opposite headings have two equally short rotations. Choose the
+  // sign of the connector's real curvature; otherwise a left U-turn can follow
+  // a left-hand arc while its sprite spins right through the same 180 degrees.
+  if (Math.abs(Math.abs(turn) - 180) <= EPSILON
+      && Math.abs(turnHintDegrees) > EPSILON) {
+    turn = Math.sign(turnHintDegrees) * 180
+  }
+  const eased = fraction * fraction * (3 - 2 * fraction)
+  return source.headingDegrees
+    + turn * eased
 }
 
 /**
@@ -64,109 +84,224 @@ function cleanPath(points) {
   return result
 }
 
-function pointAtPolyline(points, fraction) {
+function polylineMetrics(points) {
+  if (Array.isArray(points)) {
+    const cached = polylineMetricsCache.get(points)
+    if (cached) return cached
+  }
   const path = cleanPath(points)
+  const cumulative = [0]
+  for (let index = 1; index < path.length; index += 1) {
+    cumulative.push(cumulative[index - 1] + distance(path[index - 1], path[index]))
+  }
+  const metrics = {
+    path,
+    cumulative,
+    total: cumulative[cumulative.length - 1] || 0,
+  }
+  if (Array.isArray(points)) polylineMetricsCache.set(points, metrics)
+  return metrics
+}
+
+function pointAtDistance(metrics, along) {
+  const { path, cumulative, total } = metrics
   if (path.length === 0) return null
-  if (path.length === 1) return path[0]
-
-  const lengths = path.slice(1).map((point, index) => distance(path[index], point))
-  const total = lengths.reduce((sum, length) => sum + length, 0)
-  if (total <= EPSILON) return path[0]
-
-  let remaining = total * clamp01(fraction)
-  for (let index = 0; index < lengths.length; index += 1) {
-    const length = lengths[index]
-    if (remaining <= length || index === lengths.length - 1) {
-      const within = length <= EPSILON ? 0 : remaining / length
+  if (path.length === 1 || total <= EPSILON) return path[0]
+  const wanted = Math.max(0, Math.min(total, along))
+  for (let index = 1; index < path.length; index += 1) {
+    if (wanted <= cumulative[index] || index === path.length - 1) {
+      const length = cumulative[index] - cumulative[index - 1]
+      const within = length <= EPSILON ? 0 : (wanted - cumulative[index - 1]) / length
       return [
-        path[index][0] + (path[index + 1][0] - path[index][0]) * within,
-        path[index][1] + (path[index + 1][1] - path[index][1]) * within,
+        path[index - 1][0] + (path[index][0] - path[index - 1][0]) * within,
+        path[index - 1][1] + (path[index][1] - path[index - 1][1]) * within,
       ]
     }
-    remaining -= length
   }
   return path[path.length - 1]
 }
 
-function bearingAtPolyline(points, fraction, fallback) {
-  const before = pointAtPolyline(points, Math.max(0, clamp01(fraction) - 0.002))
-  const after = pointAtPolyline(points, Math.min(1, clamp01(fraction) + 0.002))
-  if (!before || !after || distance(before, after) <= EPSILON) return fallback
+function pointAtPolyline(points, fraction) {
+  const metrics = polylineMetrics(points)
+  return pointAtDistance(metrics, metrics.total * clamp01(fraction))
+}
+
+/** Arc-length position of the nearest point on a directed lane polyline. */
+function projectOntoPolyline(points, point) {
+  const metrics = polylineMetrics(points)
+  const { path, cumulative } = metrics
+  if (path.length === 0) return null
+  if (path.length === 1) return { along: 0, point: path[0] }
+
+  let best = null
+  for (let index = 1; index < path.length; index += 1) {
+    const from = path[index - 1]
+    const to = path[index]
+    const dx = to[0] - from[0]
+    const dy = to[1] - from[1]
+    const squaredLength = dx * dx + dy * dy
+    if (squaredLength <= EPSILON * EPSILON) continue
+    const projected = Math.max(0, Math.min(1,
+      ((point[0] - from[0]) * dx + (point[1] - from[1]) * dy) / squaredLength))
+    const candidate = [from[0] + dx * projected, from[1] + dy * projected]
+    const gap = distance(candidate, point)
+    if (!best || gap < best.gap) {
+      best = {
+        gap,
+        point: candidate,
+        along: cumulative[index - 1]
+          + (cumulative[index] - cumulative[index - 1]) * projected,
+      }
+    }
+  }
+  return best
+}
+
+/**
+ * Ordered portion of a lane between two authoritative/connector points.
+ * Returning null for reverse order prevents a malformed projection from
+ * creating a loop; the caller then uses a short local bridge.
+ */
+function lanePathBetween(lane, from, to) {
+  if (!lane?.centreline) return null
+  const metrics = polylineMetrics(lane.centreline)
+  const start = projectOntoPolyline(lane.centreline, from)
+  const end = projectOntoPolyline(lane.centreline, to)
+  if (!start || !end || end.along + EPSILON < start.along) return null
+
+  const result = [from, start.point]
+  for (let index = 1; index + 1 < metrics.path.length; index += 1) {
+    if (metrics.cumulative[index] > start.along + EPSILON
+        && metrics.cumulative[index] < end.along - EPSILON) {
+      result.push(metrics.path[index])
+    }
+  }
+  result.push(end.point, to)
+  return cleanPath(result)
+}
+
+function laneBearingAt(lane, point, fallback) {
+  if (!lane?.centreline) return fallback
+  const metrics = polylineMetrics(lane.centreline)
+  const projected = projectOntoPolyline(lane.centreline, point)
+  if (!projected || metrics.total <= EPSILON) return fallback
+  const sample = Math.min(0.25, metrics.total / 4)
+  const before = pointAtDistance(metrics, projected.along - sample)
+  const after = pointAtDistance(metrics, projected.along + sample)
+  return before && after && distance(before, after) > EPSILON
+    ? bearingBetween(before, after)
+    : fallback
+}
+
+function bearingBetween(from, to) {
   return (
-    Math.atan2(after[0] - before[0], after[1] - before[1]) * 180 / Math.PI
+    Math.atan2(to[0] - from[0], to[1] - from[1]) * 180 / Math.PI
     + 360
   ) % 360
 }
 
-/**
- * The part of a connector that actually lies between two poses.
- *
- * <p>Splicing a whole connector between two points assumes the vehicle is about
- * to travel all of it. Once it is part-way across a junction that is false: the
- * start of the curve is behind it, so the spliced path runs backwards to the
- * junction mouth, round the full arc, and only then forwards to where the
- * vehicle actually is. Interpolating along that path swings the vehicle through
- * a reversal — the spin-then-straighten seen at every turn.</p>
- *
- * <p>Trimming to the nearest curve point at each end keeps the path monotone,
- * so progress along it is always progress along the turn.</p>
- */
-function trimCurve(curve, from, to) {
-  const path = cleanPath(curve)
-  if (path.length < 2) return [from, to]
-  const nearest = (point) => {
-    let best = 0
-    let bestDistance = Infinity
-    path.forEach((candidate, index) => {
-      const gap = distance(candidate, point)
-      if (gap < bestDistance) { bestDistance = gap; best = index }
-    })
-    return best
+function accumulatedCurveTurn(curve) {
+  let previousBearing = null
+  let total = 0
+  for (let index = 1; index < curve.length; index += 1) {
+    const bearing = bearingBetween(curve[index - 1], curve[index])
+    if (previousBearing !== null) total += shortestTurn(previousBearing, bearing)
+    previousBearing = bearing
   }
-  const start = nearest(from)
-  const end = nearest(to)
-  const middle = start <= end
-    ? path.slice(start, end + 1)
-    : path.slice(end, start + 1).reverse()
-  return [from, ...middle, to]
+  return total
+}
+
+/**
+ * Whether a backend connector is safe enough to use as an animation path.
+ *
+ * The current backend contract has no mid-junction progress. A transition is
+ * therefore always source -> complete connector -> target; guessing which part
+ * of a connector was crossed from Euclidean proximity is invalid. In particular,
+ * a target on a very short outgoing road can be nearer the connector's start
+ * than its end, which used to collapse a real turn into a chord.
+ */
+function canonicalConnectorPath(connector, source, target, fromLane, toLane) {
+  const curve = cleanPath(connector?.curve)
+  if (curve.length < 2) return null
+
+  const bearings = []
+  for (let index = 1; index < curve.length; index += 1) {
+    bearings.push(bearingBetween(curve[index - 1], curve[index]))
+  }
+  if (bearings.some((bearing, index) => (
+    index > 0 && Math.abs(shortestTurn(bearings[index - 1], bearing)) > 60
+  ))) {
+    return null
+  }
+
+  // Reject a curve that begins or ends with a cusp relative to the two
+  // lane tangents. Comparing with the target pose itself is insufficient on a
+  // short curved exit, where the vehicle may already be past the entry tangent.
+  const expectedStart = laneBearingAt(fromLane, curve[0], source.headingDegrees)
+  const expectedEnd = laneBearingAt(toLane, curve[curve.length - 1], target.headingDegrees)
+  if (Math.abs(shortestTurn(expectedStart, bearings[0])) > 60) return null
+  if (Math.abs(shortestTurn(bearings[bearings.length - 1], expectedEnd)) > 60) {
+    return null
+  }
+
+  const sourcePoint = vehiclePoint(source)
+  const targetPoint = vehiclePoint(target)
+  const approach = lanePathBetween(fromLane, sourcePoint, curve[0])
+    || [sourcePoint, curve[0]]
+  const exit = lanePathBetween(toLane, curve[curve.length - 1], targetPoint)
+    || [curve[curve.length - 1], targetPoint]
+  return {
+    points: cleanPath([...approach, ...curve, ...exit]),
+    turnHintDegrees: accumulatedCurveTurn(curve),
+  }
 }
 
 /**
  * The connector joining two roads, preferring the one built for these lanes.
  *
- * <p>A wrong-lane connector is still better than a straight line across the
- * corner, so a partial match is accepted — but only after every exact one has
- * been considered.</p>
+ * Only an exact lane pairing is valid. Pulling a vehicle onto another lane's
+ * connector creates a lateral jump and gives it that lane's tangent.
  */
 function findConnector(connectors, fromRoadId, toRoadId, fromLane, toLane) {
   if (!fromRoadId || !toRoadId) return null
-  const candidates = (connectors || []).filter((connector) => (
-    connector.fromRoadId === fromRoadId && connector.toRoadId === toRoadId
-  ))
-  return candidates.sort((a, b) => {
-    const score = (connector) => (
-      (connector.fromLane === fromLane ? 2 : 0)
-      + (connector.toLane === toLane ? 1 : 0)
-    )
-    return score(b) - score(a)
-  })[0] || null
+  const list = connectors || []
+  let index = connectorIndexCache.get(list)
+  if (!index) {
+    index = new Map()
+    list.forEach((connector) => {
+      index.set(
+        `${connector.fromRoadId}\u0000${connector.fromLane}\u0000`
+          + `${connector.toRoadId}\u0000${connector.toLane}`,
+        connector,
+      )
+    })
+    connectorIndexCache.set(list, index)
+  }
+  return index.get(`${fromRoadId}\u0000${fromLane}\u0000${toRoadId}\u0000${toLane}`) || null
 }
 
 function findLane(lanes, roadId, preferredIndex, fallbackIndex) {
-  const candidates = (lanes || []).filter((lane) => lane.roadId === roadId)
-  return candidates.find((lane) => lane.laneIndex === preferredIndex)
-    || candidates.find((lane) => lane.laneIndex === fallbackIndex)
+  const list = lanes || []
+  let index = laneIndexCache.get(list)
+  if (!index) {
+    index = new Map()
+    list.forEach((lane) => index.set(`${lane.roadId}\u0000${lane.laneIndex}`, lane))
+    laneIndexCache.set(list, index)
+  }
+  return index.get(`${roadId}\u0000${preferredIndex}`)
+    || index.get(`${roadId}\u0000${fallbackIndex}`)
     || null
 }
 
-function followPath(target, path, fraction, fallbackHeading) {
+function followPath(source, target, path, fraction, turnHintDegrees = 0) {
   const point = pointAtPolyline(path, fraction)
   if (!point) return target
   return {
     ...target,
     x: point[0],
     y: point[1],
-    headingDegrees: bearingAtPolyline(path, fraction, fallbackHeading),
+    headingDegrees: authoritativeHeading(
+      source, target, fraction, turnHintDegrees),
   }
 }
 
@@ -195,11 +330,7 @@ function lanePose(source, target, lane, sourceProgress, targetProgress, fraction
     ...target,
     x: point[0] + correctionX,
     y: point[1] + correctionY,
-    headingDegrees: bearingAtPolyline(
-      lane.centreline,
-      progress,
-      source.headingDegrees + shortestTurn(source.headingDegrees, target.headingDegrees) * fraction,
-    ),
+    headingDegrees: authoritativeHeading(source, target, fraction),
   }
 }
 
@@ -220,6 +351,11 @@ export function interpolateVehicles(previous, next, t, geometry = {}) {
     // there is, and a vehicle drawn anywhere else on its first frame arrives
     // with a jump.
     if (!source) return target
+
+    // Interpolation is allowed to choose only intermediate poses. These two
+    // guards make the backend endpoint contract explicit and regression-testable.
+    if (fraction <= 0) return source
+    if (fraction >= 1) return target
 
     const fromRoadId = roadOf(source)
     const toRoadId = roadOf(target)
@@ -243,12 +379,21 @@ export function interpolateVehicles(previous, next, t, geometry = {}) {
       const connector = findConnector(
         connectors, fromRoadId, toRoadId, source.laneIndex, target.laneIndex)
       if (connector) {
-        return followPath(
-          target,
-          trimCurve(connector.curve, vehiclePoint(source), vehiclePoint(target)),
-          fraction,
-          target.headingDegrees,
-        )
+        const fromLane = findLane(
+          lanes, fromRoadId, source.laneIndex, source.laneIndex)
+        const toLane = findLane(
+          lanes, toRoadId, target.laneIndex, target.laneIndex)
+        const connectorPath = canonicalConnectorPath(
+          connector, source, target, fromLane, toLane)
+        if (connectorPath) {
+          return followPath(
+            source,
+            target,
+            connectorPath.points,
+            fraction,
+            connectorPath.turnHintDegrees,
+          )
+        }
       }
     }
 
@@ -256,8 +401,7 @@ export function interpolateVehicles(previous, next, t, geometry = {}) {
       ...target,
       x: source.x + (target.x - source.x) * fraction,
       y: source.y + (target.y - source.y) * fraction,
-      headingDegrees: source.headingDegrees
-        + shortestTurn(source.headingDegrees, target.headingDegrees) * fraction,
+      headingDegrees: authoritativeHeading(source, target, fraction),
     }
   })
 }

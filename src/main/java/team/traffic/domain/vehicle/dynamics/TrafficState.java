@@ -277,7 +277,9 @@ public final class TrafficState implements JunctionEnvironment {
     @Override
     public boolean hasPhysicalSpaceFor(JunctionApproach approach) {
         RoadOccupancy target = occupancyOf(approach.toRoad().getId());
-        return target != null && target.canAdmit(approach.vehicle());
+        return target != null
+                && target.canAdmitFromLane(
+                        approach.vehicle(), approach.fromLaneIndex());
     }
 
     @Override

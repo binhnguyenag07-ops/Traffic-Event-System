@@ -181,10 +181,10 @@ public final class PhysicalSceneAssembler {
     /** Places one head per controlled approach, on that approach's stop line. */
     private SceneSignal signalAt(SignalSnapshot snapshot) {
         List<SceneSignal.Approach> approaches = new ArrayList<>();
-        for (Road road : network.getRoads().values()) {
-            if (!snapshot.junctionId().equals(road.getEndIntersectionId())) {
-                continue;
-            }
+        // RoadNetwork maintains this adjacency list, so a state poll visits
+        // only the approaches of this signal rather than scanning every road
+        // once per signal (279 × 730 roads in the District 1 scene).
+        for (Road road : network.findIncomingRoads(snapshot.junctionId())) {
             StopLine stopLine = geometry.stopLineOf(road);
             if (stopLine == null) {
                 continue;

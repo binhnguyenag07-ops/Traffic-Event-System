@@ -162,6 +162,30 @@ class TrafficSimulatorTest {
     }
 
     @Test
+    void vehicleAndEventGettersReturnStableCollectionSnapshots() {
+        simulator.initialize(
+                List.of(new VehicleConfig("car-1", "CAR", "A", "B")),
+                List.of(new EventConfig("ev-1", "ROAD_CLOSURE", "AB", 0, 5)));
+
+        var vehicleSnapshot = simulator.getVehicles();
+        var eventSnapshot = simulator.getEvents();
+
+        simulator.removeVehicle("car-1");
+        simulator.removeEvent("ev-1");
+
+        assertThat(simulator.getVehicles()).isEmpty();
+        assertThat(simulator.getEvents()).isEmpty();
+        assertThat(vehicleSnapshot).extracting(vehicle -> vehicle.getId())
+                .containsExactly("car-1");
+        assertThat(eventSnapshot).extracting(event -> event.getId())
+                .containsExactly("ev-1");
+        assertThatThrownBy(vehicleSnapshot::clear)
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(eventSnapshot::clear)
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
     void frameHistoryReconstructsEventBoundariesAndEveryPhysicalSecond() {
         simulator.setSimulationSecondsPerTick(3.0);
         simulator.initialize(
@@ -274,6 +298,45 @@ class TrafficSimulatorTest {
         simulator.initialize(List.of(), List.of());
 
         assertThat(simulator.getCompletedTrips()).isEmpty();
+    }
+
+    @Test
+    void initializeClearsLegacyDynamicTrafficButPreservesExplicitClosures() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("C", "C", 2, 0, LocationType.NORMAL));
+        network.addRoad(new Road(
+                "AB",
+                "A",
+                "B",
+                1,
+                50,
+                10,
+                7,
+                new RoadCondition(0.8, 0.7, RoadStatus.CONGESTED)));
+        network.addRoad(new Road(
+                "BC",
+                "B",
+                "C",
+                1,
+                50,
+                10,
+                4,
+                new RoadCondition(1, 0.4, RoadStatus.CLOSED)));
+        simulator.replaceNetwork(network);
+
+        simulator.initialize(List.of(), List.of());
+
+        assertThat(network.getRoads().values()).allSatisfy(road -> {
+            assertThat(road.getCurrentVehicleCount()).isZero();
+            assertThat(road.getCondition().getVehicleDensity()).isZero();
+            assertThat(road.getCondition().getCongestionLevel()).isZero();
+        });
+        assertThat(network.getRoad("AB").getCondition().getRoadStatus())
+                .isEqualTo(RoadStatus.OPEN);
+        assertThat(network.getRoad("BC").getCondition().getRoadStatus())
+                .isEqualTo(RoadStatus.CLOSED);
     }
 
     @Test
