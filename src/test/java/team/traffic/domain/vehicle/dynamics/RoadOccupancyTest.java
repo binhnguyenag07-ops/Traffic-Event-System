@@ -31,6 +31,37 @@ class RoadOccupancyTest {
         assertThat(occupancy.getPhysicalJamRatio()).isCloseTo(0.7, org.assertj.core.data.Offset.offset(1e-12));
     }
 
+    @Test
+    void continuationClampsOnlyWhenTheOutgoingRoadHasFewerLanes() {
+        Road road = new Road("R", "Road", "P", "A", "B", 0.1, 50, 100, 0,
+                2, 3.5, new RoadCondition(0, 0, RoadStatus.OPEN), List.of(), RoadClass.PRIMARY);
+        TrafficParticipant arriving = car("arriving", 2, 0.0);
+        RoadOccupancy occupancy = RoadOccupancy.of(
+                road, List.of(), new RoadDataRoadLayout(), List.of());
+
+        assertThat(occupancy.continuationLaneForEntry(arriving, 2))
+                .as("lane two of a three-lane approach continues into the outer available lane")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void aBlockedContinuationDoesNotTeleportTheVehicleIntoAnEmptyLane() {
+        Road road = new Road("R", "Road", "P", "A", "B", 0.1, 50, 100, 0,
+                2, 3.5, new RoadCondition(0, 0, RoadStatus.OPEN), List.of(), RoadClass.PRIMARY);
+        TrafficParticipant arriving = car("arriving", 1, 0.0);
+        TrafficParticipant blockingLaneOne = car("blocking", 1, 0.01);
+        RoadOccupancy occupancy = RoadOccupancy.of(
+                road, List.of(blockingLaneOne), new RoadDataRoadLayout(), List.of());
+
+        assertThat(occupancy.lane(0).canAdmit(arriving))
+                .as("the other lane is deliberately empty")
+                .isTrue();
+        assertThat(occupancy.continuationLaneForEntry(arriving, 1))
+                .as("the vehicle waits instead of jumping laterally inside the junction")
+                .isEqualTo(-1);
+        assertThat(occupancy.canAdmitFromLane(arriving, 1)).isFalse();
+    }
+
     private static TrafficParticipant car(String id, int laneIndex, double progress) {
         return new Stub(id, laneIndex, progress);
     }

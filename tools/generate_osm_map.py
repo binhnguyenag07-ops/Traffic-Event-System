@@ -385,20 +385,17 @@ def build_map(ways, building_ways, land_cover_ways):
         tags = way.get("tags", {})
         road_class = tags["highway"]
         capacity = CAPACITIES[road_class]
-        target_density = 0.08 + ((way["id"] + segment["number"] * 17) % 44) / 100
-        count = min(capacity - 1, round(capacity * target_density))
-        density = round(count / capacity, 3)
-        congestion = round(max(0.04, density - 0.12), 2)
-        status = "CONGESTED" if density >= 0.46 else "OPEN"
         geometry = [[round(lat, 7), round(lon, 7)] for lat, lon in segment["geometry"]]
         common = {
             "distance": round(max(0.01, geometry_distance(segment["geometry"])), 4),
             "speedLimit": parse_speed(tags, road_class),
             "capacity": capacity,
-            "currentVehicleCount": count,
-            "congestionLevel": congestion,
-            "vehicleDensity": density,
-            "roadStatus": status,
+            # Runtime traffic is owned by the simulator. Persisting synthetic
+            # counts here creates invisible vehicles that consume road capacity.
+            "currentVehicleCount": 0,
+            "congestionLevel": 0.0,
+            "vehicleDensity": 0.0,
+            "roadStatus": "OPEN",
             "roadClass": road_class.upper(),
         }
         directions = [(segment["start"], segment["end"], geometry, "F")]

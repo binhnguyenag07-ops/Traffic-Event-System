@@ -151,6 +151,50 @@ class LaneGeometryBuilderTest {
     }
 
     @Test
+    void lanePairingMatchesTheSimulatedContinuationWithoutACartesianExplosion() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(junction("A", 10.000, 106.000));
+        network.addIntersection(junction("C", 10.005, 106.000));
+        network.addIntersection(junction("B", 10.010, 106.003));
+        network.addRoad(new Road("AC", "Approach", "AC", "A", "C", 0.55, 50, 100, 0,
+                3, LANE_WIDTH, new RoadCondition(0, 0, RoadStatus.OPEN),
+                List.of(new GeoPoint(10.000, 106.000), new GeoPoint(10.005, 106.000)),
+                RoadClass.PRIMARY));
+        network.addRoad(new Road("CB", "Exit", "CB", "C", "B", 0.65, 50, 100, 0,
+                2, LANE_WIDTH, new RoadCondition(0, 0, RoadStatus.OPEN),
+                List.of(new GeoPoint(10.005, 106.000), new GeoPoint(10.010, 106.003)),
+                RoadClass.PRIMARY));
+
+        List<LaneConnector> connectors = new LaneGeometryBuilder(network).connectorsAt("C");
+
+        assertThat(connectors)
+                .extracting(LaneConnector::fromLane, LaneConnector::toLane)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(0, 0),
+                        org.assertj.core.groups.Tuple.tuple(1, 1),
+                        org.assertj.core.groups.Tuple.tuple(2, 1));
+    }
+
+    @Test
+    void shortDistrictOneRoadDoesNotCreateEndpointCusps() {
+        RoadNetwork network = districtOneShortRoadChain();
+        LaneGeometryBuilder builder = new LaneGeometryBuilder(network);
+
+        assertSmoothConnector(
+                builder,
+                network,
+                "N5238614065",
+                "W220863461-0F",
+                "W541781966-0F");
+        assertSmoothConnector(
+                builder,
+                network,
+                "N4603207418",
+                "W541781966-0F",
+                "W220862996-0F");
+    }
+
+    @Test
     void aStraightContinuationRunsStraightAcrossTheJunction() {
         RoadNetwork network = crossroads();
         LaneConnector straight = new LaneGeometryBuilder(network).connectorsAt("C").stream()
@@ -203,6 +247,50 @@ class LaneGeometryBuilderTest {
             assertThat(turn)
                     .as("%s must never travel against its own chord (segment %d)", what, index)
                     .isLessThan(90.0);
+        }
+    }
+
+    private static void assertSmoothConnector(
+            LaneGeometryBuilder builder,
+            RoadNetwork network,
+            String junctionId,
+            String fromRoadId,
+            String toRoadId) {
+        LaneConnector connector = builder.connectorsAt(junctionId).stream()
+                .filter(candidate -> candidate.fromRoadId().equals(fromRoadId))
+                .filter(candidate -> candidate.toRoadId().equals(toRoadId))
+                .filter(candidate -> candidate.fromLane() == 0 && candidate.toLane() == 0)
+                .findFirst()
+                .orElseThrow();
+        Road fromRoad = network.getRoad(fromRoadId);
+        Road toRoad = network.getRoad(toRoadId);
+        RoadExtent extent = new RoadExtent(network, new RoadDataRoadLayout());
+        List<GeoPoint> fromLane = builder.lanesOf(fromRoad).get(0).centreline();
+        List<GeoPoint> toLane = builder.lanesOf(toRoad).get(0).centreline();
+        double expectedStart = PolylineGeometry.bearingAt(
+                fromLane, extent.exitFraction(fromRoad));
+        double expectedEnd = PolylineGeometry.bearingAt(
+                toLane, extent.entryFraction(toRoad));
+        List<GeoPoint> curve = connector.curve();
+
+        assertThat(curve).hasSizeGreaterThan(2);
+        double first = PolylineGeometry.bearingBetween(curve.get(0), curve.get(1));
+        double last = PolylineGeometry.bearingBetween(
+                curve.get(curve.size() - 2), curve.get(curve.size() - 1));
+        assertThat(Math.abs(PolylineGeometry.bearingDifference(expectedStart, first)))
+                .as("%s starts tangent to its incoming lane", fromRoadId + " -> " + toRoadId)
+                .isLessThanOrEqualTo(45.0);
+        assertThat(Math.abs(PolylineGeometry.bearingDifference(last, expectedEnd)))
+                .as("%s ends tangent to its outgoing lane", fromRoadId + " -> " + toRoadId)
+                .isLessThanOrEqualTo(45.0);
+        for (int index = 2; index < curve.size(); index++) {
+            double previous = PolylineGeometry.bearingBetween(
+                    curve.get(index - 2), curve.get(index - 1));
+            double current = PolylineGeometry.bearingBetween(
+                    curve.get(index - 1), curve.get(index));
+            assertThat(Math.abs(PolylineGeometry.bearingDifference(previous, current)))
+                    .as("no sampled connector step forms a cusp")
+                    .isLessThanOrEqualTo(45.0);
         }
     }
 
@@ -281,6 +369,49 @@ class LaneGeometryBuilderTest {
         addTwoWay(network, "S", 9.990, 106.000);
         addTwoWay(network, "E", 10.000, 106.010);
         addTwoWay(network, "W", 10.000, 105.990);
+        return network;
+    }
+
+    private RoadNetwork districtOneShortRoadChain() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(junction("N411925307", 10.7720824, 106.6923274));
+        network.addIntersection(junction("N5238614065", 10.7727238, 106.6911548));
+        network.addIntersection(junction("N4603207418", 10.7726603, 106.6911167));
+        network.addIntersection(junction("N4610625918", 10.7714596, 106.6931043));
+        network.addRoad(new Road(
+                "W220863461-0F", "Cách Mạng Tháng Tám", "W220863461-0",
+                "N411925307", "N5238614065", 0.1466, 50, 100, 0,
+                2, 3.5, new RoadCondition(0, 0, RoadStatus.OPEN),
+                List.of(
+                        new GeoPoint(10.7720824, 106.6923274),
+                        new GeoPoint(10.7721554, 106.6921940),
+                        new GeoPoint(10.7723496, 106.6918389),
+                        new GeoPoint(10.7724827, 106.6915956),
+                        new GeoPoint(10.7726749, 106.6912442),
+                        new GeoPoint(10.7727238, 106.6911548)),
+                RoadClass.PRIMARY));
+        network.addRoad(new Road(
+                "W541781966-0F", "Bùi Thị Xuân", "W541781966-0",
+                "N5238614065", "N4603207418", 0.01, 40, 65, 0,
+                2, 3.25, new RoadCondition(0, 0, RoadStatus.OPEN),
+                List.of(
+                        new GeoPoint(10.7727238, 106.6911548),
+                        new GeoPoint(10.7726603, 106.6911167)),
+                RoadClass.TERTIARY));
+        network.addRoad(new Road(
+                "W220862996-0F", "Cách Mạng Tháng Tám", "W220862996-0",
+                "N4603207418", "N4610625918", 0.2572, 50, 100, 0,
+                2, 3.5, new RoadCondition(0, 0, RoadStatus.OPEN),
+                List.of(
+                        new GeoPoint(10.7726603, 106.6911167),
+                        new GeoPoint(10.7726148, 106.6912073),
+                        new GeoPoint(10.7724198, 106.6915434),
+                        new GeoPoint(10.7720756, 106.6921617),
+                        new GeoPoint(10.7720507, 106.6922064),
+                        new GeoPoint(10.7716121, 106.6929900),
+                        new GeoPoint(10.7715430, 106.6930711),
+                        new GeoPoint(10.7714596, 106.6931043)),
+                RoadClass.PRIMARY));
         return network;
     }
 

@@ -10,6 +10,7 @@ import {
 } from '../api/trafficAPI'
 import { buildDemoTraffic, createBoundaryTripPlanner, replacementDelayMs } from '../demoTraffic'
 import { randomBoundarySpawnPolicy } from '../spawnPolicies'
+import { decideStartupAction, STARTUP_ACTION } from '../startupPolicy'
 
 const EMPTY_SNAPSHOT = {
   timelineId: null, frameId: null, tick: 0, elapsedSeconds: 0, status: 'READY',
@@ -58,6 +59,7 @@ export function useTrafficDashboard() {
   const [tickDelay, setTickDelay] = useState(1000)
   const [streamConnected, setStreamConnected] = useState(false)
   const [importSummary, setImportSummary] = useState(null)
+  const [demandStatistics, setDemandStatistics] = useState(null)
   const tickingRef = useRef(false)
   const startupRef = useRef(false)
   const demoVehicleIdsRef = useRef(null)
@@ -130,6 +132,7 @@ export function useTrafficDashboard() {
         simulationApi.status(),
       ])
       setTickDelay(status.playbackIntervalMs)
+      setDemandStatistics(status.demand ?? {})
     } catch (nextError) {
       setError(nextError.message)
     } finally {
@@ -224,7 +227,9 @@ export function useTrafficDashboard() {
       return id
     })
     try {
-      await scenarioApi.activate(id)
+      const activation = await scenarioApi.activate(id)
+      setDemandStatistics(activation.demand ?? {})
+      startupRef.current = false
       setImportSummary(null)
       setRoute(null)
       setComparison([])
@@ -245,6 +250,8 @@ export function useTrafficDashboard() {
     setError('')
     try {
       const result = await scenarioApi.importMap(file)
+      setDemandStatistics({})
+      startupRef.current = false
       setImportSummary(result)
       setActiveScenario('imported')
       setScenarios((current) => [
@@ -263,16 +270,6 @@ export function useTrafficDashboard() {
       setLoading(false)
     }
   }, [clearDemoLifecycle, refreshLiveData, refreshNetwork])
-
-  const initializeDemo = useCallback(async () => {
-    const demo = buildDemoTraffic(intersections, roads)
-    if (!demo.vehicles.length) return
-    demoVehicleIdsRef.current = new Set(demo.vehicles.map((vehicle) => vehicle.id))
-    pendingReplacementsRef.current.clear()
-    replacementsInFlightRef.current.clear()
-    persistDemoVehicleIds(demoVehicleIdsRef.current)
-    await runAction(() => simulationApi.initialize(demo.vehicles, demo.events))
-  }, [intersections, roads, runAction])
 
   const startLiveDemo = useCallback(async () => {
     const demo = buildDemoTraffic(intersections, roads)
@@ -297,13 +294,14 @@ export function useTrafficDashboard() {
       // rejects anything under 250 ms, and because this is the first call in
       // the sequence, asking for less threw before the simulation was ever
       // initialised or started. The demo button did nothing at all.
-      await simulationApi.setParameters(0.5, 250)
+      const configured = await simulationApi.setParameters(0.5, 250)
       await simulationApi.initialize(demo.vehicles, demo.events)
+      setDemandStatistics({})
       for (let tick = 0; tick < 4; tick += 1) {
         await simulationApi.tick()
       }
       await simulationApi.start()
-      setTickDelay(500)
+      setTickDelay(configured?.playbackIntervalMs ?? 250)
       setAutoRun(true)
       await refreshLiveData()
     } catch (nextError) {
@@ -367,31 +365,38 @@ export function useTrafficDashboard() {
   const updateStatus = useCallback(async (action) => {
     const status = await runAction(action, { refresh: false })
     setSnapshot((current) => ({ ...current, status: status.status, tick: status.currentTick }))
+    if (status.demand) setDemandStatistics(status.demand)
     return status
   }, [runAction])
 
   useEffect(() => {
     if (loading || startupRef.current || intersections.length < 2 || roads.length === 0) return
+    const action = decideStartupAction(snapshot, demandStatistics)
+    if (action === STARTUP_ACTION.WAIT) return
     startupRef.current = true
 
-    const activeVehicles = snapshot.vehicles.filter((item) => item.status !== 'ARRIVED')
-    if (activeVehicles.length > 0) {
-      if (snapshot.status === 'RUNNING') {
-        // A page reload reconnects to the server-owned playback. Keep the local
-        // boundary-fleet lifecycle active instead of silently stopping replacements.
-        setAutoRun(true)
-      } else if (snapshot.status === 'READY') {
-        setAutoRun(true)
-        updateStatus(simulationApi.start).catch(() => {})
-      } else if (snapshot.status === 'PAUSED') {
-        setAutoRun(true)
-        updateStatus(simulationApi.resume).catch(() => {})
-      }
-      return
+    if (action === STARTUP_ACTION.CONNECT) {
+      // A page reload reconnects to the server-owned playback. Keep the local
+      // boundary-fleet lifecycle active instead of silently stopping replacements.
+      setAutoRun(true)
+    } else if (action === STARTUP_ACTION.START) {
+      setAutoRun(true)
+      updateStatus(simulationApi.start).catch(() => {})
+    } else if (action === STARTUP_ACTION.RESUME) {
+      setAutoRun(true)
+      updateStatus(simulationApi.resume).catch(() => {})
+    } else if (action === STARTUP_ACTION.DEMO) {
+      startLiveDemo()
     }
-
-    startLiveDemo()
-  }, [intersections.length, loading, roads.length, snapshot.status, snapshot.vehicles, startLiveDemo, updateStatus])
+  }, [
+    demandStatistics,
+    intersections.length,
+    loading,
+    roads.length,
+    snapshot,
+    startLiveDemo,
+    updateStatus,
+  ])
 
   useEffect(() => {
     let trackedIdsChanged = false
@@ -574,7 +579,6 @@ export function useTrafficDashboard() {
     setTickDelay,
     activateScenario,
     importMap,
-    initializeDemo,
     start: async () => { setAutoRun(true); return updateStatus(simulationApi.start) },
     pause: pauseSimulation,
     resume: resumeSimulation,

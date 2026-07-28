@@ -1,628 +1,430 @@
-# Demand and scenarios: design
+# Demand and scenario design
 
-`VEHICLE_FLOW.md` describes what a vehicle does once it exists. This describes
-what decides that it exists at all.
+`VEHICLE_FLOW.md` describes what a vehicle does after it exists. This document
+describes how generated vehicles are scheduled, resolved into multi-leg plans
+and handed to that lifecycle.
 
-**This designs a capability, not a scenario.** No traffic numbers are settled
-here, and none should be: the densities, mode splits and departure curves are
-unknowns waiting on urban and transport research. What has to be settled now is
-whether the backend can *host* the problem once those numbers arrive.
+Implementation status: **built and exercised by the bundled scenario**.
+`GravityDemandModel`, multi-leg `TripPlan`s, dwell, reachability-aware place
+selection, the clock, the demand spawner, file/HTTP parsing and run statistics
+are implemented.
 
-The problem, stated plainly. A map carries `N` buildings, each with a tag `n`.
-Each building emits some number of vehicles; the type of each vehicle depends on
-the tag and on the time of day; so do its destination and its route. Every one of
-those dependencies is a function to be supplied later, from research. The design
-question is whether each is a parameter the backend reads, or a decision baked
-into its code.
+That statement is about software capability, not empirical validity. The
+bundled numbers are explicitly synthetic. The project does not contain a
+household survey, cordon count, hourly classified count or calibrated OD matrix
+for its former District 1 study window. `district1_typical_day.json` is an
+educational deterministic scenario, **not an observed or calibrated traffic
+forecast**.
 
-Implementation status: the backend capability described here is now built,
-including resolved multi-leg plans, dwell, demand generation, scenario loading,
-failure reporting and API activation. The numerical inputs shipped with the
-default scenario remain labelled assumptions and still require calibration.
+The exact bundled case, its evidence classes and reproducible output are in
+[`DISTRICT1_SCENARIO.md`](DISTRICT1_SCENARIO.md).
 
-Worked examples used throughout — "motorcycles leaving home for work in the
-morning", "an errand loop that returns home", "cars passing through from the
-north" — are there to test whether the shape can express them. The percentages
-in them are invented and are marked as such.
-
-## Does the design host the problem?
-
-The short answer, before the detail. Each dependency in the statement above maps
-to one design element, and in every case the research value stays a parameter.
-
-| Dependency | Expressed by | Stays a free parameter? |
-|---|---|---|
-| How many vehicles a place emits | `DemandSource.production` | yes, population-derived or absolute |
-| Vehicle type depends on the tag | `FlowSpec.vehicleMix`, within a source group | yes |
-| Vehicle type depends on the hour | `s(f) · m(v|f) · c_f(t)` | yes |
-| Destination depends on the tag | each leg's `PlaceSpec` + gravity | yes |
-| Destination depends on the hour | which flows are active at `t` | yes |
-| Route | existing congestion-aware routing | already dynamic |
-| A trip with stops, A→B→C→A | `TripPlan` with legs | structural, not a number |
-| Traffic from or to outside the map | the same `FlowSpec`, with a boundary source or leg | yes |
-| Whether a vehicle must return | `CompletionPolicy` | explicit and validated |
-| A new purpose such as delivery | open `PurposeId`, not a Java enum | data-only |
-| Research arriving as an OD matrix instead | `MatrixDemandModel` | strategy swap, no rewrite |
-
-Three of those rows are structural rather than parametric — multi-leg trips,
-generic place resolution and explicit completion policy — and they are the
-things that genuinely have to be *built* before any research can be plugged in
-at all. Boundary traffic is deliberately not a separate model: it is an ordinary
-flow whose source or leg resolves to a boundary place. The rest is plumbing for
-numbers that do not exist yet.
-
-## Baseline gaps this implementation addresses
-
-These were the four gaps measured before implementation; they are retained here
-as the acceptance baseline.
-
-| Gap | Evidence |
-|---|---|
-| No trip purpose or proportion | `VehicleConfig` is `(id, type, startIntersectionId, destinationIntersectionId)`. Nothing else. |
-| No multi-leg trip | Zero matches for `waypoint`, `leg`, `tripChain` in `src/main/java`. A vehicle holds one destination, reaches it, and is removed 5 s later. |
-| No departure schedule | `VehicleConfig` has no time field; `initialize` creates the whole fleet at t = 0. |
-| No modelled external traffic | Boundary-to-boundary trips exist only in `frontend/src/demoTraffic.js`. The backend has no notion of "outside"; a boundary junction is an ordinary intersection. |
-
-One piece of luck: **`Vehicle.destinationIntersectionId` is no longer `final`**
-— PR #52 unsealed it so building routing could re-pick an access point. Multi-leg
-trips therefore need no surgery on `Vehicle`; a vehicle that reaches a leg's end
-can be given the next destination and re-routed, keeping its id and its
-`TripRecord` intact.
-
-## Constraints the design has to live with
-
-These are measured, not guessed, and two of them shape the model.
-
-**885 of 1162 buildings are `OTHER`.** OpenStreetMap tags them `building=yes`
-with no name. Only 277 buildings carry a usable purpose:
-
-| Type | Count |
-|---|---|
-| OTHER | 885 |
-| RESIDENTIAL | 147 |
-| OFFICE | 57 |
-| COMMERCIAL | 36 |
-| SCHOOL | 18 |
-| HOSPITAL | 17 |
-| PARKING | 2 |
-
-A model that only used tagged buildings would run the whole district's traffic
-through 147 homes. So `OTHER` has to participate — see below.
-
-**Buildings cover 19.1% of the map.** The building stock is a sample, not a
-census, so any population derived from it is a *relative* quantity. A scenario
-must therefore carry an explicit `scale`, and the docs must never present the
-resulting vehicle count as a real-world figure.
-
-**Two parking buildings.** Parking inventory is not modellable. A closed
-`TripPlan` can preserve one vehicle from its origin back to that same origin,
-but the model does not claim to know how many parked cars a building owns.
-
-**Routing succeeds about 87% of the time** on District 1, because it is a real
-one-way layout and some origin–destination pairs have no directed path. A demand
-model will therefore generate trips that cannot be routed. That is expected, and
-must be counted and reported rather than silently dropped.
-
----
-
-## The model
-
-### 1. `PurposeId` — an open label, not an enum
-
-Purpose is metadata for statistics, experiments and UI filtering:
-`HOME_TO_WORK`, `ERRAND`, `DELIVERY`, `MEDICAL`, `TOURISM` and any later value
-are all ordinary validated strings. Java code must not switch on a closed
-`TripPurpose` enum.
-
-Purpose does **not** secretly select a curve or destination policy. Those are
-explicit fields on `FlowSpec`. This avoids two sources of truth and means adding
-a purpose is a scenario/data change, not a recompile. A shipped purpose catalog
-may provide display labels and suggested defaults, but the resolved flow remains
-self-contained.
-
-### 2. `PlaceSpec` and `ResolvedPlace`
-
-A source or leg names a *kind* of place, and a `PlaceResolver` selects a concrete
-routable place. That is what lets one flow definition stand for hundreds of
-vehicles and also lets the same flow shape cover internal, inbound, outbound and
-through traffic.
+## End-to-end boundary
 
 ```text
-PlaceSpec
-  kind: BUILDING | BOUNDARY | ZONE | EXPLICIT | ORIGIN
-  types:      [RESIDENTIAL, OFFICE, …]   when kind = BUILDING
-  side:       NORTH | SOUTH | EAST | WEST | ANY   when kind = BOUNDARY
-  zoneIds:    [district-1-west, …]        when kind = ZONE
-  buildingId or intersectionId           when kind = EXPLICIT
-
-ResolvedPlace
-  kind: BUILDING | BOUNDARY | INTERSECTION
-  id
-  accessIntersectionId
+map + demand parameter catalog + scenario
+                  │
+                  ▼
+        DemandScenarioParser
+                  │
+                  ▼
+        GravityDemandModel
+     (seeded, eager plan expansion)
+                  │
+                  ▼
+        List<TripPlan> ordered by
+        departure time, then plan id
+                  │
+                  ▼
+        DemandDrivenSpawner
+                  │
+                  ▼
+     Vehicle + normal routing/dynamics
+       dwell → next leg → completion
 ```
 
-`ORIGIN` is valid only in a leg. It resolves to the exact `ResolvedPlace` at
-which that plan began, never another random building of the same type. `ZONE`
-requires an optional zone catalog; a scenario using it against a map with no
-zone data is rejected at load time. `EXPLICIT` exists for scripted demos and
-tests, not for generated typical-day demand.
+The hand-written `vehicles` array is a second entry path. It is intentionally
+still supported and may coexist with generated demand. Those entries are
+legacy one-origin/one-destination vehicle configs; they are not authored
+multi-leg `TripPlan`s.
 
-Boundary detection uses the outer margin of the map's bounding box — the same
-rule `createBoundaryTripPlanner` uses today, moved into the domain. There is no
-separate external-trip type.
+## Values and responsibilities
 
-### 3. `DemandSource`, `FlowSpec` and `CompletionPolicy`
+### `DemandScenario`
 
-Every generated trip starts from the same structure:
+The parsed scenario supplies:
+
+```text
+startTimeOfDaySeconds
+durationSeconds
+seed
+scale
+sources: [DemandSource, …]
+zones: { id → ZoneDefinition }
+parameters: DemandParameters
+```
+
+`startTimeOfDay` is parsed into seconds since midnight. `durationHours` or
+`durationSeconds` defines the **departure-generation horizon** only. It does
+not stop or pause the simulator. A vehicle may depart near the end of the
+horizon and complete its travel or dwell after it.
+
+Demand scenarios are currently limited to one departure day. The clock itself
+can cross midnight, but this model does not repeat a daily demand schedule.
+
+`seed` controls stochastic rounding, departure time within an hour, vehicle
+type, destination and dwell range. With the same map, parameters, scenario,
+algorithm and seed, the resolved plan list is reproducible.
+
+`scale` is a dimensionless multiplier on generated source-flow volume. It does
+not scale:
+
+- the map;
+- scripted `vehicles`;
+- road capacity;
+- speed or simulation time;
+- dwell duration.
+
+In the bundled case `scale = 0.015` is a **SYNTHETIC ASSUMPTION** selected for a
+manageable demonstration load. It is not a fitted calibration coefficient.
+
+### `DemandSource`, `FlowSpec` and production
 
 ```text
 DemandSource
   id
   from: PlaceSpec
   production:
-    kind: POPULATION_DERIVED | ABSOLUTE
-    tripsPerPersonPerDay      when POPULATION_DERIVED
-    vehiclesPerDay            when ABSOLUTE
+    POPULATION_DERIVED + tripsPerPersonPerDay
+    or
+    ABSOLUTE + vehiclesPerDay
   flows: [FlowSpec, …]
 
 FlowSpec
   id
-  purpose: PurposeId
+  purpose: open PurposeId string
   share
   vehicleMix: [{ type, share }, …]
-  curve: DemandCurve
+  curve: normalized 24-hour DemandCurve
   completion: RETURN_TO_ORIGIN | REMOVE_AT_LAST_STOP
   legs: [{ to: PlaceSpec, dwell?: DwellSpec }, …]
-
-DwellSpec
-  kind: FIXED | RANGE
-  seconds                         when FIXED
-  minSeconds, maxSeconds          when RANGE
 ```
 
-`POPULATION_DERIVED` is for homes, offices and other building/zone sources whose
-volume comes from the mapped stock. `ABSOLUTE` is for cordon counts, a stadium
-release, a scripted visitor stream or any source whose volume research supplies
-directly. Both are daily totals distributed by the flow's curve, so the units do
-not change meaning between source kinds. An hourly count table is imported as
-its daily total plus its normalized 24-hour shape.
+Flow shares within a source may total less than 1; the remainder is
+intentionally unallocated. `vehicleMix` must total exactly 1.
 
-All flows under one source divide that source's production, so their shares must
-sum to at most 1. Each flow then divides its vehicles by `vehicleMix`, whose
-shares must sum exactly to 1. A one-mode flow simply has one entry with share 1.
+`PurposeId` is metadata, not a closed enum and not hidden behavior. Adding
+`DELIVERY` or `MEDICAL` does not require Java changes; the scenario must still
+declare its own curve, destinations, mix and completion policy.
 
-`RETURN_TO_ORIGIN` makes the generated plan end at its exact origin. The model
-appends the resolved origin leg when it is not already last, so conservation
-cannot be lost because a scenario author forgot an `ORIGIN` leg.
-`REMOVE_AT_LAST_STOP` is an explicitly open trip: the vehicle leaves the model
-after its final stop. A completion policy is required; there is no silent
-default.
+There is an important units caveat. Despite the field name
+`tripsPerPersonPerDay`, the current generator emits **plan starts**, not
+person-trip records:
 
-`DwellSpec` is resolved once into concrete `dwellSeconds` on `TripLeg`. A range
-uses the scenario seed, so work-day length and errand duration can vary without
-making replay nondeterministic. More distributions may be added as data readers
-behind `DwellSpec`; vehicle movement still consumes only resolved seconds.
-An omitted dwell is an explicit shorthand for fixed zero seconds.
+- one `TripPlan` creates one vehicle;
+- a closed plan can contain two or more road legs;
+- occupancy per vehicle and non-motorized mode share are not represented.
 
-This is intentionally one schema. Building→building, building→boundary,
-boundary→building, boundary→boundary and multi-stop loops differ only in their
-`PlaceSpec`s and completion policy.
+Consequently generated plan counts must not be compared directly with survey
+person-trip totals.
 
-### 4. `TripLeg` and `TripPlan`
+### `PlaceSpec` and `ResolvedPlace`
 
 ```text
-TripLeg
-  to: ResolvedPlace
-  dwellSeconds
+PlaceSpec.kind:
+  BUILDING    selected building types
+  BOUNDARY    NORTH | SOUTH | EAST | WEST | ANY
+  ZONE        one or more named scenario zones
+  EXPLICIT    one building or intersection id
+  ORIGIN      the exact original ResolvedPlace, valid only in a leg
 
+ResolvedPlace.kind:
+  BUILDING | BOUNDARY | INTERSECTION
+```
+
+A `ResolvedPlace` contains the concrete id and its access intersection. The
+vehicle never re-rolls a destination while travelling.
+
+Boundary candidates are role-aware:
+
+- a boundary **origin** must have at least one outgoing directed road;
+- a boundary **destination** must have at least one incoming directed road.
+
+Geometric boundary selection uses the outer 8% of the current map bounds.
+Named zones can be preferable for a shipped scenario because they make entry
+and exit semantics reviewable and stable.
+
+For buildings, the resolver currently selects the access point with the
+shortest driveway distance, breaking ties by access id. It does not optimize
+across all access points during demand generation.
+
+### `TripPlan`, legs and completion
+
+```text
 TripPlan
-  purpose: PurposeId
+  id
+  purpose
   vehicleType
   origin: ResolvedPlace
   legs: [TripLeg, …]
-  completion: CompletionPolicy
+  completion
   departAtSeconds
+
+TripLeg
+  to: ResolvedPlace
+  dwellSeconds
 ```
 
-Note the difference from `PlaceSpec`: a scenario says "some office" or "the
-north boundary"; a `TripPlan` says exactly which building or boundary
-intersection. The model resolves every spec once, when it generates the plan —
-the vehicle never re-rolls a destination mid-trip, so a run is reproducible and
-a plan is inspectable.
-
-A →B →C →A is one `TripPlan` and one vehicle. The vehicle is created once at
-`departAtSeconds` and removed only after the last leg. `TripRecord` measures the
-whole journey, which is the point: one loop's total travel time is meaningful;
-three unrelated vehicles' times are not.
-
-### 5. `DemandCurve`
-
-A flow owns a 24-hour weight vector summing to 1. It distributes that flow's
-share of its source's daily production. A morning commute can peak at
-07:00–08:00, school earlier, errands around midday and delivery throughout the
-day without any Java code knowing those purpose names.
-
-The curve is read against `SimulationClock`, which already carries a time of day
-and wraps at midnight. Its shape and numbers are research parameters stored in
-data.
-
-### 6. `TripDemandModel`
-
-**Nobody writes generated trips by hand.** A scenario declares sources and
-flows; the model expands them into concrete `TripPlan`s against the places on
-the current map. Given the network, scenario, clock and seed, it answers which
-trips begin in an interval.
-
-For source `g`, flow `f`, vehicle type `v` and hour `t`, the common allocation is
+Plan and leg are different counting units. For example:
 
 ```text
-trips(g, f, v, t) =
-    production(g) · s(f) · m(v | f) · c_f(t) · scale
+home → school → home
 ```
 
-For a population-derived building `b`, `production(g)` expands to
-`P(b) · r(g)`. For an absolute source it is the supplied daily vehicle count.
+is one plan, one vehicle and two legs. A visitor flow
+`entry → landmark → exit` is also one plan and two legs.
 
-- `P(b)` — occupancy: footprint area × per-type density, falling back to a
-  per-type constant when no footprint is recorded.
-- `r(g)` — trips per occupant per day for the source.
-- `s(f)` — the flow's share of its source's daily trips.
-- `m(v | f)` — vehicle type share inside the flow.
-- `c_f(t)` — the flow's normalized departure curve.
+`RETURN_TO_ORIGIN` appends the exact resolved origin when needed.
+`REMOVE_AT_LAST_STOP` leaves the modeled network after its final stop. Dwell is
+resolved once from a fixed value or seeded range. A dwelling vehicle releases
+road occupancy, retains its plan, then routes to its next leg when dwell ends.
 
-The source decides how much demand exists; `PlaceResolver` and the gravity model
-resolve each leg. For a building destination, attraction is weighted by the
-candidate's size, requested types and distance. Purpose is a label, not hidden
-selection logic.
+## Gravity generation
 
-A worked line, with placeholder constants: a 180 m² residential building at four
-floors gives roughly 20 occupants; at 2.4 trips per occupant per day that is ~48
-trips; a flow share of 45% is ~21; a motorcycle mix of 80% is ~17; a morning
-curve putting 35% into 07:00–08:00 gives about 6 motorcycles in that hour.
-Multiply across the district and dial with `scale`.
+The model eagerly expands the entire departure horizon. Later interval queries
+are read-only filters over that ordered list.
 
-Two further rules:
-
-- **`OTHER` buildings count as mixed use.** They emit trips and attract them at
-  a reduced, explicitly assumed weight. Excluding 76% of the building stock
-  would be worse than approximating it.
-- **Seeded.** Same seed, same resolved places, types and departure times, because
-  experiments and frame replay depend on reproducibility.
-
-#### It is an interface, not a class
-
-The gravity model derives origin–destination demand from buildings. Research may
-instead arrive as a zone OD matrix or a scripted list, so the generation
-strategy remains replaceable:
+For one source, flow and clock-hour interval:
 
 ```text
-TripDemandModel
-  List<TripPlan> tripsBeginningIn(fromSeconds, toSeconds)
-
-  GravityDemandModel   — expands DemandSource and FlowSpec with gravity
-  MatrixDemandModel    — maps zone OD rows to concrete ResolvedPlaces
-  ScriptedDemandModel  — resolves a hand-written plan list
+expected plan starts =
+    sourceDailyProduction
+  × flow.share
+  × flow.curve[clockHour]
+  × intervalSeconds / 3600
+  × scenario.scale
 ```
 
-All implementations produce the same `TripPlan`s. The spawner, vehicle runtime
-and statistics never know whether a plan began at a building, boundary, zone or
-explicit test point. Swapping the demand source is a scenario choice, not a
-refactor.
+The expected value is stochastically rounded with the scenario PRNG. Each
+generated plan then samples `vehicleMix`, a departure second inside the interval
+and its destinations/dwell.
 
-### 7. `DemandDrivenSpawner`
+For `ABSOLUTE`, `sourceDailyProduction` is `vehiclesPerDay`.
 
-Each tick, ask the model for due plans and create one vehicle per plan through a
-generic `createVehicleForPlan`. It routes between each leg's resolved access
-intersections. Existing `createVehicleBetweenBuildings` becomes a convenience
-adapter, not the abstraction on which demand depends.
+For each population-derived building:
 
-On reaching a leg's end the vehicle dwells, then takes the next leg. Only after
-the last leg does it become `ARRIVED` and get removed.
+```text
+sourceDailyProduction =
+    footprintGroundAreaM²
+  × occupantsPerSquareMetre
+  × tripsPerPersonPerDay
+```
 
-Dwelling gets its own `DWELLING` status so statistics do not confuse a planned
-stop with congestion. A dwelling vehicle releases road occupancy, retains its
-plan and current `ResolvedPlace`, and is not rendered as if it were sitting in a
-lane. Statistics report road-active, dwelling and completed vehicles separately;
-the headline traffic count uses road-active vehicles. This is decided in the
-design rather than deferred into implementation.
+If no footprint is available, a per-type fallback occupant count is used.
+There is **no storey field in `Building`**, so the model does not multiply by
+floors. The old four-storey worked example was incorrect.
 
----
+`OTHER` participates as a low-weight mixed-use proxy because most mapped
+buildings have no specific OSM use tag. That prevents all demand being forced
+through the small tagged subset, but it is still a synthetic approximation.
 
-## The unknowns, enumerated
+For a candidate building destination:
 
-This design deliberately fixes **no traffic numbers**. Every quantity below is a
-free parameter waiting for urban and transport research to supply it. Listing
-them is half the point of the design: the backend is finished when all of these
-are *inputs*, and none of them is a literal in a `.java` file.
+```text
+weight =
+    attractionWeight(type)
+  × max(1, footprintGroundAreaM²)
+  × exp(-distanceDecayBeta × straightLineDistanceKm)
+```
 
-| Symbol | Quantity | Depends on | Where a real value comes from |
-|---|---|---|---|
-| `P(b)` | occupants per building | tag, footprint area, storeys | building-density study |
-| `r(g)` | trips per occupant per day | source definition | household travel survey |
-| `s(f)` | flow share of one source | source, purpose | travel survey |
-| `m(v|f)` | vehicle mix within a flow | flow and source tag | mode-share survey |
-| `c_f(t)` | hourly departure profile | flow | traffic counts / survey |
-| `A(b)` | attraction as a destination | tag, area | employment or POI data |
-| `β` | distance decay in the gravity model | — | calibration against counts |
-| `w(OTHER)` | mixed-use weight for untagged buildings | — | assumption, or better OSM tagging |
-| `Q(g)` | absolute vehicles per day | source place or cordon | cordon / venue count |
+Non-building destinations have base attraction 1. Distance is geographic
+Haversine distance when latitude/longitude exists, otherwise map-coordinate
+Euclidean distance. This is a gravity heuristic, not a network-cost or
+travel-time calibration.
 
-Two consequences for how this gets built:
+## Reachability-aware resolution
 
-- **Parameters live in data, not code.** A `data/demand/` table keyed by tag,
-  loaded like the map is. Changing `r(RESIDENTIAL)` from 2.4 to 3.1 when a survey
-  says so must be a file edit, never a recompile.
-- **Until a citation exists, a number is labelled an assumption**, the same rule
-  `FilteringRules` follows. The traffic will look plausible whatever the inputs;
-  only the labelling keeps it honest. A confident-looking morning peak built from
-  invented constants is worse than no peak, because it reads as a finding.
+Randomly choosing every leg independently produced broken plans on the
+one-way network. Resolution now checks the complete directed chain before a
+candidate may be sampled.
 
-### What the design does *not* guarantee
+For each possible destination, the model requires:
 
-Worth naming so nobody discovers it later as a surprise.
+1. a directed path from the current place to that destination;
+2. at least one feasible suffix through every later leg;
+3. for `RETURN_TO_ORIGIN`, a final directed path back to the exact origin.
 
-**Closed plans conserve vehicles, not people or parking inventory.**
-`RETURN_TO_ORIGIN` preserves one vehicle through all stops and back to the exact
-place where it began. `REMOVE_AT_LAST_STOP` explicitly does not. Two independent
-flows such as morning home→work and evening work→home remain independent draws
-and must not be presented as the same commuters. A typical-day scenario should
-therefore model commuting, school runs and errands as closed plans unless an
-experiment deliberately needs open demand.
+Reachable-node sets are cached per origin intersection. The check is structural
+topology: it follows directed roads and is deliberately independent of live
+traffic events. A closure activated during a run remains the routing and
+rerouting layer's responsibility.
 
-The model still does not maintain a parked-vehicle count or household identity
-inside each building. Adding those later would be a separate `PlaceInventory`
-capability; neither `TripPlan` nor the scenario schema has to change.
+Source handling is explicit:
 
-**Nobody reacts to congestion.** Departure times are drawn before the run and
-never revised, so a jam does not make anyone leave earlier or stay home. Routing
-*is* congestion-aware, so vehicles avoid blocked roads — but demand itself is
-fixed. This is standard for a model at this level and far short of what a real
-study would want.
+- `ABSOLUTE` flows sample only origins that can complete the whole chain; if no
+  such origin exists, model construction fails with the source and flow ids.
+- For `POPULATION_DERIVED`, an origin-flow pair with no feasible chain is
+  excluded before stochastic scheduling.
+- An unexpected invalid resolved plan is retained in demand failure statistics
+  by plan id instead of being spawned.
 
-## The scenario file
+The bundled former District 1 study-window scenario resolves 216 generated
+plans with 0 structural generation failures. That does not promise that no
+vehicle will be blocked by a live closure, full downstream road or later
+routing condition.
 
-One file describes a run: which map, when it starts, how long, and what travels.
-It names no individual building or vehicle for generated demand and is written
-once per experiment, not per run.
+## Runtime hand-off and statistics
 
-Demand is grouped by **source place and production basis**, and each source's
-production divides among its flows. A source may be buildings, a boundary, a
-zone or an explicit demo point. This grouping makes shares have one unambiguous
-denominator without creating separate internal and external flow schemas.
+`DemandDrivenSpawner` queries the model over
+`(lastScannedSeconds, currentElapsedSeconds]`. A due plan is converted into one
+vehicle, assigned its first destination and routed through the ordinary routing
+service.
+
+Demand statistics report:
+
+```text
+scheduledTrips
+spawnedTrips
+failedTrips
+pendingTrips
+failedPlanIds
+```
+
+Here “trip” means scheduled plan, matching the runtime API name. It does not
+mean leg or person trip.
+
+Scenario initialization also normalizes legacy road state before routing any
+vehicle:
+
+- `currentVehicleCount = 0`;
+- vehicle density = 0;
+- congestion = 0;
+- non-closed road status = `OPEN`;
+- explicit `CLOSED` status is preserved.
+
+The OSM generator now writes those zero runtime defaults as well. This removes
+persisted “phantom” occupancy that previously consumed capacity without a
+corresponding vehicle object.
+
+## Actual scenario shape
+
+The file/HTTP demand shape is `demandSources`, not a nested
+`demand: { model: ... }` object:
 
 ```jsonc
 {
-  "map": "data/maps/district1_network.json",
+  "map": "../maps/district1_network.json",
+  "demandParameters": "../demand/default_assumptions.json",
   "startTimeOfDay": "06:00",
-  "durationHours": 18,       // long enough for closed commute plans to return
-  "seed": 42,
-  "scale": 1.0,              // calibrates all generated demand together
+  "durationHours": 18,
+  "seed": 20260728,
+  "scale": 0.015,
+
+  "zones": [
+    {
+      "id": "entry-zone",
+      "intersectionIds": ["N..."]
+    },
+    {
+      "id": "landmarks",
+      "buildingIds": ["B..."]
+    }
+  ],
 
   "demandSources": [
     {
-      "id": "homes",
-      "from": {
-        "kind": "BUILDING",
-        "types": ["RESIDENTIAL", "OTHER"]
-      },
-      "production": {
-        "kind": "POPULATION_DERIVED",
-        "tripsPerPersonPerDay": 2.4
-      },
-      "flows": [
-        {
-          "id": "commute-loop",
-          "purpose": "COMMUTE",
-          "share": 0.55,
-          "vehicleMix": [
-            { "type": "MOTORCYCLE", "share": 0.80 },
-            { "type": "CAR",        "share": 0.20 }
-          ],
-          "curve": "MORNING_PEAK",
-          "completion": "RETURN_TO_ORIGIN",
-          "legs": [
-            {
-              "to": { "kind": "BUILDING", "types": ["OFFICE", "COMMERCIAL"] },
-              "dwell": { "kind": "RANGE", "minSeconds": 28800, "maxSeconds": 36000 }
-            }
-          ]
-        },
-        {
-          "id": "moto-errand-loop",
-          "purpose": "ERRAND",
-          "share": 0.20,
-          "vehicleMix": [{ "type": "MOTORCYCLE", "share": 1.0 }],
-          "curve": "MIDDAY",
-          "completion": "RETURN_TO_ORIGIN",
-          "legs": [
-            {
-              "to": { "kind": "BUILDING", "types": ["COMMERCIAL"] },
-              "dwell": { "kind": "FIXED", "seconds": 600 }
-            },
-            {
-              "to": { "kind": "BUILDING", "types": ["SCHOOL"] },
-              "dwell": { "kind": "FIXED", "seconds": 300 }
-            }
-          ]
-        }
-        // the remaining 25% of daily production is intentionally unallocated
-      ]
-    },
-    {
-      "id": "north-cordon",
-      "from": { "kind": "BOUNDARY", "side": "NORTH" },
+      "id": "cordon",
+      "from": {"kind": "ZONE", "zoneIds": ["entry-zone"]},
       "production": {
         "kind": "ABSOLUTE",
-        "vehiclesPerDay": 7200
+        "vehiclesPerDay": 3600
       },
       "flows": [
         {
-          "id": "north-south-through",
-          "purpose": "THROUGH",
-          "share": 0.75,
-          "vehicleMix": [{ "type": "CAR", "share": 1.0 }],
-          "curve": "FLAT",
-          "completion": "REMOVE_AT_LAST_STOP",
-          "legs": [
-            { "to": { "kind": "BOUNDARY", "side": "SOUTH" } }
-          ]
-        },
-        {
-          "id": "north-visitor",
-          "purpose": "TOURISM",
-          "share": 0.25,
+          "id": "visitor",
+          "purpose": "VISITOR",
+          "share": 0.20,
           "vehicleMix": [
-            { "type": "CAR",        "share": 0.70 },
-            { "type": "MOTORCYCLE", "share": 0.30 }
+            {"type": "MOTORCYCLE", "share": 0.65},
+            {"type": "CAR", "share": 0.35}
           ],
-          "curve": "DAYTIME",
+          "curve": "VISITOR_DAYTIME",
           "completion": "REMOVE_AT_LAST_STOP",
           "legs": [
             {
-              "to": { "kind": "BUILDING", "types": ["COMMERCIAL"] },
-              "dwell": { "kind": "RANGE", "minSeconds": 1800, "maxSeconds": 7200 }
-            },
-            { "to": { "kind": "BOUNDARY", "side": "ANY" } }
+              "to": {"kind": "ZONE", "zoneIds": ["landmarks"]},
+              "dwell": {
+                "kind": "RANGE",
+                "minSeconds": 3600,
+                "maxSeconds": 10800
+              }
+            }
           ]
         }
       ]
     }
   ],
 
-  "events": [ /* unchanged from today's format */ ],
-
-  "vehicles": [ /* still supported: a scripted vehicle, for a demo */ ]
+  "events": [],
+  "vehicles": [
+    {
+      "id": "scripted-warm-start",
+      "type": "MOTORCYCLE",
+      "currentIntersectionId": "N...",
+      "destinationIntersectionId": "N..."
+    }
+  ]
 }
 ```
 
-The same schema now covers all four direction families:
+The parameter catalog supplies all building-type parameters and named
+normalized curves. Its top-level `status` is `ASSUMPTION`.
 
-- building→building: `commute-loop`;
-- boundary→boundary: `north-south-through`;
-- boundary→building→boundary: `north-visitor`;
-- building→boundary: use a building source and a boundary final leg.
+## Load-time invariants
 
-`RETURN_TO_ORIGIN` turns the commute and errand examples into closed plans
-without a separately sampled evening flow. A delivery flow is the same shape:
-give it purpose `DELIVERY`, a depot source, any number of building or zone legs,
-and `RETURN_TO_ORIGIN`. No new Java enum or flow class is required.
+- Exactly one production kind and its matching positive value are required.
+- Population-derived production requires a building or zone source containing
+  buildings.
+- Source ids are unique; flow ids are unique across the whole scenario.
+- Flow shares are in `(0, 1]` and total at most 1 per source.
+- Vehicle-mix entries are positive and total 1.
+- Curves contain exactly 24 finite non-negative weights totaling 1.
+- Completion is mandatory and every flow has at least one leg.
+- Place types, zones, explicit ids and boundary selectors must resolve.
+- Dwell values are finite and non-negative; ranges are ordered.
+- Demand duration is positive and no longer than one day.
+- `durationHours` and `durationSeconds` cannot both be declared.
 
-### Extension contract
+The parser currently accepts only the implemented gravity expansion for
+`demandSources`. `TripDemandModel` remains an extension seam:
 
-The no-refactor boundary is explicit:
+- `GravityDemandModel` is the file/HTTP scenario implementation.
+- `ScriptedDemandModel` exists for programmatic resolved-plan tests and custom
+  callers.
+- `MatrixDemandModel` is a possible future implementation; it does **not**
+  currently exist and must not be documented as a selectable scenario model.
 
-- A new purpose, vehicle mix, departure curve, source volume, sequence of stops,
-  building type, boundary direction or completion choice is **data only**.
-- A new demand source such as an OD matrix is a new `TripDemandModel`; the
-  spawner, vehicle and statistics remain unchanged.
-- A new place-selection mechanism is a new `PlaceResolver` variant; resolved
-  plans and vehicle movement remain unchanged.
-- A behaviour that changes a plan while it is running — passenger pickup,
-  parking inventory, dispatch reacting to congestion — is a new simulation
-  capability, not merely a new flow. It may require code, but it must still emit
-  or update the same `TripPlan`/`TripLeg` boundary rather than bypass it.
+## Claim discipline and limitations
 
-This is the acceptance test for the architecture: adding `DELIVERY` or
-boundary→hospital→boundary must not touch Java; adding live taxi dispatch may
-add a planner, but must not require another vehicle lifecycle.
+Use these labels consistently:
 
-Ship one of these as `data/scenarios/district1_typical_day.json` so the common
-case needs no writing at all — a run picks the default and only an experiment
-that wants something unusual edits a copy.
+| Label | Meaning |
+|---|---|
+| **DATASET FACT** | Measured from committed repository data or deterministic output. It is a fact about this artifact, not automatically the city. |
+| **CITY-LEVEL PROXY** | External Ho Chi Minh City or historical evidence used to inform a plausible scenario shape. It is not former District 1 study-window calibration. |
+| **SYNTHETIC ASSUMPTION** | An authored model input with no matching local observation in this project. |
 
-A hand-written `vehicles` list stays supported, and a scenario may carry both. A
-scripted incident against a background of generated traffic is exactly what a
-demonstration needs.
+The design supports replacing parameters later, but the current scenario still
+omits:
 
-### Validation, at load time and loudly
+- observed hourly cordon volumes and OD calibration for the former District 1
+  study window;
+- person/household identity, vehicle occupancy and parked-vehicle inventory;
+- storeys and reliable building-use coverage;
+- walking, cycling, metro, bus timetable and behavioral mode choice;
+- demand response to congestion;
+- a calibrated travel-time impedance or OD matrix;
+- automatic simulation stop at the demand horizon.
 
-- Every source declares exactly one production kind and the matching positive
-  value. `POPULATION_DERIVED` requires a building or zone source;
-  `ABSOLUTE` accepts any source kind.
-- **Flow shares within one source must not exceed 1.** A remainder under 1 is
-  legal and means that part of production is intentionally unallocated.
-- Every `vehicleMix` is non-empty and sums to exactly 1.
-- `purpose` is a non-blank stable identifier; it does not need a Java enum.
-- `completion` is mandatory. `RETURN_TO_ORIGIN` produces an effective final
-  origin leg; `REMOVE_AT_LAST_STOP` must be intentional in the scenario.
-- A source or leg whose `PlaceSpec` resolves no candidate is an **error**, not
-  an empty flow. This covers missing building types, zone data, explicit ids and
-  boundary sides.
-- Each `DwellSpec` has finite non-negative values and a valid range.
-- `curve` must name a known normalized curve.
-- Resolved plans must have at least one leg. The generator attempts reachability
-  for every consecutive pair; a failure is recorded instead of producing a
-  broken plan.
-- Unroutable generation failures are counted and reported at the end of a run,
-  not discarded in silence — roughly one in eight may fail on this map.
-
-## Where the code goes
-
-| Piece | Package | Owner |
-|---|---|---|
-| `PurposeId`, `PlaceSpec`, `ResolvedPlace`, `PlaceResolver` | new `domain/demand` | Student C |
-| `DemandSource`, `FlowSpec`, `CompletionPolicy`, `DwellSpec`, `DemandCurve` | `domain/demand` | Student C |
-| `TripLeg`, `TripPlan` | `domain/demand` | Student C |
-| `TripDemandModel` interface + `GravityDemandModel` | `domain/demand` | Student C |
-| `TripPlan` on `Vehicle`, leg advance, dwell | `domain/vehicle` | Student C |
-| `DemandDrivenSpawner` | `simulation` | shared with D, agreed |
-| Parameter tables | `data/demand/` | Student C |
-| Scenario parsing | `persistence` | Student B's area |
-| Scenario endpoint and UI | `api`, `frontend` | Student D's area |
-
-The demand model is pure: network in, seed in, trip plans out. No simulation
-state, so it can be tested exhaustively without running a tick — and a research
-value can be swapped in and its effect measured without starting a simulation at
-all.
-
-## Build order
-
-Ordered so that the structural work — the part research cannot supply and cannot
-begin without — comes first, and the parameter plumbing follows.
-
-1. **Resolved plan values.** Build `PurposeId`, `ResolvedPlace`,
-   `CompletionPolicy`, `TripLeg` and `TripPlan` first.
-2. **Multi-leg vehicle movement.** Drive a hand-built plan through leg advance,
-   seeded dwell and final removal. No demand model or scenario parser yet.
-3. **`PlaceSpec` and `PlaceResolver`.** Implement building, boundary, zone,
-   explicit and origin resolution behind one interface.
-4. **`DemandSource`, `FlowSpec`, `DwellSpec` and `DemandCurve`.** Pure values
-   and load-time validation. No closed purpose enum or external flow class.
-5. **`TripDemandModel` interface + `GravityDemandModel`.** Pure: network and
-   seed in, trip plans out. Where the real work is.
-6. **`DemandDrivenSpawner` + `createVehicleForPlan`.** Wires generic resolved
-   places and due plans to the tick.
-7. **Parameter tables in `data/demand/`.** Placeholder constants, every one
-   marked as an assumption, ready to be replaced wholesale when research lands.
-8. **Scenario file and loader.** Last, because it is the surface over everything
-   above and its shape will be clearer once they exist.
-
-Steps 1–5 need no agreement with anyone else — they are all inside Student C's
-packages. Steps 6 and 8 cross package boundaries and need their owners to agree.
-
-`MatrixDemandModel` is deliberately not on this list. It is the reason
-`TripDemandModel` is an interface, but nothing should be built for it until an
-actual matrix exists to read.
-
-## Deliberately out of scope
-
-- **Parking.** Two parking buildings on the map; there is nothing to model.
-- **Public-transport timetables.** Buses keep their current routing.
-- **Behavioural mode choice.** A flow declares a data-driven `vehicleMix`; the
-  model samples it but does not infer whether a person decides to drive or ride.
-- **Multi-day runs.** The clock counts days, but demand repeats identically.
-- **Feedback from congestion to demand.** People do not reschedule when the road
-  is blocked. Real, and far beyond this project.
-
-## The risk worth naming
-
-Beyond the parameters, one thing about this map cannot be fixed by better
-research: the building stock covers 19.1% of the district and 76% of it is
-untagged. Even with perfect densities and perfect curves, `P(b)` is being
-computed over a *sample*. So the report must say that the population is derived
-from OpenStreetMap building footprints — not from any census — and treat the
-resulting vehicle counts as relative quantities that `scale` calibrates against
-an observed count, not as absolute predictions.
-
-That is a limitation of the data, and stating it is the difference between a
-model and a claim.
+Therefore `scale`, output counts and modal shares are demonstration controls.
+Do not call them measured demand, validation results or forecasts.

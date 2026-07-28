@@ -78,24 +78,35 @@ public final class RoadOccupancy {
     }
 
     /**
-     * Lane to enter from an approach that was in {@code arrivingFromLaneIndex},
-     * keeping to that lane where it has room.
+     * Lane continuation for an approach that arrived in
+     * {@code arrivingFromLaneIndex}, or {@code -1} while that continuation has
+     * no entry space.
      *
-     * <p>A driver crossing a junction holds their lane and changes afterwards if
-     * they need to. Picking purely by the largest gap meant a vehicle could
-     * leave the nearside lane of one road and appear in the offside lane of the
-     * next in the same instant, a whole lane width sideways with nothing in
-     * between. Drawn, that is a car sliding bodily across the junction; it was
-     * one of the ways traffic appeared to swing about at a four-way. Anything
-     * the vehicle really does need to do sideways now happens on the road
-     * afterwards, where the lateral motion model takes it a metre at a time.</p>
+     * <p>The index is clamped only when the outgoing road has fewer lanes. It is
+     * never replaced by an arbitrary emptier lane: doing so made the simulation
+     * teleport laterally inside the junction and forced the renderer to invent a
+     * connector for a movement the lane topology never described. A vehicle
+     * waits for this continuation and may change lanes gradually after entering
+     * the road.</p>
      */
-    public int bestLaneForEntry(TrafficParticipant arriving, int arrivingFromLaneIndex) {
-        Lane held = lane(arrivingFromLaneIndex);
-        if (held != null && held.canAdmit(arriving)) {
-            return held.getLaneIndex();
+    public int continuationLaneForEntry(
+            TrafficParticipant arriving,
+            int arrivingFromLaneIndex) {
+        if (arriving == null || lanes.isEmpty()) {
+            return -1;
         }
-        return bestLaneForEntry(arriving);
+        int continuationIndex = Math.max(
+                0, Math.min(arrivingFromLaneIndex, lanes.size() - 1));
+        Lane continuation = lane(continuationIndex);
+        return continuation != null && continuation.canAdmit(arriving)
+                ? continuationIndex
+                : -1;
+    }
+
+    public boolean canAdmitFromLane(
+            TrafficParticipant arriving,
+            int arrivingFromLaneIndex) {
+        return continuationLaneForEntry(arriving, arrivingFromLaneIndex) >= 0;
     }
 
     /** The strip of road a whole lane occupies, used to place obstructions. */

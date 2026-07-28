@@ -71,6 +71,15 @@ describe('drawStatic', () => {
     expect(graphics.calls.lineTo).toBeGreaterThan(0)
   })
 
+  it('keeps connector geometry out of the static paint pass', () => {
+    const withConnectors = fakeGraphics()
+    const withoutConnectors = fakeGraphics()
+    drawStatic(withConnectors, scene)
+    drawStatic(withoutConnectors, { ...scene, connectors: [] })
+    expect(withConnectors.calls.stroke).toBe(withoutConnectors.calls.stroke)
+    expect(withConnectors.calls.lineTo).toBe(withoutConnectors.calls.lineTo)
+  })
+
   it('does nothing rather than throwing when there is no scene', () => {
     const graphics = fakeGraphics()
     expect(() => drawStatic(graphics, null)).not.toThrow()
@@ -102,6 +111,12 @@ describe('drawTrails', () => {
   it('draws a trail behind a moving motorcycle so filtering reads', () => {
     const graphics = fakeGraphics()
     drawTrails(graphics, [rider])
+    expect(graphics.calls.stroke).toBe(1)
+  })
+
+  it('batches all moving motorcycle trails into one stroke', () => {
+    const graphics = fakeGraphics()
+    drawTrails(graphics, [rider, { ...rider, id: 'V2', x: 20 }])
     expect(graphics.calls.stroke).toBe(1)
   })
 
