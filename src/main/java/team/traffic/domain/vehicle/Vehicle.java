@@ -642,6 +642,7 @@ public abstract class Vehicle implements TrafficParticipant {
                 currentIntersectionId,
                 approachRoad,
                 targetRoad,
+                placement.getLastLaneIndex(),
                 turnDirection,
                 0.0,
                 trip.getWaitingTicks()));
@@ -684,6 +685,7 @@ public abstract class Vehicle implements TrafficParticipant {
                 currentStep.getToIntersectionId(),
                 approachRoad,
                 targetRoad,
+                placement.getLaneIndex(),
                 turnDirection,
                 distanceToJunctionMetres,
                 trip.getWaitingTicks()));
@@ -744,7 +746,8 @@ public abstract class Vehicle implements TrafficParticipant {
         RoadOccupancy targetOccupancy = trafficState.occupancyOf(road.getId());
         int entryLane = targetOccupancy == null
                 ? 0
-                : targetOccupancy.bestLaneForEntry(this, placement.getLastLaneIndex());
+                : targetOccupancy.continuationLaneForEntry(
+                        this, placement.getLastLaneIndex());
         if (entryLane < 0) {
             instantaneousSpeedMps = 0;
             trip.recordWaitingTick();

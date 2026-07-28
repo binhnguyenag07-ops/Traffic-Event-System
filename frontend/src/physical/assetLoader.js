@@ -8,6 +8,8 @@
 import { Assets, Matrix } from 'pixi.js'
 import { allAssetSlots } from './assetManifest'
 
+const ASSET_LOAD_TIMEOUT_MS = 3000
+
 /**
  * How much world space one texture tile covers.
  *
@@ -40,15 +42,32 @@ function tiledFill(texture, group) {
  * Anything absent is simply missing from the result, and the renderer draws its
  * own shape instead.
  */
-export async function loadSceneAssets() {
+function loadWithTimeout(url, loadAsset, timeoutMs) {
+  let timeout
+  return Promise.race([
+    loadAsset(url),
+    new Promise((_, reject) => {
+      timeout = globalThis.setTimeout(
+        () => reject(new Error(`Asset timed out: ${url}`)),
+        timeoutMs,
+      )
+    }),
+  ]).finally(() => globalThis.clearTimeout(timeout))
+}
+
+export async function loadSceneAssets({
+  loadAsset = (url) => Assets.load(url),
+  timeoutMs = ASSET_LOAD_TIMEOUT_MS,
+} = {}) {
   const loaded = { vehicles: {}, surfaces: {}, buildings: {}, land: {} }
   await Promise.all(allAssetSlots().map(async ({ group, key, url }) => {
     try {
-      const texture = await Assets.load(url)
+      const texture = await loadWithTimeout(url, loadAsset, timeoutMs)
       if (!texture) return
       loaded[group][key] = group === 'vehicles' ? texture : tiledFill(texture, group)
     } catch {
-      // Slot not filled yet. The fallback drawing covers it.
+      // Missing, failed, or stalled slots all use the fallback drawing. A
+      // broken texture must never hold the whole Physical View in "Loading".
     }
   }))
   return loaded

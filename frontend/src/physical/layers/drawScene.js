@@ -17,7 +17,6 @@ const BUILDING_EDGE = 0x606a70
 const ROAD_CASING = 0x242a30
 const ROAD = 0x4b5158
 const PAVEMENT = 0x525a62
-const CONNECTOR = 0x59626b
 const LANE_DASH = 0xe5e8e9
 const TRAIL = 0xe0a415
 
@@ -261,9 +260,10 @@ export function drawStatic(graphics, scene, assets = {}) {
       fillPolygon(graphics, junction.pavement, PAVEMENT,
         ROAD_TEXTURE_ALPHA, surfaces.JUNCTION))
   }
-  scene.connectors?.forEach((connector) => strokePath(graphics, connector.curve, {
-    width: 2.8, color: CONNECTOR, cap: 'round', join: 'round',
-  }))
+  // Connector curves remain in the scene as interpolation paths, but are not
+  // painted as guide lines. Junction pavement already supplies the visible
+  // tarmac; stroking every legal movement added thousands of overlapping
+  // segments to the static GPU mesh without changing what a driver sees.
 
   laneDividers(scene.lanes).forEach((divider) => {
     strokeDashed(graphics, divider, { width: 0.16, color: LANE_DASH, alpha: 0.9 })
@@ -301,6 +301,7 @@ export function drawSignals(graphics, scene) {
 export function drawTrails(graphics, vehicles) {
   graphics.clear()
   if (!vehicles) return
+  let hasTrail = false
   vehicles.forEach((vehicle) => {
     if (String(vehicle.type).toUpperCase() !== 'MOTORCYCLE') return
     if (!(vehicle.speedMps > 1.5)) return
@@ -309,6 +310,9 @@ export function drawTrails(graphics, vehicles) {
     const [cx, cy] = worldPoint(vehicle.x, vehicle.y)
     graphics.moveTo(cx, cy)
     graphics.lineTo(cx - Math.sin(rad) * back, cy + Math.cos(rad) * back)
-    graphics.stroke({ width: 0.35, color: TRAIL, alpha: 0.35 })
+    hasTrail = true
   })
+  // One batched stroke keeps the hot 60 FPS path to one Graphics submission
+  // instead of creating one submission per moving motorcycle.
+  if (hasTrail) graphics.stroke({ width: 0.35, color: TRAIL, alpha: 0.35 })
 }

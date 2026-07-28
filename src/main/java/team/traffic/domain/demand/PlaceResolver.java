@@ -42,7 +42,9 @@ public final class PlaceResolver {
                     .filter(building -> spec.types().contains(building.getType()))
                     .map(this::buildingPlace)
                     .toList();
-            case BOUNDARY -> boundaryPlaces(spec.side());
+            case BOUNDARY -> boundaryPlaces(
+                    spec.side(),
+                    origin == null ? BoundaryUse.ORIGIN : BoundaryUse.DESTINATION);
             case ZONE -> zonePlaces(spec.zoneIds());
             case EXPLICIT -> explicitPlace(spec);
             case ORIGIN -> {
@@ -103,7 +105,9 @@ public final class PlaceResolver {
         return List.copyOf(unique.values());
     }
 
-    private List<ResolvedPlace> boundaryPlaces(BoundarySide side) {
+    private List<ResolvedPlace> boundaryPlaces(
+            BoundarySide side,
+            BoundaryUse boundaryUse) {
         List<Intersection> intersections = new ArrayList<>(network.getIntersections().values());
         if (intersections.isEmpty()) return List.of();
         double minX = intersections.stream().mapToDouble(Intersection::getX).min().orElseThrow();
@@ -115,10 +119,16 @@ public final class PlaceResolver {
 
         return intersections.stream()
                 .filter(intersection -> onSide(intersection, side, minX, maxX, minY, maxY, marginX, marginY))
-                .filter(intersection -> !network.findOutgoingRoads(intersection.getId()).isEmpty()
-                        || !network.findIncomingRoads(intersection.getId()).isEmpty())
+                .filter(intersection -> boundaryUse == BoundaryUse.ORIGIN
+                        ? !network.findOutgoingRoads(intersection.getId()).isEmpty()
+                        : !network.findIncomingRoads(intersection.getId()).isEmpty())
                 .map(intersection -> ResolvedPlace.boundary(intersection.getId()))
                 .toList();
+    }
+
+    private enum BoundaryUse {
+        ORIGIN,
+        DESTINATION
     }
 
     private boolean onSide(

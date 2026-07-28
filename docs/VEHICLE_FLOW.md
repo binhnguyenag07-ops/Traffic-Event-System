@@ -18,12 +18,15 @@ created ──> routed ──> waiting at a junction ──> on a road ──> a
 
 ## 1. Creation
 
-Two ways in, and they differ in what they take as the endpoints.
+Vehicles can enter through an operator/service call, a scripted scenario entry
+or a due generated plan.
 
-| Entry point | Endpoints | Reachable today |
-|---|---|---|
-| `VehicleService.createVehicle` | two intersection ids | yes |
-| `VehicleService.createVehicleBetweenBuildings` | two building ids | only since the map gained buildings |
+| Entry point | Input |
+|---|---|
+| `VehicleService.createVehicle` | two intersection ids |
+| `VehicleService.createVehicleBetweenBuildings` | two building ids |
+| scenario `vehicles` | one scripted origin/destination config, created during initialization |
+| `DemandDrivenSpawner` | one resolved, due, possibly multi-leg `TripPlan` |
 
 The second resolves each building to the junction its access point names, picks
 the pair of access points with the cheapest route between them, and creates the
@@ -52,9 +55,9 @@ road finishes its current segment first; it does not teleport off it.
 
 ## 3. One tick
 
-A tick is normally ten simulated seconds — far too coarse for a car-following
-model tuned to about a second of reaction time. `VehicleDynamicsEngine` splits
-it into sub-steps of at most one second and runs three phases in each:
+The default tick is 0.5 simulated seconds. If a caller configures a longer
+tick, `VehicleDynamicsEngine` splits it into sub-steps of at most one second
+and runs three phases in each:
 
 1. **Observe.** `TrafficState.capture` records where every vehicle physically
    is, once, before anyone decides anything.
@@ -112,76 +115,133 @@ reroute count) survives into the completed-trip statistics.
 
 ---
 
-## Where the demand model plugs in
+## Where generated demand plugs in
 
-Everything above describes a vehicle that already exists. Nothing yet decides
-**how many** vehicles there should be, **where** they start, or **when**. Today
-a scenario lists them by hand, or the UI spawns them at random boundary
-junctions.
-
-### The clock
-
-`SimulationClock` now carries a time of day. It starts at 06:00 by default,
-advances with the simulation, wraps at midnight, and counts the days crossed.
-
-The time of day is **derived, never stored per frame**. A frame already records
-its elapsed seconds; writing the clock time beside it would be a second copy of
-the same fact. The API publishes `startTimeOfDaySeconds` once, and any frame can
-be labelled from that plus its own elapsed seconds:
+Everything above still describes the physical lifecycle. Demand supplies the
+creation schedule and the sequence of destinations without bypassing routing or
+dynamics.
 
 ```text
-GET /api/simulation/status
-{ "elapsedSeconds": 5400, "startTimeOfDaySeconds": 21600,
-  "timeOfDaySeconds": 27000, "timeOfDay": "07:30", ... }
+DemandSource + FlowSpec + seed
+             │
+             ▼
+     GravityDemandModel
+   (resolve complete plans)
+             │
+             ▼
+ tripsBeginningIn(last, now]
+             │
+             ▼
+    DemandDrivenSpawner
+             │
+             ▼
+ one Vehicle with TripPlan
+   leg → dwell → leg → ...
 ```
 
-### The model to come
+### Clock and departure horizon
 
-A `TripDemandModel` answering, for the current hour: which trips begin, from
-which building, to which building, in what vehicle.
+`SimulationClock` starts at the scenario's `startTimeOfDay`, advances with
+simulated elapsed time, wraps at midnight and counts crossed days. Time of day is
+derived from the start offset and frame elapsed seconds.
 
-- **Population per building** — footprint area times a per-type density, so a
-  tower generates more trips than a shophouse.
-- **Purposes** — `HOME_TO_WORK`, `WORK_TO_HOME`, `HOME_TO_SCHOOL`,
-  `SCHOOL_TO_HOME`, `OTHER`, each with an hourly departure curve. The classic
-  double peak: work outbound around 07:00–08:00, inbound around 17:00–18:00,
-  school an hour earlier, a midday errand bump.
-- **Destination choice** — a gravity model, weighted by the destination's size
-  and suitability for the purpose, divided by a function of travel distance.
-  Nearby offices win over distant ones.
-- **Vehicle type by trip** — short trips lean motorcycle, long trips car, school
-  runs motorcycle and bus. That is the District 1 mix, and it exercises the
-  filtering model.
-- **Seeded** — a scenario replays identically, which the experiments depend on.
+`durationHours` is frequently misunderstood. It is the window in which the
+demand model may schedule **departures**. It does not stop the simulator.
+Travel, dwell and a return leg may finish after that horizon.
 
-A `DemandDrivenSpawner` then asks the model each tick what departs now and calls
-`createVehicleBetweenBuildings`, which is what finally makes that method
-reachable in a real run.
+The bundled scenario starts at 06:00 and has an 18-hour departure horizon, so
+generated departure scheduling ends at midnight.
 
-**Constants must be sourced or labelled.** A plausible-looking peak built from
-invented numbers is worse than no peak at all, because it reads as a finding.
-Every density and curve gets a citation or an explicit "assumption" comment, the
-same rule the filtering limits follow.
+### Plan lifecycle
 
-### What a scenario will need to say
+One generated `TripPlan` creates one vehicle. It can contain several
+`TripLeg`s:
 
-Scenarios today are a list of vehicles and events
-(`data/scenarios/demo_simulation.json`, matching the body of
-`POST /api/simulation/initialize`). A demand-driven scenario says instead:
+```text
+home → school → home
+```
+
+is one plan and two legs. On each leg arrival:
+
+1. the vehicle releases its road;
+2. positive dwell puts it in `DWELLING`;
+3. after dwell, the next resolved destination is applied and routed;
+4. only the final leg completes the whole plan.
+
+`RETURN_TO_ORIGIN` ends at the exact resolved origin.
+`REMOVE_AT_LAST_STOP` completes at the last declared place. Demand statistics
+count plans, not legs or survey person trips.
+
+### Directed reachability
+
+`GravityDemandModel` does not independently roll destinations and discard the
+broken combinations afterward. It samples only candidates for which the entire
+directed suffix is feasible, including the return path of a closed plan.
+
+Boundary roles are directional:
+
+- an origin boundary needs an outgoing road;
+- a destination boundary needs an incoming road.
+
+The check is structural topology. A closure or capacity constraint that occurs
+during simulation remains a normal routing, retry and rerouting concern.
+
+The bundled scenario has 216 generated plans and 0 structural generation
+failures for its committed seed and map.
+
+### Initialization and phantom occupancy
+
+Before scripted or generated vehicles are routed, scenario initialization
+clears legacy persisted runtime traffic:
+
+```text
+currentVehicleCount = 0
+vehicleDensity      = 0
+congestionLevel     = 0
+roadStatus          = OPEN, unless explicitly CLOSED
+```
+
+Without this step the old map counts represented no `Vehicle` objects but still
+consumed capacity and altered routing.
+
+### Actual scenario fields
+
+Generated demand is declared with top-level `demandSources`; there is no nested
+`demand: { model: "GRAVITY" }` block.
 
 ```jsonc
 {
   "startTimeOfDay": "06:00",
-  "durationHours": 4,
-  "seed": 42,
-  "demand": {
-    "model": "GRAVITY",
-    "scale": 1.0            // multiplier on the whole population
-  },
-  "events": [ /* unchanged */ ]
+  "durationHours": 18,
+  "seed": 20260728,
+  "scale": 0.015,
+  "zones": [ /* named building/intersection groups */ ],
+  "demandSources": [ /* source production and flows */ ],
+  "events": [],
+  "vehicles": [ /* optional scripted warm starts */ ]
 }
 ```
 
-The hand-written `vehicles` list stays supported. A scenario with both is a
-scripted fleet plus a background of generated traffic, which is exactly what a
-demonstration of one incident against realistic load needs.
+`scale` multiplies generated plan volume only. It does not multiply scripted
+vehicles, durations, road capacity or speed.
+
+For `district1_typical_day.json`, the deterministic snapshot is:
+
+| Output | Count |
+|---|---:|
+| Generated plans | 216 |
+| Structural generation failures | 0 |
+| Generated motorcycles | 184 |
+| Generated cars | 32 |
+| Scripted vehicles at `t = 0` | 4 |
+
+The first generated plan departs at 272.10 simulated seconds. The four scripted
+vehicles are deliberate warm starts so the physical demo is active immediately;
+they are excluded from the generated-demand counts.
+
+Those values are deterministic model output, not observed traffic in the former
+District 1 study window.
+The complete scenario, evidence labels and limitations are documented in
+[`DISTRICT1_SCENARIO.md`](DISTRICT1_SCENARIO.md). The schema and algorithms are
+documented in
+[`DEMAND_AND_SCENARIO_DESIGN.md`](DEMAND_AND_SCENARIO_DESIGN.md).

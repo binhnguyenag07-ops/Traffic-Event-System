@@ -1,11 +1,13 @@
 package team.traffic.domain.demand;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.Intersection;
@@ -70,7 +72,7 @@ class GravityDemandModelTest {
     }
 
     @Test
-    void recordsGeneratedPlansWithAnUnreachableReturnLeg() {
+    void rejectsAnAbsoluteFlowWithNoReachableCompletionChain() {
         RoadNetwork network = new RoadNetwork();
         network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
         network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
@@ -103,11 +105,71 @@ class GravityDemandModelTest {
                 Map.of(),
                 parameters());
 
+        assertThatThrownBy(() -> new GravityDemandModel(network, scenario))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("source")
+                .hasMessageContaining("closed")
+                .hasMessageContaining("no structurally reachable");
+    }
+
+    @Test
+    void samplesOnlyCandidatesThatCanReachEveryLaterLegAndReturnToOrigin() {
+        RoadNetwork network = new RoadNetwork();
+        for (String id : List.of("A", "B", "C", "D")) {
+            network.addIntersection(new Intersection(id, id, 0, 0, LocationType.NORMAL));
+        }
+        network.addRoad(road("AB", "A", "B"));
+        network.addRoad(road("AC", "A", "C"));
+        network.addRoad(road("BD", "B", "D"));
+        network.addRoad(road("DA", "D", "A"));
+        DemandCurve hourSix = new DemandCurve(
+                "HOUR_SIX",
+                java.util.stream.IntStream.range(0, 24)
+                        .mapToObj(hour -> hour == 6 ? 1.0 : 0.0)
+                        .toList());
+        FlowSpec flow = new FlowSpec(
+                "multi-leg",
+                new PurposeId("MULTI_LEG"),
+                1,
+                List.of(new VehicleMixEntry(VehicleType.MOTORCYCLE, 1)),
+                hourSix,
+                CompletionPolicy.RETURN_TO_ORIGIN,
+                List.of(
+                        new LegSpec(
+                                PlaceSpec.zones(Set.of("first-stops")),
+                                DwellSpec.fixed(0)),
+                        new LegSpec(
+                                PlaceSpec.explicitIntersection("D"),
+                                DwellSpec.fixed(0))));
+        DemandScenario scenario = new DemandScenario(
+                6 * 3600,
+                3600,
+                81,
+                1,
+                List.of(new DemandSource(
+                        "source",
+                        PlaceSpec.explicitIntersection("A"),
+                        ProductionSpec.absolute(20),
+                        List.of(flow))),
+                Map.of("first-stops", new ZoneDefinition(
+                        "first-stops",
+                        Set.of(),
+                        Set.of("B", "C"))),
+                parameters());
+
         GravityDemandModel model = new GravityDemandModel(network, scenario);
 
-        assertThat(model.scheduledTripCount()).isEqualTo(1);
-        assertThat(model.allPlans()).isEmpty();
-        assertThat(model.generationFailedPlanIds()).hasSize(1);
+        assertThat(model.allPlans()).hasSize(20);
+        assertThat(model.generationFailedPlanIds()).isEmpty();
+        assertThat(model.allPlans()).allSatisfy(plan -> {
+            assertThat(plan.legs()).hasSize(3);
+            assertThat(plan.legs().get(0).to())
+                    .isEqualTo(ResolvedPlace.intersection("B"));
+            assertThat(plan.legs().get(1).to())
+                    .isEqualTo(ResolvedPlace.intersection("D"));
+            assertThat(plan.legs().get(2).to()).isEqualTo(plan.origin());
+            assertThat(TripPlanReachability.isReachable(network, plan)).isTrue();
+        });
     }
 
     private static DemandParameters parameters() {

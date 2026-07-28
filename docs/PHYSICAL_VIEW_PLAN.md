@@ -1,103 +1,120 @@
 # Macro and Physical Views
 
-Design record for the two-renderer split, and what of it is built.
+Current design and implementation record for the two renderers.
 
-Outstanding work on the physical view is in `SIMULATION_REALISM_PLAN.md`; this
-document is the design it rests on.
-
-## Two-view boundary
+## Responsibility boundary
 
 | View | Renderer | Responsibility |
 |---|---|---|
-| Macro | React Leaflet | Browse the full network, inspect pressure/incidents/routes, view lightweight vehicle dots, and select an area |
-| Physical | PixiJS/WebGL canvas | Animate lane-level vehicles, stop lines, traffic lights, and junction movements |
+| Macro | React Leaflet, canvas-preferred layers | Browse the network, inspect aggregate road state, events and routes |
+| Physical | PixiJS 8/WebGL | Draw lane geometry and animate vehicle poses between backend frames |
 
-At a high Leaflet zoom (18 or above) an **Open physical view** action appears
-for the selected junction, or the map centre when nothing is selected. Leaflet is
-never replaced automatically on a zoom event: an explicit transition preserves
-the user's selection and avoids a disorienting renderer switch.
+The backend is authoritative for the simulation. The Pixi renderer does **not**
+run a second collision, lane-change or junction model. It may only choose a
+visually smooth path between two poses already emitted by the backend.
 
-Both views consume the same `{timelineId, frameId}` rather than maintaining
-independent clocks. The macro view uses aggregate road state; the physical view
-requests only the geometry and moving objects within its region.
+Both views consume the same `timelineId` and `frameId`. Initialize, reset,
+scenario activation, map replacement and topology edits start a new timeline,
+which prevents state from one network being painted over another.
 
-## The interpolation contract
+## Data cadence
 
-The backend records one immutable `SimulationFrame` after every microscopic
-sub-step (at most one simulated second) and at every exact event boundary. It
-carries `tick`, `elapsedSeconds`, vehicle poses, event states, road states, and
-traffic-signal phase state. The current frame goes out over SSE; retained frames
-are queried through:
+The Physical View uses two endpoints:
 
 ```text
-GET /api/simulation/trace/frames
-GET /api/simulation/trace/frames/at?elapsedSeconds=...
+GET /api/simulation/physical-view?lat=&lon=&radiusMetres=&fullMap=true
+GET /api/simulation/physical-view/state?lat=&lon=&radiusMetres=
 ```
 
-The physical renderer draws the exact frame the shared cursor selects. It may
-interpolate **pixels** between two adjacent LIVE frames for smoothness, but
-interpolation must never create authoritative event, signal, road, or vehicle
-state. On pause or a history scrub it draws the selected frame exactly.
+The first request loads the current network's static lanes, stop lines,
+junctions, buildings, land cover and connectors once. The second carries only
+vehicles, signals and frame metadata.
 
-That rule is what makes synchronisation enforceable even though two renderers
-cannot paint pixels in the same nanosecond. It is enforced in
-`frontend/src/physical/interpolate.js`: a departed vehicle is dropped rather
-than coasted onward, a newly appeared one is drawn at its own position, and
-everything but position and heading comes from the newer frame unchanged.
+`PhysicalScene.jsx` keeps every layer in one world-metre `Container`; pan and
+zoom change only that container's transform. Static geometry is rebuilt only
+when the timeline changes. `App.jsx` lazy-loads the Physical View, so PixiJS
+does not inflate or initialize the normal Leaflet dashboard bundle. Pixi is
+capped at 60 FPS so a 120/144 Hz monitor
+does not redraw the full map unnecessarily. State polling runs at 250 ms while
+frames advance. It only starts backing off after state has remained unchanged
+for longer than the current backend playback interval (with a one-second
+minimum), then caps the delay at 1000 ms; an updated frame immediately restores
+250 ms. This grace period covers the default 1000 ms clock as well as the
+250–2000 ms speed controls, avoiding aliasing and a dropped road transition at
+a turn.
 
-History retains 900 timestamps in memory. Initialize, reset, scenario or map
-replacement, and any in-place network edit start a new timeline; the client
-discards a selected history frame when its timeline changes or the frame leaves
-the retained window.
+Geometry and optional artwork load in parallel. Every asset slot has a bounded
+load time and falls back to a generated shape independently, so a missing or
+stalled texture cannot leave the scene waiting forever.
 
-## Lateral position
+The District 1 scene currently contains 389 intersections, 730 directed roads,
+1,318 lane centrelines and 1,162 buildings. This is small enough for a
+single retained static scene. A materially larger map should add spatial
+partitioning or viewport culling instead of continuing to load the whole city.
 
-A vehicle carries a signed offset in metres from the road centreline and crosses
-towards a new lane at a bounded lateral speed, so one part-way through a lane
-change reports a position it genuinely occupies. Sub-lane occupancy landed after
-that, so a motorcycle can ride the gap between two lanes and report an offset
-that is really where it is.
+## Interpolation contract
 
-The renderer therefore places vehicles from `lateralOffsetMetres` and **must not**
-derive lateral position from the lane index. See `MOTORCYCLE_FILTERING_PLAN.md`
-for the model behind it.
+`frontend/src/physical/interpolate.js` enforces these rules:
 
-## What is built
+1. At interpolation fraction `0` and `1`, return the exact source and target
+   backend poses, including heading.
+2. On one road, sample the directed lane centreline by road progress and retain
+   the backend's lateral endpoint offsets. This keeps curved-road movement on
+   the road and preserves gradual motorcycle filtering/lane changes.
+3. Across two roads, use only the connector matching the exact
+   `(fromRoad, fromLane, toRoad, toLane)` transition.
+4. Traverse the ordered remainder of the incoming lane, the complete connector,
+   then the ordered prefix of the outgoing lane. Do not trim a connector by
+   Euclidean proximity: on a short outgoing segment the target can be nearer
+   the connector's start, which previously collapsed a turn into a chord.
+5. Reject connectors with an endpoint cusp or an excessive internal turn and
+   fall back to endpoint interpolation. Heading always takes the shortest
+   smooth turn between authoritative headings. At the otherwise ambiguous
+   180-degree U-turn, the connector's signed curvature chooses left versus
+   right so the sprite rotates with its path.
+6. A departed vehicle is removed; a newly appeared vehicle is drawn at its
+   first authoritative pose. The renderer never extrapolates unknown state.
 
-Backend, in `domain/scene` and served by `GET /api/simulation/physical-view`
-(contract in `API_CONTRACT.md`):
+Lane, connector and polyline indexes are cached for a retained scene. Static
+connector guides are intentionally not painted, and motorcycle trails are
+batched into one graphics stroke per frame.
 
-- `LaneGeometryBuilder` derives each lane's centreline by offsetting the road
-  shape along its local normal, using the same
-  `RoadLayout.laneCentreOffsetMetres` the simulation places vehicles with, so
-  what is drawn and what is simulated cannot disagree.
-- Stop lines across each approach, quadratic turning curves between lanes across
-  a junction, and a junction pavement polygon.
-- `PhysicalSceneAssembler` filters roads, junctions and vehicles against one
-  radius.
-- `PhysicalViewDto` performs the single geographic → local-metre projection, so
-  the browser never sees a latitude.
+## Backend geometry and lane continuity
 
-Frontend, in `frontend/src/physical` on PixiJS v8:
+`LaneGeometryBuilder` derives lane centrelines with the same `RoadLayout` used
+to place vehicles. For each legal road transition it publishes the same
+deterministic lane continuation used by `RoadOccupancy`: keep the incoming lane
+index, clamping only when the outgoing road has fewer lanes.
 
-- `sceneTransform.js` — metres ↔ pixels, and the corners of a vehicle box for a
-  heading. Pure and unit-tested.
-- `interpolate.js` — the contract above. Pure and unit-tested.
-- `layers/drawScene.js` — draw order: junction pavement, road surface, lane
-  markings and stop lines, then vehicles.
-- `PhysicalScene.jsx` — owns the PixiJS application, polls the endpoint, draws
-  on a ticker.
+Turning connectors use cubic Hermite candidates with adaptive handle lengths.
+Every accepted curve must:
 
-The package lives in `domain/scene` rather than `domain/network/geometry`
-because the two tools it builds on, `RoadLayout` and `PolylineGeometry`, are
-both in `domain/vehicle`, and `domain/network` is otherwise independent of
-`domain/vehicle`. A geometry package under `network` reaching up into `vehicle`
-would invert the layering; a sibling consuming both does not.
+- start and end within 45 degrees of its lane tangents;
+- contain no zero-length segment;
+- contain no sampled vertex turn over 45 degrees.
 
-## Known gaps
+If the continuation lane has no entry space, a vehicle waits. It is not moved
+instantaneously into a different empty lane inside the junction; a real lateral
+change can happen gradually after entry.
 
-The renderer draws a fixed region, has no sprites, no signal heads, and a
-palette too dark to read. The map it draws carries no buildings and no measured
-lane counts, so every lane shown for District 1 is inferred from `RoadClass`
-defaults. All of that, and the demand model that would give the vehicles
-somewhere real to go, is planned in `SIMULATION_REALISM_PLAN.md`.
+## Honest limitations
+
+- The backend currently crosses the junction boundary within a simulation
+  sub-step and does not publish a `connectorProgress` or junction-occupancy
+  duration. The connector traversal is therefore a **render-only interpolation**
+  between two authoritative road poses. Junction permission, collision checks
+  and road occupancy still belong to the backend.
+- A missing or rejected connector uses a straight endpoint fallback. This is
+  bounded and cannot spin, but it can visually cut a corner. Such a fallback is
+  a geometry-data defect to fix, not permission for frontend free movement.
+- District 1 lane counts are a mixture of OSM tags and generator defaults. The
+  generator reports provenance during regeneration, but the current JSON schema
+  does not persist it per road.
+- Signal heads show the simulation's generated signal plan. They are not a
+  survey of every real signal controller or phase in District 1.
+- Pedestrians, bicycles, kerbside parking and public-transport dwell operations
+  are outside the current model.
+
+Adding timed junction occupancy would be a legitimate future model upgrade, but
+it must be designed together with reservation release, deadlock detection and
+collision tests. It is not safe to add as a renderer-only patch.
