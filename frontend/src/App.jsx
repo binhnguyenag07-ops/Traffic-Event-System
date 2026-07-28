@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TrafficMap from './components/TrafficMap'
 import NetworkEditor from './components/NetworkEditor'
 import ExperimentPanel from './components/ExperimentPanel'
 import TimelineScrubber from './components/TimelineScrubber'
-import PhysicalScene from './physical/PhysicalScene'
 import { useTrafficDashboard } from './hooks/useTrafficDashboard'
 import { DEFAULT_PHYSICAL_ZOOM } from './mapViewport'
 import { isVehicleVisibleOnMap } from './vehicleVisibility'
 import { inspectorEntries } from './inspector'
+
+// PixiJS is only needed in the lane-level view. Keeping it out of the initial
+// dashboard bundle makes the normal Leaflet view interactive sooner and avoids
+// constructing the WebGL stack until the user actually asks for it.
+const PhysicalScene = lazy(() => import('./physical/PhysicalScene'))
 
 const PREFERENCES = [
   ['CONGESTION_AWARE', 'Traffic aware'],
@@ -262,7 +266,10 @@ export default function App() {
   const traffic = statistics.traffic || {}
   const activeEvents = snapshot.trafficEvents?.filter((event) => event.status === 'ACTIVE') || []
   const viewActiveEvents = viewFrame.trafficEvents?.filter((event) => event.status === 'ACTIVE') || []
-  const canStart = snapshot.status === 'READY' && snapshot.vehicles.length > 0
+  // Demand-backed scenarios may legitimately have an empty fleet before the
+  // first scheduled departure. The server, not the current sprite count,
+  // decides whether READY can transition to RUNNING.
+  const canStart = snapshot.status === 'READY'
   const canPause = snapshot.status === 'RUNNING'
   const canResume = snapshot.status === 'PAUSED'
   const viewRoadStates = viewFrame.roadStates || []
@@ -431,25 +438,34 @@ export default function App() {
             }}
           />}
           {physicalOpen && mapViewport && (
-            <PhysicalScene
-              // A new scenario is a new world, so the scene is rebuilt rather
-              // than re-aimed. Its camera, origin and radius are read once at
-              // mount and never from the prop again, so without this it went on
-              // polling the previous case's centre and radius after a switch —
-              // drawing the old patch of map, or nothing at all, while the
-              // banner and the picker both showed the new case.
-              key={activeScenario}
-              viewport={mapViewport}
-              onViewportChange={setMapViewport}
-              onClose={labMode
-                // Closing in the lab would leave an empty stage, since the
-                // basemap is not rendered here. Leave the lab instead.
-                ? () => { window.location.search = '' }
-                : (viewport) => {
-                  if (viewport) setMapViewport(viewport)
-                  setPhysicalOpen(false)
-                }}
-            />
+            <Suspense fallback={(
+              <div className="physical-overlay" role="dialog" aria-label="Physical lane view">
+                <div className="physical-toolbar">
+                  <strong>Physical view</strong>
+                  <span className="physical-note">Loading renderer…</span>
+                </div>
+              </div>
+            )}>
+              <PhysicalScene
+                // A new scenario is a new world, so the scene is rebuilt rather
+                // than re-aimed. Its camera, origin and radius are read once at
+                // mount and never from the prop again, so without this it went on
+                // polling the previous case's centre and radius after a switch —
+                // drawing the old patch of map, or nothing at all, while the
+                // banner and the picker both showed the new case.
+                key={activeScenario}
+                viewport={mapViewport}
+                onViewportChange={setMapViewport}
+                onClose={labMode
+                  // Closing in the lab would leave an empty stage, since the
+                  // basemap is not rendered here. Leave the lab instead.
+                  ? () => { window.location.search = '' }
+                  : (viewport) => {
+                    if (viewport) setMapViewport(viewport)
+                    setPhysicalOpen(false)
+                  }}
+              />
+            </Suspense>
           )}
           <div className="map-metrics" aria-label={viewingHistory ? 'Historical traffic summary' : 'Live traffic summary'}>
             <Metric label="Fleet" value={visibleVehicles.length} />
@@ -474,8 +490,9 @@ export default function App() {
               <button className="quiet" disabled={loading} onClick={() => safely(dashboard.reset)}>Reset</button>
             </div>
             <div className="setup-row">
-              <button onClick={() => safely(dashboard.initializeDemo)} disabled={loading || snapshot.status === 'RUNNING'}>
-                Reload live traffic
+              <button onClick={() => safely(() => dashboard.activateScenario(activeScenario))}
+                disabled={loading || snapshot.status === 'RUNNING' || activeScenario === 'imported'}>
+                Reload scenario
               </button>
               <Field label="Speed">
                 <select value={tickDelay} onChange={(event) => safely(() => dashboard.setPlaybackInterval(Number(event.target.value)))}>

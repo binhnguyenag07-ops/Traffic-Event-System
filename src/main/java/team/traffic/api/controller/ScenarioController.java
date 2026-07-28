@@ -38,22 +38,44 @@ public class ScenarioController {
      *
      * <p>Starts as the scenario whose map {@code App} loads at boot.</p>
      */
-    private static volatile String activeScenarioId = "district-1";
+    private volatile String activeScenarioId;
     private final RoadNetworkService networkService;
     private final SimulationService simulationService;
     private final JsonScenarioLoader loader;
     private final MapImportService importService;
 
     public ScenarioController(RoadNetworkService networkService, SimulationService simulationService) {
-        this(networkService, simulationService, new MapImportService(new OsrmRoadGeometryProvider()));
+        this(networkService, simulationService, "district-1");
+    }
+
+    public ScenarioController(
+            RoadNetworkService networkService,
+            SimulationService simulationService,
+            String initialScenarioId) {
+        this(
+                networkService,
+                simulationService,
+                new MapImportService(new OsrmRoadGeometryProvider()),
+                initialScenarioId);
     }
 
     public ScenarioController(RoadNetworkService networkService, SimulationService simulationService,
             MapImportService importService) {
+        this(networkService, simulationService, importService, "district-1");
+    }
+
+    ScenarioController(
+            RoadNetworkService networkService,
+            SimulationService simulationService,
+            MapImportService importService,
+            String initialScenarioId) {
         this.networkService = networkService;
         this.simulationService = simulationService;
         this.loader = new JsonScenarioLoader();
         this.importService = importService;
+        this.activeScenarioId = initialScenarioId == null || initialScenarioId.isBlank()
+                ? "imported"
+                : initialScenarioId;
     }
 
     public void registerRoutes(Javalin app) {

@@ -46,8 +46,18 @@ public final class LaneGeometryBuilder {
      * leave a lane endpoint and return to it, reversing its tangent.
      */
     private static final double MIN_CURVED_CONNECTOR_METRES = 0.25;
-    /** A sampled connector must never hide a near-reversal in one vertex. */
-    private static final double MAX_CONNECTOR_VERTEX_TURN_DEGREES = 90.0;
+    /** A sampled connector must never hide a sharp correction in one vertex. */
+    private static final double MAX_CONNECTOR_VERTEX_TURN_DEGREES = 45.0;
+    /** A connector must leave and join its lanes without an endpoint cusp. */
+    private static final double MAX_CONNECTOR_TANGENT_ERROR_DEGREES = 45.0;
+    /**
+     * Hermite handle lengths tried from broadest to tightest. Imported OSM
+     * junctions can be wider than a very short road beside them; one fixed
+     * one-third handle is not robust for both ordinary and compact junctions.
+     */
+    private static final double[] CONNECTOR_HANDLE_RATIOS = {
+        0.5, 1.0 / 3.0, 0.25, 0.2, 0.125, 0.075
+    };
 
     private final RoadNetwork network;
     private final RoadLayout roadLayout;
@@ -130,9 +140,10 @@ public final class LaneGeometryBuilder {
     }
 
     /**
-     * Turning curves across one junction, one per lane pairing between each
-     * legal road transition. The authoritative movement graph therefore keeps
-     * routing, arbitration, and rendered U-turn geometry in agreement.
+     * Turning curves across one junction, one deterministic lane continuation
+     * for every incoming lane of each legal road transition. The authoritative
+     * movement graph therefore keeps routing, arbitration, and rendered U-turn
+     * geometry in agreement.
      */
     public List<LaneConnector> connectorsAt(String junctionId) {
         Intersection junction = network.getIntersection(junctionId);
@@ -153,12 +164,20 @@ public final class LaneGeometryBuilder {
                     continue;
                 }
                 List<LaneGeometry> outLanes = lanesOf(outgoing);
+                if (inLanes.isEmpty() || outLanes.isEmpty()) {
+                    continue;
+                }
                 double startFraction = extent.exitFraction(incoming);
                 double endFraction = extent.entryFraction(outgoing);
-                int pairs = Math.min(inLanes.size(), outLanes.size());
-                for (int lane = 0; lane < pairs; lane++) {
+                // Publish exactly the deterministic continuation used by
+                // RoadOccupancy: preserve the incoming index, clamping only when
+                // the outgoing road has fewer lanes. This gives every simulated
+                // crossing one exact connector without the quadratic payload and
+                // draw cost of every possible lane pair.
+                for (LaneGeometry inLane : inLanes) {
+                    int outIndex = Math.min(inLane.laneIndex(), outLanes.size() - 1);
                     connectors.add(connector(
-                            inLanes.get(lane), outLanes.get(lane),
+                            inLane, outLanes.get(outIndex),
                             centre, startFraction, endFraction));
                 }
             }
@@ -240,10 +259,11 @@ public final class LaneGeometryBuilder {
      * ending clear of the junction — the same {@link RoadExtent} the stop line
      * and the vehicle poses use — makes the turn come out forwards.</p>
      *
-     * <p>A cubic uses the lane tangents at those points, with handles one third
-     * of the gap, which keeps a turn local to its junction. If imported geometry
-     * defeats it, a curve through the junction centre is tried, and a straight
-     * connector is the final, loop-free fallback.</p>
+     * <p>A cubic uses the lane tangents at those points. Several local handle
+     * lengths are tried because a single fixed ratio fails beside short OSM road
+     * segments. Every candidate, including the centre quadratic fallback, must
+     * match both endpoint tangents and avoid sharp sampled corrections. A
+     * straight bridge is the final finite, loop-free fallback.</p>
      */
     private static List<GeoPoint> connectorCurve(
             List<GeoPoint> incoming,
@@ -261,18 +281,24 @@ public final class LaneGeometryBuilder {
             return List.of(start, end);
         }
 
-        double handleMetres = gapMetres / 3.0;
-        GeoPoint firstControl = PolylineGeometry.advanceMetres(
-                start, PolylineGeometry.bearingAt(incoming, startFraction), handleMetres);
-        GeoPoint secondControl = PolylineGeometry.advanceMetres(
-                end, PolylineGeometry.bearingAt(outgoing, endFraction), -handleMetres);
-        List<GeoPoint> candidate = cubicBezier(start, firstControl, secondControl, end);
-        if (isSafeConnectorCurve(candidate)) {
-            return candidate;
+        double incomingBearing = PolylineGeometry.bearingAt(incoming, startFraction);
+        double outgoingBearing = PolylineGeometry.bearingAt(outgoing, endFraction);
+        for (double handleRatio : CONNECTOR_HANDLE_RATIOS) {
+            double handleMetres = gapMetres * handleRatio;
+            GeoPoint firstControl = PolylineGeometry.advanceMetres(
+                    start, incomingBearing, handleMetres);
+            GeoPoint secondControl = PolylineGeometry.advanceMetres(
+                    end, outgoingBearing, -handleMetres);
+            List<GeoPoint> candidate = cubicBezier(start, firstControl, secondControl, end);
+            if (isSafeConnectorCurve(candidate, incomingBearing, outgoingBearing)) {
+                return candidate;
+            }
         }
 
         List<GeoPoint> centreCurve = quadraticBezier(start, junctionCentre, end);
-        return isSafeConnectorCurve(centreCurve) ? centreCurve : List.of(start, end);
+        return isSafeConnectorCurve(centreCurve, incomingBearing, outgoingBearing)
+                ? centreCurve
+                : List.of(start, end);
     }
 
     private static List<GeoPoint> cubicBezier(
@@ -314,36 +340,45 @@ public final class LaneGeometryBuilder {
     }
 
     /**
-     * Rejects a cubic that doubles back along its start-to-end chord. This is a
-     * guard for malformed or extremely sharp imported geometry; legitimate
-     * left and right turns keep making forward progress along that chord.
+     * Rejects zero-length segments, endpoint cusps, and sharp internal turns.
+     *
+     * <p>Progress along the start-to-end chord is deliberately not required.
+     * Offset lane endpoints at a compact turn can make a correct curve travel
+     * briefly against that chord even while it follows both road tangents.
+     * Chord monotonicity used to reject that valid cubic, after which a
+     * centre-point quadratic with a 90-degree cusp was accepted.</p>
      */
-    private static boolean isSafeConnectorCurve(List<GeoPoint> curve) {
-        GeoPoint start = curve.get(0);
-        GeoPoint end = curve.get(curve.size() - 1);
-        double latitudeScale = Math.cos(Math.toRadians(
-                (start.latitude() + end.latitude()) / 2.0));
-        double chordNorth = end.latitude() - start.latitude();
-        double chordEast = (end.longitude() - start.longitude()) * latitudeScale;
-        Double previousBearing = null;
+    private static boolean isSafeConnectorCurve(
+            List<GeoPoint> curve,
+            double incomingBearing,
+            double outgoingBearing) {
+        if (curve == null || curve.size() < 2) {
+            return false;
+        }
+        List<Double> bearings = new ArrayList<>(curve.size() - 1);
         for (int index = 1; index < curve.size(); index++) {
             GeoPoint previous = curve.get(index - 1);
             GeoPoint current = curve.get(index);
-            double segmentNorth = current.latitude() - previous.latitude();
-            double segmentEast = (current.longitude() - previous.longitude()) * latitudeScale;
-            if (segmentNorth * chordNorth + segmentEast * chordEast < 0) {
+            if (PolylineGeometry.lengthMetres(List.of(previous, current)) <= 0) {
                 return false;
             }
-            if (PolylineGeometry.lengthMetres(List.of(previous, current)) <= 0) {
-                continue;
-            }
-            double bearing = PolylineGeometry.bearingBetween(previous, current);
-            if (previousBearing != null
-                    && Math.abs(PolylineGeometry.bearingDifference(previousBearing, bearing))
+            bearings.add(PolylineGeometry.bearingBetween(previous, current));
+        }
+        if (Math.abs(PolylineGeometry.bearingDifference(
+                incomingBearing, bearings.get(0))) > MAX_CONNECTOR_TANGENT_ERROR_DEGREES) {
+            return false;
+        }
+        if (Math.abs(PolylineGeometry.bearingDifference(
+                bearings.get(bearings.size() - 1), outgoingBearing))
+                > MAX_CONNECTOR_TANGENT_ERROR_DEGREES) {
+            return false;
+        }
+        for (int index = 1; index < bearings.size(); index++) {
+            if (Math.abs(PolylineGeometry.bearingDifference(
+                    bearings.get(index - 1), bearings.get(index)))
                             > MAX_CONNECTOR_VERTEX_TURN_DEGREES) {
                 return false;
             }
-            previousBearing = bearing;
         }
         return true;
     }

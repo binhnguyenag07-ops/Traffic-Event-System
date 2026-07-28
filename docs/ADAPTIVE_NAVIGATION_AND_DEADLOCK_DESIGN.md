@@ -34,8 +34,8 @@ uncalibrated assumptions, as noted in the configuration section.
 
 ### Verification
 
-- Backend regression: 118 suites, 623 tests, 0 failures/errors/skips.
-- Frontend regression: 13 files, 79 tests; ESLint and the production Vite build
+- Backend regression: 638 tests, 0 failures/errors/skips.
+- Frontend regression: 16 files, 111 tests; ESLint and the production Vite build
   pass.
 - Routing computation count, cache hit rate, and mean compute time are recorded
   at runtime instead of assigning an unprofiled absolute millisecond budget.

@@ -32,10 +32,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.signal.TrafficSignal;
 
 public class SimulationServiceImpl implements SimulationService, AutoCloseable {
+    private static final Logger LOGGER = Logger.getLogger(SimulationServiceImpl.class.getName());
     private final TrafficSimulator simulator;
     private final ScheduledExecutorService runner;
     private final List<Consumer<SimulationSnapshot>> snapshotListeners = new CopyOnWriteArrayList<>();
@@ -254,9 +257,33 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
         }
         scheduledTicks = runner.scheduleWithFixedDelay(() -> {
             if (simulator.getStatus() == SimulationStatus.RUNNING) {
-                advanceTick();
+                try {
+                    advanceTick();
+                } catch (RuntimeException failure) {
+                    handleScheduledTickFailure(failure);
+                } catch (Error failure) {
+                    handleScheduledTickFailure(failure);
+                    throw failure;
+                }
             }
         }, playbackIntervalMillis, playbackIntervalMillis, TimeUnit.MILLISECONDS);
+    }
+
+    private synchronized void handleScheduledTickFailure(Throwable failure) {
+        LOGGER.log(Level.SEVERE,
+                "Scheduled simulation tick failed; playback is being paused.", failure);
+        if (simulator.getStatus() == SimulationStatus.RUNNING) {
+            try {
+                simulator.pause();
+            } catch (RuntimeException pauseFailure) {
+                failure.addSuppressed(pauseFailure);
+                LOGGER.log(Level.SEVERE,
+                        "Scheduled simulation tick failed and playback could not be paused.",
+                        pauseFailure);
+            }
+        }
+        cancelScheduledTicks();
+        publishSnapshot();
     }
 
     private synchronized void cancelScheduledTicks() {

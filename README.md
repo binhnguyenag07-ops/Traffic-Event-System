@@ -20,9 +20,9 @@ The repository currently includes:
   curve-speed limits, lane occupancy, MOBIL lane changes, and a compact
   motorcycle filtering strategy;
 - traffic-event models for congestion, positioned accidents, breakdowns, and road closures;
-- event service, event API, and dynamic rerouting support;
+- event service, event API, and overlap-safe event overlay composition;
 - simulation clock, tick processing, pause/resume/reset, and snapshots;
-- server-owned live playback with configurable tick timing and SSE snapshots;
+- server-owned live playback with configurable tick timing and SSE renderer frames;
 - bounded authoritative frame history captured after every microscopic sub-step
   and event boundary, with a LIVE/HISTORY scrubber on the macro map;
 - lane-offset vehicle pose (latitude, longitude, heading), collision detection,
@@ -33,10 +33,9 @@ The repository currently includes:
 - open-boundary demo traffic where completed vehicles exit and different
   same-type vehicles enter from reachable boundary roads;
 - traffic and algorithm statistics services;
-- React operations console with an OpenStreetMap/Leaflet macro map for road
-  pressure, incidents, routes, network editing, and statistics; lightweight
-  glowing vehicle dots remain visible while image sprites are reserved for a
-  separate physical view;
+- React operations console with a React-Leaflet/OpenStreetMap macro map for road
+  pressure, incidents, routes, network editing, and statistics, plus a PixiJS
+  lane-level physical view; both render backend-resolved vehicle poses;
 - a Fleet **Spawn random test vehicle** control that creates a real backend car
   or motorcycle on a reachable boundary-to-boundary route, with the request
   policy isolated for later land-use/demand-based origin-destination models;
@@ -72,8 +71,10 @@ git --version
 
 ## Run the Complete Demo
 
-The launch scripts install/build the frontend, package it inside the backend
-JAR, and start the complete application at `http://localhost:7070`.
+The launch scripts run from the repository root, install the locked frontend
+dependencies, build the frontend, run a clean Maven package, and start the
+application at `http://localhost:7070`. They stop immediately if any native
+build or launch step fails.
 
 Linux or macOS:
 
@@ -90,6 +91,17 @@ Windows PowerShell:
 The map uses OpenStreetMap tiles, so the basemap requires an internet
 connection. The traffic simulation, routing, events, and vehicle positions run
 locally.
+
+The compiled frontend is embedded in the JAR, but `data/maps`,
+`data/scenarios`, and `data/demand` remain external runtime inputs. Keep the
+repository `data/` directory beside the launch scripts. If starting the JAR
+manually, run it from the repository root or set `SCENARIO_FILE` to a valid
+scenario path. `MAP_FILE` is a topology-only override for map-development runs.
+
+By default the backend initializes the complete
+`district1_typical_day.json` scenario before serving requests. Opening the
+dashboard starts playback from its warm-start fleet; pause and use
+**Reload scenario** whenever a clean seeded rerun is needed.
 
 ## Backend Setup
 
@@ -127,30 +139,41 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/health` | health check |
+| `GET /api/network` | current intersection, road, and building counts |
 | `GET /api/network/intersections` | list intersections |
+| `GET /api/network/intersections/{id}` | get one intersection |
 | `POST /api/network/intersections` | add an intersection |
 | `DELETE /api/network/intersections/{id}` | remove an intersection and its safe-to-remove roads |
 | `GET /api/network/roads` | list roads |
+| `GET /api/network/roads/{id}` | get one road |
 | `POST /api/network/roads` | add a directed or two-way road |
 | `DELETE /api/network/roads/{id}` | remove an unoccupied road |
 | `PUT /api/network/roads/{id}/condition` | update road status and congestion |
-| `GET /api/network/movements` | list explicit and inferred legal junction movements |
+| `GET /api/network/movements` | list explicit junction-movement rules |
 | `PUT /api/network/movements` | add or replace an explicit movement rule |
 | `DELETE /api/network/movements` | remove an explicit movement rule |
+| `GET /api/network/buildings` | list buildings and access intersections |
+| `GET /api/network/buildings/{id}` | get one building |
 | `GET /api/network/intersections/{id}/roads` | list incoming and outgoing roads |
 | `GET /api/network/export` | download the current network as JSON |
-| `POST /api/scenarios/import` | upload a geographic JSON map in multipart field `map` |
 | `POST /api/routes` | compute route |
+| `GET /api/routing/algorithms` | list registered algorithms and compatible preferences |
+| `POST /api/routes/compare` | compare all algorithms compatible with a request |
 | `GET /api/vehicles` | list vehicles |
+| `GET /api/vehicles/{id}` | get one vehicle |
 | `POST /api/vehicles` | create vehicle |
+| `DELETE /api/vehicles/{id}` | remove one vehicle |
 | `GET /api/events` | list events |
+| `GET /api/events/{id}` | get one event |
 | `POST /api/events` | create traffic event |
 | `GET /api/events/active` | list active events |
 | `GET /api/events/road/{roadId}` | list events affecting one road |
 | `PUT /api/events/{id}/status` | activate or resolve event |
 | `DELETE /api/events/{id}` | remove event |
 | `GET /api/scenarios` | list bundled complete run definitions |
+| `GET /api/scenarios/active` | get the server-owned active scenario id |
 | `POST /api/scenarios/{id}/activate` | load a scenario map, demand, vehicles, and events |
+| `POST /api/scenarios/import` | upload a geographic JSON map in multipart field `map` |
 | `POST /api/simulation/initialize` | load generated demand plus optional scripted vehicles/events |
 | `POST /api/simulation/start` | start simulation |
 | `POST /api/simulation/pause` | pause simulation |
@@ -158,15 +181,23 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `POST /api/simulation/reset` | reset simulation |
 | `POST /api/simulation/tick` | advance one tick |
 | `PUT /api/simulation/parameters` | set logical seconds per tick and playback interval |
+| `GET /api/simulation/status` | run status, clock, playback settings, and demand counters |
+| `GET /api/simulation/tick/current` | current integer trace tick |
 | `GET /api/simulation/snapshot` | current simulation snapshot |
 | `GET /api/simulation/diagnostics` | adaptive navigation, information, wait, U-turn, and deadlock evidence |
-| `GET /api/simulation/stream` | live snapshot stream using Server-Sent Events |
+| `GET /api/simulation/stream` | live authoritative renderer frames using Server-Sent Events |
 | `GET /api/simulation/signals` | generated traffic-signal plans |
+| `GET /api/simulation/trace` | trace range and recorded vehicle ids |
 | `GET /api/simulation/trace/frames` | retained authoritative frame timeline |
 | `GET /api/simulation/trace/frames/at?elapsedSeconds={s}` | frame at or immediately before a simulated second |
+| `GET /api/simulation/trace/ticks/{tick}` | all recorded vehicle states at one tick |
+| `GET /api/simulation/trace/vehicles/{vehicleId}?fromTick={a}&toTick={b}` | one vehicle's trace over an optional tick range |
+| `GET /api/simulation/trace/vehicles/{vehicleId}/ticks/{tick}` | one vehicle state at one tick |
 | `GET /api/simulation/trace/flow` | density, speed, and flow samples |
 | `GET /api/simulation/trace/fundamental` | fundamental-diagram density bins |
 | `GET /api/simulation/trace/roads/{roadId}/time-space` | vehicle trajectories on one road |
+| `GET /api/simulation/physical-view?lat={lat}&lon={lon}&radiusMetres={m}` | static lane-level scene plus the current frame state |
+| `GET /api/simulation/physical-view/state?lat={lat}&lon={lon}&radiusMetres={m}` | lightweight current physical-view state |
 | `GET /api/statistics` | combined statistics |
 | `GET /api/statistics/traffic` | traffic statistics |
 | `GET /api/statistics/algorithm/{name}` | algorithm statistics |
@@ -181,8 +212,13 @@ Available map files:
 |---|---|
 | `data/maps/district1_network.json` | default full-viewport District 1 network and buildings |
 | `data/demand/default_assumptions.json` | replaceable occupancy, attraction, decay, and hourly curves |
-| `data/scenarios/district1_typical_day.json` | bundled seeded multi-flow demand run |
+| `data/scenarios/district1_typical_day.json` | seeded synthetic weekday run: 216 deterministic demand plans and four warm-start vehicles |
 | `data/results/experiment_results.json` | reproducible experiment baseline |
+
+The District 1 scenario is an educational, research-informed synthetic demand
+case. Its volumes, dwell times, hourly curves, and mode shares are explicit
+assumptions, not observed or calibrated traffic counts. See the
+[scenario evidence and reproducibility note](docs/DISTRICT1_SCENARIO.md).
 
 ### Units
 
@@ -218,7 +254,7 @@ and routing do not depend on an external routing service at runtime. Map data
 The current centreline dataset can be regenerated with
 `python3 tools/generate_osm_map.py`. This legacy generator still uses public
 Overpass mirrors. See the [macro and physical map plan](docs/PHYSICAL_VIEW_PLAN.md)
-for the proposed reproducible local-PBF replacement and physical-view contract.
+for the local-PBF ingestion roadmap and physical-view design background.
 
 ### Network Editor
 
@@ -366,19 +402,24 @@ npm test
 npm run build
 ```
 
-Build the self-contained application JAR:
+Build the executable application JAR:
 
 ```powershell
-mvn package
+mvn clean package
 java -jar target/traffic-event-system-1.0-SNAPSHOT.jar
 ```
+
+Run the JAR from the repository root because the checked-in map, demand, and
+scenario JSON files are intentionally not embedded in it.
 
 Optional environment variables:
 
 | Variable | Default | Purpose |
 |---|---:|---|
 | `PORT` | `7070` | HTTP server port |
-| `MAP_FILE` | `data/maps/district1_network.json` | initial map before a scenario is activated |
+| `SCENARIO_FILE` | `data/scenarios/district1_typical_day.json` | complete startup scenario; takes precedence over `MAP_FILE` |
+| `MAP_FILE` | unset | topology-only startup map when `SCENARIO_FILE` is unset |
+| `VITE_API_BASE_URL` | `/api` | build-time frontend API base (for example `https://host.example/api`) |
 | `VITE_TILE_URL` | OpenStreetMap | frontend tile provider URL |
 | `VITE_TILE_ATTRIBUTION` | OpenStreetMap attribution | tile attribution text |
 
@@ -393,6 +434,7 @@ Optional environment variables:
 - [Live demo guide](docs/DEMO_GUIDE.md)
 - [Planning overview](docs/PLANNING_OVERVIEW.md)
 - [Demand and scenario design](docs/DEMAND_AND_SCENARIO_DESIGN.md)
+- [District 1 scenario evidence and reproducibility](docs/DISTRICT1_SCENARIO.md)
 - [Student A network and persistence notes](docs/planning/Binh-network-persistence.md)
 - [Student B routing notes](docs/planning/nguynie-routing-algorithms.md)
 - [Student C vehicle and event notes](docs/planning/Hyo-vehicle-traffic_event.md)

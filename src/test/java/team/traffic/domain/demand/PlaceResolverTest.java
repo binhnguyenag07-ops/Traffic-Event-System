@@ -70,6 +70,27 @@ class PlaceResolverTest {
                 .hasMessageContaining("Zone not found");
     }
 
+    @Test
+    void boundaryOriginsRequireOutgoingRoadsAndDestinationsRequireIncomingRoads() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(intersection("SOUTH", 5, 0));
+        network.addIntersection(intersection("CENTRE", 5, 5));
+        network.addIntersection(intersection("NORTH-ENTRY", 0, 10));
+        network.addIntersection(intersection("NORTH-EXIT", 10, 10));
+        addRoad(network, "ENTRY-CENTRE", "NORTH-ENTRY", "CENTRE");
+        addRoad(network, "CENTRE-EXIT", "CENTRE", "NORTH-EXIT");
+        PlaceResolver resolver = new PlaceResolver(network, Map.of());
+
+        assertThat(resolver.resolve(
+                        PlaceSpec.boundary(BoundarySide.NORTH),
+                        null))
+                .containsExactly(ResolvedPlace.boundary("NORTH-ENTRY"));
+        assertThat(resolver.resolve(
+                        PlaceSpec.boundary(BoundarySide.NORTH),
+                        ResolvedPlace.intersection("CENTRE")))
+                .containsExactly(ResolvedPlace.boundary("NORTH-EXIT"));
+    }
+
     private static RoadNetwork squareNetwork() {
         RoadNetwork network = new RoadNetwork();
         network.addIntersection(intersection("SW", 0, 0));

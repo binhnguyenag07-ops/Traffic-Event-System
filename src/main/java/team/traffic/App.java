@@ -1,5 +1,6 @@
 package team.traffic;
 
+import java.nio.file.Path;
 import team.traffic.api.ApiRouteRegistry;
 import team.traffic.api.TrafficApiServer;
 import team.traffic.api.controller.HealthController;
@@ -16,6 +17,7 @@ import team.traffic.experiment.ExperimentService;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.observer.TrafficEventBus;
 import team.traffic.persistence.JsonMapLoader;
+import team.traffic.persistence.JsonScenarioLoader;
 import team.traffic.routing.AStarPathFindingStrategy;
 import team.traffic.routing.BfsPathFindingStrategy;
 import team.traffic.routing.DijkstraPathFindingStrategy;
@@ -32,12 +34,31 @@ import team.traffic.service.impl.VehicleServiceImpl;
 
 public class App {
     private static final int PORT = Integer.parseInt(System.getenv().getOrDefault("PORT", "7070"));
-    private static final String MAP_FILE = System.getenv().getOrDefault("MAP_FILE", "data/maps/district1_network.json");
+    private static final String DEFAULT_SCENARIO_FILE =
+            "data/scenarios/district1_typical_day.json";
 
     public static void main(String[] args) throws Exception {
-        // Load road network from JSON
-        JsonMapLoader loader = new JsonMapLoader();
-        RoadNetwork network = loader.load(MAP_FILE);
+        /*
+         * A normal launch loads a complete scenario, not merely its map. The old
+         * boot path claimed District 1 was active while leaving demand
+         * uninitialised; because the picker already selected its only real
+         * scenario, the UI could not activate it with an onChange event.
+         *
+         * SCENARIO_FILE has precedence. MAP_FILE remains an explicit topology-
+         * only override for map-development workflows.
+         */
+        String scenarioFile = nonBlankEnvironment("SCENARIO_FILE");
+        String mapFile = nonBlankEnvironment("MAP_FILE");
+        JsonScenarioLoader.LoadedScenario startupScenario = null;
+        RoadNetwork network;
+        if (scenarioFile != null || mapFile == null) {
+            Path path = Path.of(
+                    scenarioFile == null ? DEFAULT_SCENARIO_FILE : scenarioFile);
+            startupScenario = new JsonScenarioLoader().load(path);
+            network = startupScenario.network();
+        } else {
+            network = new JsonMapLoader().load(mapFile);
+        }
         System.out.println("Loaded road network: "
                 + network.getIntersectionCount() + " intersections, "
                 + network.getRoadCount() + " roads");
@@ -62,6 +83,19 @@ public class App {
                 eventBus,
                 team.traffic.simulation.AdaptiveTrafficConfig.defaults());
         SimulationServiceImpl simulationService = new SimulationServiceImpl(simulator);
+        if (startupScenario != null) {
+            JsonScenarioLoader.LoadedScenario loaded = startupScenario;
+            simulationService.configureAdaptiveTraffic(loaded.adaptiveTraffic());
+            simulationService.configureDriverDecisionProfiles(loaded.driverProfiles());
+            loaded.demand().ifPresentOrElse(
+                    demand -> simulationService.initialize(
+                            demand, loaded.vehicles(), loaded.events()),
+                    () -> simulationService.initialize(
+                            loaded.vehicles(), loaded.events()));
+            System.out.println("Initialized scenario: " + loaded.id()
+                    + " (" + simulationService.getDemandRunStatistics().scheduledTrips()
+                    + " demand plans)");
+        }
         VehicleServiceImpl vehicleService = new VehicleServiceImpl(simulator, routingService);
         TrafficEventServiceImpl trafficEventService = new TrafficEventServiceImpl(eventBus, networkService, simulator);
 
@@ -78,7 +112,10 @@ public class App {
         StatisticsServiceImpl statisticsService = new StatisticsServiceImpl(
                 simulationService, networkService, registry, routingService);
         StatisticsController statisticsController = new StatisticsController(statisticsService);
-        ScenarioController scenarioController = new ScenarioController(networkService, simulationService);
+        ScenarioController scenarioController = new ScenarioController(
+                networkService,
+                simulationService,
+                startupScenario == null ? "imported" : startupScenario.id());
         ExperimentController experimentController = new ExperimentController(new ExperimentService());
         PhysicalViewController physicalViewController =
                 new PhysicalViewController(networkService, simulationService);
@@ -117,5 +154,10 @@ public class App {
         System.out.println("  GET  http://localhost:" + PORT + "/api/statistics");
         System.out.println("  GET  http://localhost:" + PORT + "/api/statistics/traffic");
         System.out.println("  GET  http://localhost:" + PORT + "/api/statistics/algorithm/{name}");
+    }
+
+    private static String nonBlankEnvironment(String name) {
+        String value = System.getenv(name);
+        return value == null || value.isBlank() ? null : value;
     }
 }

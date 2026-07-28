@@ -11,7 +11,9 @@ import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.event.TrafficEventStatus;
 import team.traffic.domain.event.TrafficEventType;
 import team.traffic.domain.event.BreakdownEvent;
+import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleFactory;
@@ -35,7 +37,6 @@ import team.traffic.domain.signal.SignalPlan;
 import team.traffic.domain.signal.TrafficSignal;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -210,6 +211,7 @@ public class TrafficSimulator {
             double startTimeOfDaySeconds) {
         resolveActiveEvents();
         releaseVehicleOccupancy();
+        resetLegacyDynamicRoadState();
         this.vehicleConfigs = vehicleConfigs == null ? new ArrayList<>() : new ArrayList<>(vehicleConfigs);
         this.eventConfigs = eventConfigs == null ? new ArrayList<>() : new ArrayList<>(eventConfigs);
         this.demandModel = demandModel;
@@ -260,6 +262,7 @@ public class TrafficSimulator {
     public synchronized void reset() {
         resolveActiveEvents();
         releaseVehicleOccupancy();
+        resetLegacyDynamicRoadState();
         configureTickProcessor(adaptiveTrafficConfig, adaptiveScenarioSeed);
         this.clock = new SimulationClock(demandStartTimeOfDaySeconds);
         this.vehicles = buildVehicles(this.vehicleConfigs);
@@ -321,11 +324,11 @@ public class TrafficSimulator {
     }
 
     public synchronized List<Vehicle> getVehicles() {
-        return Collections.unmodifiableList(vehicles);
+        return List.copyOf(vehicles);
     }
 
     public synchronized List<TrafficEvent> getEvents() {
-        return Collections.unmodifiableList(events);
+        return List.copyOf(events);
     }
 
     public synchronized List<TrafficSignal> getSignals() {
@@ -685,6 +688,26 @@ public class TrafficSimulator {
         for (Vehicle vehicle : vehicles) {
             vehicle.releaseRoad(network);
         }
+    }
+
+    /**
+     * Starts every run without persisted or stale runtime traffic.
+     *
+     * <p>Map files describe topology and explicit closures. Vehicle occupancy,
+     * density and congestion are runtime state, so importing non-zero legacy
+     * values would otherwise reserve capacity for vehicles that do not exist.
+     * Explicitly closed roads remain closed.</p>
+     */
+    private void resetLegacyDynamicRoadState() {
+        network.getRoads().values().forEach(road -> {
+            boolean preserveClosure =
+                    road.getCondition().getRoadStatus() == RoadStatus.CLOSED;
+            road.setCurrentVehicleCount(0);
+            road.setCondition(new RoadCondition(
+                    0,
+                    0,
+                    preserveClosure ? RoadStatus.CLOSED : RoadStatus.OPEN));
+        });
     }
 
     private List<Vehicle> buildVehicles(List<VehicleConfig> configs) {

@@ -11,6 +11,10 @@ import { interpolateVehicles } from './interpolate'
 import { drawSignals, drawStatic, drawTrails } from './layers/drawScene'
 import { VehicleLayer, buildVehicleTextures } from './vehicleSprites'
 import { assetCount, loadSceneAssets } from './assetLoader'
+import {
+  nextPollCadence,
+  PHYSICAL_POLL_INTERVAL_MS,
+} from './pollCadence'
 
 // The lane-level renderer.
 //
@@ -24,7 +28,7 @@ import { assetCount, loadSceneAssets } from './assetLoader'
 // and signals, so panning never crosses a region boundary and buildings cannot
 // pop in and out as a radius-based LOD request catches up.
 
-const POLL_INTERVAL_MS = 250
+const MAX_RENDER_FPS = 60
 const BACKGROUND = 0xe7e3da
 const WHEEL_PIXELS_PER_ZOOM_LEVEL = 240
 const MAX_WHEEL_DELTA_PIXELS = 240
@@ -124,11 +128,17 @@ export default function PhysicalScene({ viewport, onViewportChange, onClose }) {
       const app = new Application()
       await app.init({ background: BACKGROUND, antialias: true, resizeTo: mount, autoDensity: true })
       if (cancelled) { app.destroy(true); return }
+      // Pixi otherwise follows a 120/144 Hz display and repeats the complete
+      // full-map render that many times even though state only arrives at 4 Hz.
+      app.ticker.maxFPS = MAX_RENDER_FPS
       store.app = app
       mount.appendChild(app.canvas)
 
-      // Whatever artwork is present; every missing slot falls back to a drawn
-      // shape, so an empty assets folder is a supported state rather than a fault.
+      // Geometry and optional artwork are independent, so start both now. A
+      // slow texture must not postpone the comparatively small API request.
+      const geometry = loadGeometry(store, setStatus, () => cancelled)
+      // Whatever artwork is present; every missing, failed, or timed-out slot
+      // falls back to a drawn shape.
       const assets = await loadSceneAssets()
       if (cancelled) { app.destroy(true); return }
       store.assets = assets
@@ -158,19 +168,31 @@ export default function PhysicalScene({ viewport, onViewportChange, onClose }) {
         }
       })
 
-      await loadGeometry(store, setStatus, () => cancelled)
-      poll = window.setInterval(
-        () => (store.needsGeometry
-          ? loadGeometry(store, setStatus, () => cancelled)
-          : loadState(store, setStatus, () => cancelled)),
-        POLL_INTERVAL_MS,
-      )
+      await geometry
+
+      let cadence = { delayMs: PHYSICAL_POLL_INTERVAL_MS, unchangedForMs: 0 }
+      const pollOnce = async () => {
+        if (cancelled) return
+        const requestStartedAt = performance.now()
+        const result = store.needsGeometry
+          ? await loadGeometry(store, setStatus, () => cancelled)
+          : await loadState(store, setStatus, () => cancelled)
+        cadence = nextPollCadence(result, cadence, store.animationDurationMs)
+        // Preserve a start-to-start cadence. Scheduling a full 250 ms only
+        // after an 11–55 ms request completed skipped authoritative frames at
+        // 4× playback, turning one interpolation interval into several road
+        // transitions. Idle backoff still uses the same bounded deadlines.
+        const requestElapsed = performance.now() - requestStartedAt
+        const wait = Math.max(0, cadence.delayMs - requestElapsed)
+        if (!cancelled) poll = window.setTimeout(pollOnce, wait)
+      }
+      if (!cancelled) poll = window.setTimeout(pollOnce, cadence.delayMs)
     }
 
     boot()
     return () => {
       cancelled = true
-      if (poll) window.clearInterval(poll)
+      if (poll) window.clearTimeout(poll)
       if (store.app) { store.app.destroy(true, { children: true }); store.app = null }
       if (storeRef.current === store) storeRef.current = null
     }
@@ -395,7 +417,7 @@ function tick(store, setCounts) {
 
 /** Loads the complete static network once for the current simulation timeline. */
 async function loadGeometry(store, setStatus, isCancelled) {
-  if (store.fetching) return
+  if (store.fetching) return 'skipped'
   store.fetching = true
   try {
     const request = store.origin ?? store.viewport
@@ -418,8 +440,10 @@ async function loadGeometry(store, setStatus, isCancelled) {
     setStatus(scene.frameId >= 0
       ? `Live · full map · frame ${scene.frameId}`
       : 'Live · full map geometry')
+    return 'updated'
   } catch (error) {
     if (!isCancelled()) setStatus(`Could not load scene: ${error.message}`)
+    return 'error'
   } finally {
     store.fetching = false
   }
@@ -427,7 +451,7 @@ async function loadGeometry(store, setStatus, isCancelled) {
 
 /** Polls only moving state and merges it onto the retained static scene. */
 async function loadState(store, setStatus, isCancelled) {
-  if (store.fetching || !store.origin || !store.current) return
+  if (store.fetching || !store.origin || !store.current) return 'skipped'
   store.fetching = true
   try {
     const state = await simulationApi.physicalViewState(
@@ -437,9 +461,13 @@ async function loadState(store, setStatus, isCancelled) {
     if (state.timelineId !== store.current.timelineId) {
       store.needsGeometry = true
       setStatus('Refreshing full map…')
-      return
+      return 'timeline-changed'
     }
-    if (state.frameId === store.current.frameId) return
+    store.animationDurationMs = Math.max(
+      PHYSICAL_POLL_INTERVAL_MS,
+      Number(state.playbackIntervalMs) || store.animationDurationMs,
+    )
+    if (state.frameId === store.current.frameId) return 'unchanged'
     store.previous = store.current
     store.current = {
       ...store.current,
@@ -448,16 +476,14 @@ async function loadState(store, setStatus, isCancelled) {
       vehicles: state.vehicles || [],
     }
     store.fetchedAt = performance.now()
-    store.animationDurationMs = Math.max(
-      POLL_INTERVAL_MS,
-      Number(state.playbackIntervalMs) || store.animationDurationMs,
-    )
     store.signalsDirty = true
     setStatus(state.frameId >= 0
       ? `Live · full map · frame ${state.frameId}`
       : 'Live · full map geometry')
+    return 'updated'
   } catch (error) {
     if (!isCancelled()) setStatus(`Could not update scene: ${error.message}`)
+    return 'error'
   } finally {
     store.fetching = false
   }
