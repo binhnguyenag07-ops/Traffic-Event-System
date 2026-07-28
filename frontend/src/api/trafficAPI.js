@@ -43,6 +43,10 @@ export const networkApi = {
 
 export const scenarioApi = {
   list: () => get('/scenarios'),
+  // Which scenario the server's network actually came from. Worth asking rather
+  // than assuming: activating one replaces the network until something else
+  // does, so a reloaded page cannot know from its own state.
+  active: () => get('/scenarios/active'),
   activate: (id) => post(`/scenarios/${encodeURIComponent(id)}/activate`),
   importMap: async (file) => {
     const form = new FormData()

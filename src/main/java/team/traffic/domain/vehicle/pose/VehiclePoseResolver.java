@@ -77,11 +77,18 @@ public final class VehiclePoseResolver {
 
     private Optional<VehiclePose> poseOnRoad(Vehicle vehicle, RoadNetwork network, Road road) {
         List<GeoPoint> shape = shapeOf(road, network);
-        GeoPoint position = PolylineGeometry.pointAt(shape, vehicle.getRoadProgress());
+        // Progress is measured against the road as the network models it, node
+        // to node. It is drawn against the stretch that is actually road, so
+        // that entering a road puts the vehicle at the junction's far edge
+        // rather than on its centre, and the turning curve it just followed
+        // ends where the vehicle now is.
+        double fraction = new RoadExtent(network, roadLayout)
+                .drivableFraction(road, vehicle.getRoadProgress());
+        GeoPoint position = PolylineGeometry.pointAt(shape, fraction);
         if (position == null) {
             return Optional.empty();
         }
-        double heading = PolylineGeometry.bearingAt(shape, vehicle.getRoadProgress());
+        double heading = PolylineGeometry.bearingAt(shape, fraction);
         // The vehicle's own lateral offset, not one derived from its lane
         // index: a vehicle part-way through a lane change is genuinely between
         // two lanes, and deriving the offset from the index would jump it
@@ -121,18 +128,16 @@ public final class VehiclePoseResolver {
     private Optional<VehiclePose> poseInJunction(Vehicle vehicle, RoadNetwork network) {
         Road arrivedOn = routeRoadAt(vehicle, network, vehicle.getNextRouteStepIndex() - 1);
         if (arrivedOn != null) {
-            return approachPose(vehicle, network, arrivedOn, 1.0);
-        }
-        Road aboutToTake = routeRoadAt(vehicle, network, vehicle.getNextRouteStepIndex());
-        if (aboutToTake != null) {
-            return approachPose(vehicle, network, aboutToTake, 0.0);
+            return approachPose(vehicle, network, arrivedOn, stopLineFraction(arrivedOn, network));
         }
 
-        // No road and no route: the vehicle has not joined the traffic yet, so
-        // there is no honest place to put it. Drawing it on the junction's own
-        // coordinate was the old answer, and it piled every vehicle of a
-        // scenario into one heap on the first frame. An empty pose leaves it
-        // out of the scene until it has a route to stand on.
+        // A vehicle that has not moved off yet holds no road, and the simulation
+        // means that literally: it is absent from the road's occupancy, so
+        // car-following cannot see it and the collision test skips it. Drawing
+        // it on the tarmac anyway made the picture lie twice over — traffic
+        // drove straight through it, and when it finally entered at progress
+        // zero it jumped backwards to the start of the road it was already
+        // standing on. It is left out until it is really on a road.
         return Optional.empty();
     }
 
@@ -145,8 +150,13 @@ public final class VehiclePoseResolver {
      * vehicles. A scenario that starts ten at one junction is the common case,
      * and drawn individually all ten land on the same coordinate.</p>
      *
-     * <p>Order within a queue is by vehicle id, so the same captured state
-     * always draws the same way.</p>
+     * <p>Order within a queue is by how long each vehicle has been waiting, so
+     * the one that arrived first stands at the front. Ordering by vehicle id
+     * instead — which is all this used to have — is stable but arbitrary, and it
+     * showed: a car arriving at a junction would be drawn ahead of one that had
+     * been sitting there for a minute, and the two appeared to swap places. Ties
+     * fall back to the id, so the same captured state always draws the same
+     * way.</p>
      */
     public Map<String, VehiclePose> resolveAll(List<Vehicle> vehicles, RoadNetwork network) {
         Map<String, VehiclePose> poses = new LinkedHashMap<>();
@@ -155,14 +165,16 @@ public final class VehiclePoseResolver {
         }
         Map<String, Double> queuedMetres = new HashMap<>();
         for (Vehicle vehicle : vehicles.stream()
-                .sorted(Comparator.comparing(Vehicle::getId))
+                .sorted(Comparator
+                        .comparingDouble((Vehicle queued) -> queued.getWaitState().sinceSeconds())
+                        .thenComparing(Vehicle::getId))
                 .toList()) {
             Approach approach = approachOf(vehicle, network);
             if (approach == null) {
                 resolve(vehicle, network).ifPresent(pose -> poses.put(vehicle.getId(), pose));
                 continue;
             }
-            String slot = approach.road().getId() + "|" + vehicle.getLaneIndex()
+            String slot = approach.road().getId() + "|" + vehicle.getLastLaneIndex()
                     + "|" + approach.fraction();
             double alreadyQueued = queuedMetres.getOrDefault(slot, 0.0);
             approachPose(vehicle, network, approach.road(), approach.fraction(), alreadyQueued)
@@ -172,19 +184,30 @@ public final class VehiclePoseResolver {
         return poses;
     }
 
-    /** Which road end a road-less vehicle belongs to, or null if it holds a road. */
+    /**
+     * Which road end a road-less vehicle belongs to, or null if it holds a road.
+     *
+     * <p>Only a vehicle that has already travelled gets one. A vehicle that has
+     * not moved off yet is deliberately left without a pose — see
+     * {@link #poseInJunction}.</p>
+     */
     private Approach approachOf(Vehicle vehicle, RoadNetwork network) {
         if (vehicle.getOccupiedRoadId() != null
                 && network.getRoad(vehicle.getOccupiedRoadId()) != null) {
             return null;
         }
         Road arrivedOn = routeRoadAt(vehicle, network, vehicle.getNextRouteStepIndex() - 1);
-        if (arrivedOn != null) return new Approach(arrivedOn, 1.0);
-        Road aboutToTake = routeRoadAt(vehicle, network, vehicle.getNextRouteStepIndex());
-        return aboutToTake == null ? null : new Approach(aboutToTake, 0.0);
+        return arrivedOn == null
+                ? null
+                : new Approach(arrivedOn, stopLineFraction(arrivedOn, network));
     }
 
     private record Approach(Road road, double fraction) {}
+
+    /** Where along a road its stop line sits, as a fraction of its whole shape. */
+    private double stopLineFraction(Road road, RoadNetwork network) {
+        return new RoadExtent(network, roadLayout).exitFraction(road);
+    }
 
     private Optional<VehiclePose> approachPose(
             Vehicle vehicle, RoadNetwork network, Road road, double fraction) {
@@ -195,24 +218,25 @@ public final class VehiclePoseResolver {
      * The vehicle placed on one end of a road, in its own lane and carriageway,
      * held back {@code queuedMetres} along the road by the vehicles ahead of it.
      *
-     * <p>A queue at a road's exit extends backwards from the stop line. One at a
-     * road's entry — vehicles that have not moved off yet — extends forwards
-     * instead, because backwards from the entry is off the end of the road.</p>
+     * <p>The queue extends backwards from the stop line, which is where a queue
+     * waiting to cross actually forms.</p>
      */
     private Optional<VehiclePose> approachPose(
             Vehicle vehicle, RoadNetwork network, Road road, double fraction, double queuedMetres) {
         List<GeoPoint> shape = shapeOf(road, network);
         double lengthMetres = PolylineGeometry.lengthMetres(shape);
         if (lengthMetres > 0 && queuedMetres > 0) {
-            double shift = Math.min(queuedMetres / lengthMetres, 1.0);
-            fraction = fraction >= 1.0 ? 1.0 - shift : Math.min(1.0, fraction + shift);
+            fraction = Math.max(0.0, fraction - Math.min(queuedMetres / lengthMetres, 1.0));
         }
         GeoPoint position = PolylineGeometry.pointAt(shape, fraction);
         if (position == null) {
             return Optional.empty();
         }
         double heading = PolylineGeometry.bearingAt(shape, fraction);
-        double lateralOffset = roadLayout.laneCentreOffsetMetresOf(road, vehicle.getLaneIndex());
+        // The lane it drove up in, not the zero its placement was reset to when
+        // it gave up the road: a queue belongs in the lane that formed it.
+        int laneIndex = vehicle.getLastLaneIndex();
+        double lateralOffset = roadLayout.laneCentreOffsetMetresOf(road, laneIndex);
         double carriageway = Carriageway.offsetMetres(network, road, roadLayout);
         return Optional.of(new VehiclePose(
                 PolylineGeometry.offsetMetres(position, heading, lateralOffset + carriageway),
@@ -220,7 +244,7 @@ public final class VehiclePoseResolver {
                 vehicle.getLength(),
                 vehicle.getWidth(),
                 null,
-                vehicle.getLaneIndex(),
+                laneIndex,
                 lateralOffset,
                 true));
     }

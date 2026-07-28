@@ -12,6 +12,7 @@ import team.traffic.domain.vehicle.dynamics.Carriageway;
 import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
 import team.traffic.domain.vehicle.dynamics.RoadLayout;
 import team.traffic.domain.vehicle.pose.PolylineGeometry;
+import team.traffic.domain.vehicle.pose.RoadExtent;
 
 /**
  * Turns the network's centreline model into the lane-level geometry a physical
@@ -37,8 +38,6 @@ import team.traffic.domain.vehicle.pose.PolylineGeometry;
  */
 public final class LaneGeometryBuilder {
 
-    /** How far back from the junction the stop line sits, in metres. */
-    private static final double STOP_LINE_SETBACK_METRES = 3.0;
     /** Points sampled along each junction turning curve. */
     private static final int CONNECTOR_SAMPLE_COUNT = 8;
     /**
@@ -52,6 +51,12 @@ public final class LaneGeometryBuilder {
 
     private final RoadNetwork network;
     private final RoadLayout roadLayout;
+    /**
+     * Where each road usefully starts and stops. Shared with the pose resolver,
+     * so the painted stop line, the turning curves, and the place traffic
+     * actually waits cannot drift apart.
+     */
+    private final RoadExtent extent;
 
     public LaneGeometryBuilder(RoadNetwork network) {
         this(network, new RoadDataRoadLayout());
@@ -62,6 +67,7 @@ public final class LaneGeometryBuilder {
         if (roadLayout == null) throw new IllegalArgumentException("Road layout is required.");
         this.network = network;
         this.roadLayout = roadLayout;
+        this.extent = new RoadExtent(network, roadLayout);
     }
 
     /**
@@ -106,9 +112,7 @@ public final class LaneGeometryBuilder {
         if (shape.size() < 2) {
             return null;
         }
-        double length = PolylineGeometry.lengthMetres(shape);
-        double fraction = length <= 0 ? 1.0 : Math.max(0.0, 1.0 - STOP_LINE_SETBACK_METRES / length);
-        return crossSectionAt(road, shape, fraction);
+        return crossSectionAt(road, shape, extent.exitFraction(road));
     }
 
     /** A line across one carriageway at a fraction of its stored geometry. */
@@ -149,9 +153,13 @@ public final class LaneGeometryBuilder {
                     continue;
                 }
                 List<LaneGeometry> outLanes = lanesOf(outgoing);
+                double startFraction = extent.exitFraction(incoming);
+                double endFraction = extent.entryFraction(outgoing);
                 int pairs = Math.min(inLanes.size(), outLanes.size());
                 for (int lane = 0; lane < pairs; lane++) {
-                    connectors.add(connector(inLanes.get(lane), outLanes.get(lane), centre));
+                    connectors.add(connector(
+                            inLanes.get(lane), outLanes.get(lane),
+                            centre, startFraction, endFraction));
                 }
             }
         }
@@ -193,15 +201,11 @@ public final class LaneGeometryBuilder {
         if (shape.size() < 2) {
             return null;
         }
-        double length = PolylineGeometry.lengthMetres(shape);
-        double setback = length <= 0
-                ? 0.0
-                : Math.min(1.0, STOP_LINE_SETBACK_METRES / length);
         double fraction;
         if (junctionId.equals(road.getStartIntersectionId())) {
-            fraction = setback;
+            fraction = extent.entryFraction(road);
         } else if (junctionId.equals(road.getEndIntersectionId())) {
-            fraction = 1.0 - setback;
+            fraction = extent.exitFraction(road);
         } else {
             return null;
         }
@@ -209,48 +213,59 @@ public final class LaneGeometryBuilder {
     }
 
     private LaneConnector connector(
-            LaneGeometry from, LaneGeometry to, GeoPoint junctionCentre) {
+            LaneGeometry from,
+            LaneGeometry to,
+            GeoPoint junctionCentre,
+            double startFraction,
+            double endFraction) {
         return new LaneConnector(
                 from.roadId(), from.laneIndex(),
                 to.roadId(), to.laneIndex(),
-                connectorCurve(from.centreline(), to.centreline(), junctionCentre));
+                connectorCurve(
+                        from.centreline(), to.centreline(),
+                        junctionCentre, startFraction, endFraction));
     }
 
     /**
-     * Joins two lane centrelines without inventing a loop at their shared node.
+     * Joins two lane centrelines across the junction between them.
      *
-     * <p>The old quadratic used the geographic junction centre as its control
-     * point. Straight OSM ways are commonly split at that node, so their
-     * offset lane endpoints are coincident beside the centre. A quadratic from
-     * that point to the centre and back has a 180-degree tangent reversal even
-     * though the route goes straight.</p>
+     * <p>The curve runs from the incoming lane's stop line to the outgoing
+     * lane's exit line, not from one lane's last point to the other's first.
+     * Those two points both sit on the junction node, and because a lane is the
+     * road shape pushed sideways they sit on <em>opposite</em> sides of it: at a
+     * four-way the eastbound approach ends south of the node and the southbound
+     * exit begins west of it. Joining them sent every right turn backwards
+     * through a reversal. Measured on the four-way case, a motorcycle turning
+     * west-to-south swung 94 degrees in a single animation frame. Starting and
+     * ending clear of the junction — the same {@link RoadExtent} the stop line
+     * and the vehicle poses use — makes the turn come out forwards.</p>
      *
-     * <p>A cubic uses the actual incoming and outgoing lane tangents instead.
-     * Its handles are one third of the gap, which keeps a turn local to its
-     * junction. If imported tangents point away from the destination, the
-     * centre-controlled curve remains useful when it still advances along the
-     * chord. A direct connector is the final, loop-free fallback.</p>
+     * <p>A cubic uses the lane tangents at those points, with handles one third
+     * of the gap, which keeps a turn local to its junction. If imported geometry
+     * defeats it, a curve through the junction centre is tried, and a straight
+     * connector is the final, loop-free fallback.</p>
      */
     private static List<GeoPoint> connectorCurve(
-            List<GeoPoint> incoming, List<GeoPoint> outgoing, GeoPoint junctionCentre) {
-        GeoPoint start = incoming.get(incoming.size() - 1);
-        GeoPoint end = outgoing.get(0);
+            List<GeoPoint> incoming,
+            List<GeoPoint> outgoing,
+            GeoPoint junctionCentre,
+            double startFraction,
+            double endFraction) {
+        GeoPoint start = PolylineGeometry.pointAt(incoming, startFraction);
+        GeoPoint end = PolylineGeometry.pointAt(outgoing, endFraction);
+        if (start == null || end == null) {
+            return List.of();
+        }
         double gapMetres = PolylineGeometry.lengthMetres(List.of(start, end));
         if (gapMetres < MIN_CURVED_CONNECTOR_METRES) {
             return List.of(start, end);
         }
 
-        GeoPoint before = incoming.get(incoming.size() - 2);
-        GeoPoint after = outgoing.get(1);
-        double incomingSegmentMetres = PolylineGeometry.lengthMetres(List.of(before, start));
-        double outgoingSegmentMetres = PolylineGeometry.lengthMetres(List.of(end, after));
-        if (incomingSegmentMetres <= 0 || outgoingSegmentMetres <= 0) {
-            return List.of(start, end);
-        }
-
         double handleMetres = gapMetres / 3.0;
-        GeoPoint firstControl = extendFrom(start, before, handleMetres / incomingSegmentMetres);
-        GeoPoint secondControl = extendFrom(end, after, handleMetres / outgoingSegmentMetres);
+        GeoPoint firstControl = PolylineGeometry.advanceMetres(
+                start, PolylineGeometry.bearingAt(incoming, startFraction), handleMetres);
+        GeoPoint secondControl = PolylineGeometry.advanceMetres(
+                end, PolylineGeometry.bearingAt(outgoing, endFraction), -handleMetres);
         List<GeoPoint> candidate = cubicBezier(start, firstControl, secondControl, end);
         if (isSafeConnectorCurve(candidate)) {
             return candidate;
@@ -258,17 +273,6 @@ public final class LaneGeometryBuilder {
 
         List<GeoPoint> centreCurve = quadraticBezier(start, junctionCentre, end);
         return isSafeConnectorCurve(centreCurve) ? centreCurve : List.of(start, end);
-    }
-
-    /**
-     * Extends from {@code reference} away from {@code behind}. For the outgoing
-     * control point the arguments are reversed, placing it behind the endpoint
-     * along the outgoing tangent as a cubic Bézier requires.
-     */
-    private static GeoPoint extendFrom(GeoPoint reference, GeoPoint behind, double scale) {
-        return new GeoPoint(
-                reference.latitude() + (reference.latitude() - behind.latitude()) * scale,
-                reference.longitude() + (reference.longitude() - behind.longitude()) * scale);
     }
 
     private static List<GeoPoint> cubicBezier(
