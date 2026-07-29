@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.DoubleConsumer;
+import java.util.function.BiConsumer;
 
 public class TickProcessor {
     /**
@@ -156,15 +157,42 @@ public class TickProcessor {
         if (frameObserver == null) {
             throw new IllegalArgumentException("Frame observer is required.");
         }
+        process(
+                currentTick,
+                elapsedSeconds,
+                network,
+                vehicles,
+                events,
+                signals,
+                simulationSecondsPerTick,
+                (seconds, ignoredKind) -> frameObserver.accept(seconds));
+    }
+
+    /**
+     * Variant that distinguishes exact state-transition boundaries from
+     * periodic physics sub-steps, allowing a history store to sample the latter
+     * without losing an incident/collision timestamp.
+     */
+    public void process(
+            long currentTick,
+            double elapsedSeconds,
+            RoadNetwork network,
+            List<Vehicle> vehicles,
+            List<TrafficEvent> events,
+            List<TrafficSignal> signals,
+            double simulationSecondsPerTick,
+            BiConsumer<Double, FrameBoundaryKind> frameObserver) {
+        if (frameObserver == null) {
+            throw new IllegalArgumentException("Frame observer is required.");
+        }
         List<Vehicle> movable = new ArrayList<>();
         for (Vehicle vehicle : vehicles) {
-            if (vehicle.getStatus() == VehicleStatus.DWELLING) {
-                vehicle.addTravelTime(simulationSecondsPerTick);
-                continue;
-            }
             if (vehicle.isJourneyComplete()) {
                 continue;
             }
+            // Trip time follows the simulator's established tick accounting:
+            // one increment for every active vehicle, irrespective of how many
+            // microscopic/access-link sub-steps this tick contains.
             vehicle.addTravelTime(simulationSecondsPerTick);
             movable.add(vehicle);
         }
@@ -172,12 +200,12 @@ public class TickProcessor {
         double tickEndSeconds = elapsedSeconds + simulationSecondsPerTick;
         double cursorSeconds = elapsedSeconds;
         if (transitionEventsAt(cursorSeconds, network, vehicles, events)) {
-            frameObserver.accept(cursorSeconds);
+            frameObserver.accept(cursorSeconds, FrameBoundaryKind.STATE_TRANSITION);
         }
 
         while (cursorSeconds < tickEndSeconds - TIME_EPSILON_SECONDS) {
             if (detectCollisions(network, vehicles, events, cursorSeconds)) {
-                frameObserver.accept(cursorSeconds);
+                frameObserver.accept(cursorSeconds, FrameBoundaryKind.STATE_TRANSITION);
             }
             double boundarySeconds = nextEventBoundary(events, cursorSeconds, tickEndSeconds);
             double stepSeconds = boundarySeconds - cursorSeconds;
@@ -187,7 +215,7 @@ public class TickProcessor {
             }
             cursorSeconds = boundarySeconds;
             if (transitionEventsAt(cursorSeconds, network, vehicles, events)) {
-                frameObserver.accept(cursorSeconds);
+                frameObserver.accept(cursorSeconds, FrameBoundaryKind.STATE_TRANSITION);
             }
         }
 
@@ -262,15 +290,37 @@ public class TickProcessor {
             List<TrafficEvent> events,
             List<TrafficSignal> signals,
             double simulationSecondsPerTick,
-            DoubleConsumer frameObserver) {
+            BiConsumer<Double, FrameBoundaryKind> frameObserver) {
+        final double[] accessCursorSeconds = {elapsedSeconds};
         dynamicsEngine.step(currentTick, elapsedSeconds,
                 network, movable, events, signals, simulationSecondsPerTick,
                 (stepEndSeconds, subStepState) -> {
+                    double accessStepSeconds = stepEndSeconds - accessCursorSeconds[0];
+                    for (Vehicle vehicle : movable) {
+                        if (vehicle.isTraversingBuildingAccessLink()) {
+                            vehicle.advanceBuildingAccessLink(
+                                    accessStepSeconds,
+                                    stepEndSeconds,
+                                    network,
+                                    routingService);
+                        } else {
+                            vehicle.updateTripPlanLifecycle(
+                                    stepEndSeconds,
+                                    network,
+                                    routingService);
+                        }
+                    }
+                    accessCursorSeconds[0] = stepEndSeconds;
                     publishPhysicalDensity(network, subStepState);
                     navigationCoordinator.process(
                             stepEndSeconds, network, movable, events, subStepState);
-                    frameObserver.accept(stepEndSeconds);
+                    frameObserver.accept(stepEndSeconds, FrameBoundaryKind.PHYSICS_SUBSTEP);
                 });
+    }
+
+    public enum FrameBoundaryKind {
+        PHYSICS_SUBSTEP,
+        STATE_TRANSITION
     }
 
     public AdaptiveNavigationMetrics getAdaptiveNavigationMetrics() {

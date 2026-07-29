@@ -25,6 +25,7 @@ export const networkApi = {
   getSummary: () => get('/network'),
   getAllIntersections: () => get('/network/intersections'),
   getAllRoads: () => get('/network/roads'),
+  getAllBuildings: () => get('/network/buildings'),
   addIntersection: (payload) => post('/network/intersections', payload),
   removeIntersection: (id) => remove(`/network/intersections/${encodeURIComponent(id)}`),
   addRoad: (payload) => post('/network/roads', payload),
@@ -67,6 +68,7 @@ export const simulationApi = {
   tick: () => post('/simulation/tick'),
   snapshot: () => get('/simulation/snapshot'),
   status: () => get('/simulation/status'),
+  demandSchedule: () => get('/simulation/demand/schedule'),
   signals: () => get('/simulation/signals'),
   flowTrace: () => get('/simulation/trace/flow'),
   frameTimeline: () => get('/simulation/trace/frames'),
@@ -103,6 +105,8 @@ export const vehicleApi = {
   list: () => get('/vehicles'),
   create: (type, startIntersectionId, destinationIntersectionId) =>
     post('/vehicles', { type, startIntersectionId, destinationIntersectionId }),
+  createBetweenBuildings: (type, startBuildingId, destinationBuildingId) =>
+    post('/vehicles', { type, startBuildingId, destinationBuildingId }),
   remove: (id) => remove(`/vehicles/${encodeURIComponent(id)}`),
 }
 

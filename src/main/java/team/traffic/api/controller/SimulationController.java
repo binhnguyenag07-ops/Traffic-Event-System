@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import team.traffic.api.dto.SimulationSnapshotDto;
+import team.traffic.api.dto.DemandScheduleDto;
 import team.traffic.api.dto.VehicleTracePointDto;
 import team.traffic.api.dto.VehicleTraceSummaryDto;
 import team.traffic.domain.demand.DemandScenario;
@@ -42,6 +43,11 @@ public class SimulationController {
         app.post("/api/simulation/tick", this::tick);
         app.get("/api/simulation/status", this::getStatus);
         app.get("/api/simulation/snapshot", this::getSnapshot);
+        app.get("/api/simulation/demand/schedule", ctx -> ctx.json(DemandScheduleDto.of(
+                simulationService.getDemandPlans(),
+                simulationService.getDemandRunStatistics(),
+                simulationService.getNetwork(),
+                simulationService.getStartTimeOfDaySeconds())));
         app.get("/api/simulation/diagnostics", ctx -> {
             Object diagnostics = simulationService.getDiagnostics();
             ctx.json(diagnostics == null ? Map.of() : diagnostics);

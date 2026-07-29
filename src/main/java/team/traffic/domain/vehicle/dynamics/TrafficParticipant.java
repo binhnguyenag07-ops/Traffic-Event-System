@@ -33,7 +33,14 @@ public interface TrafficParticipant {
         return 1.8;
     }
 
-    /** How far along its current road it is, from 0 at the entry to 1 at the exit. */
+    /**
+     * How far the front bumper has travelled along its current road, from
+     * {@code 0} at the entry to {@code 1} at the exit/stop line.
+     *
+     * <p>This is deliberately a front-bumper coordinate: leader-gap,
+     * obstruction, and stop-line calculations all use it that way. Rendering
+     * converts it to the centre coordinate required by a vehicle sprite.</p>
+     */
     double getRoadProgress();
 
     /** The road it currently occupies, or {@code null} while crossing a junction. */

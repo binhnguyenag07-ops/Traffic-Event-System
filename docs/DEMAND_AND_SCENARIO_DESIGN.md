@@ -10,7 +10,8 @@ selection, the clock, the demand spawner, file/HTTP parsing and run statistics
 are implemented.
 
 That statement is about software capability, not empirical validity. The
-bundled numbers are explicitly synthetic. The project does not contain a
+bundled case combines verified artifact facts, research-informed citywide
+proxies, and explicitly synthetic parameters. The project does not contain a
 household survey, cordon count, hourly classified count or calibrated OD matrix
 for its former District 1 study window. `district1_typical_day.json` is an
 educational deterministic scenario, **not an observed or calibrated traffic
@@ -71,6 +72,8 @@ horizon and complete its travel or dwell after it.
 
 Demand scenarios are currently limited to one departure day. The clock itself
 can cross midnight, but this model does not repeat a daily demand schedule.
+The bundled start is 06:00 with a 24-hour horizon, so it samples each clock hour
+once and ends its departure window at 06:00 on day `D+1`.
 
 `seed` controls stochastic rounding, departure time within an hour, vehicle
 type, destination and dwell range. With the same map, parameters, scenario,
@@ -128,6 +131,44 @@ person-trip records:
 Consequently generated plan counts must not be compared directly with survey
 person-trip totals.
 
+This is especially important for the
+[JICA HOUTRANS follow-up result](https://openjicareport.jica.go.jp/pdf/12305124_01.pdf):
+83.0% motorcycle, 5.3% car, and 6.3% bus are **2013 person-trip modal shares**, not
+probabilities for creating vehicle instances. A passenger bus can account for
+many person trips. The generator has no vehicle-occupancy or bus
+route/headway/fleet-allocation conversion, so those shares are context only and
+are never copied mechanically into `vehicleMix`.
+
+### How the bundled residential proxy is parameterized
+
+The final scenario uses only the 147 buildings explicitly typed
+`RESIDENTIAL`; the 885 `OTHER` buildings are not silently treated as homes.
+Several inputs are traceable historical/citywide proxies:
+
+- `tripsPerPersonPerDay = 1.84` uses the non-home-purpose sum for the HOUTRANS
+  Table 1.1.2 one-motorcycle household row. The schema field name is broader
+  than that historical statistic, so 1.84 remains a research-informed
+  production proxy, not a measured rate for these mapped residents.
+- Work/school/private/business shares
+  `0.3473 / 0.1130 / 0.5033 / 0.0364` are derived from the same table.
+- Internal/outbound splits use the historical former-District-1 results in
+  HOUTRANS Table 2.1.25: work 26/74, school 42/58, private 40/60, and business
+  29/71. A perimeter gateway stands in for the unmodelled outside destination;
+  this is an upper-bound OD proxy, not a real gateway count.
+- `HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY` normalizes a digitization of
+  Figures 2.1.18–2.1.19 on p. 2-32 for general private/business/through timing.
+- `0.8955 / 0.1045` motorcycle/car is the ratio among the 2024 citywide
+  registered stocks cited in `DISTRICT1_SCENARIO.md`, not a traffic-flow or
+  person-trip mode share.
+
+The HOUTRANS 2002 trip-rate table is reproduced in Appendix 1 of
+[JICA, Data Collection Survey on Traffic Conditions of Southern Roads and Bridges](https://openjicareport.jica.go.jp/pdf/12305017_02.pdf).
+The former-District-1 split table and hourly figures are in
+[JICA, HOUTRANS Volume 2, Main Text](https://openjicareport.jica.go.jp/pdf/11764636_02.pdf).
+The cordon base of 3,600 vehicles/day per side, scenario scale `0.015`, cordon
+20/50/30 allocation, dwell ranges, and
+`COMMUTE_AM`/`SCHOOL_AM`/`VISITOR_DAYTIME` curves remain synthetic assumptions.
+
 ### `PlaceSpec` and `ResolvedPlace`
 
 ```text
@@ -157,6 +198,15 @@ and exit semantics reviewable and stable.
 For buildings, the resolver currently selects the access point with the
 shortest driveway distance, breaking ties by access id. It does not optimize
 across all access points during demand generation.
+
+The selected access is physically visible at runtime. At 15 km/h the
+authoritative vehicle moves from the building centre to the access node before
+occupying its first road, and from the destination access node to the building
+centre after leaving its final road. These
+`DEPARTING_ORIGIN`/`ARRIVING_DESTINATION` phases accumulate trip time and
+distance without creating phantom lane occupancy. After dwell, a return or
+later leg repeats the same departure-link lifecycle from its actual current
+building.
 
 ### `TripPlan`, legs and completion
 
@@ -268,7 +318,7 @@ Source handling is explicit:
 - An unexpected invalid resolved plan is retained in demand failure statistics
   by plan id instead of being spawned.
 
-The bundled former District 1 study-window scenario resolves 216 generated
+The bundled former District 1 study-window scenario resolves 156 generated
 plans with 0 structural generation failures. That does not promise that no
 vehicle will be blocked by a live closure, full downstream road or later
 routing condition.
@@ -293,6 +343,24 @@ failedPlanIds
 Here “trip” means scheduled plan, matching the runtime API name. It does not
 mean leg or person trip.
 
+### Reader-facing schedule
+
+`GET /api/simulation/demand/schedule` exposes the exact already-resolved plan
+list; it does not regenerate or resample demand. Each entry carries:
+
+- plan id, purpose, vehicle type, and completion policy;
+- human-readable origin and destination names, nullable coordinates for
+  disambiguating repeated/generic labels, and ids retained for traceability;
+- exact scheduled departure clock/day offset;
+- each leg's estimated travel, arrival, dwell, and next departure;
+- estimated final/return arrival.
+
+The estimator uses directed Dijkstra free-flow road time plus the 15 km/h
+building access links and declared dwell. It deliberately ignores live queues,
+signals, closures, and incidents; the UI labels every arrival/return value as
+an estimate. The **24-hour demand** panel groups exact departures by clock hour,
+filters by purpose/hour, and paginates plan details.
+
 Scenario initialization also normalizes legacy road state before routing any
 vehicle:
 
@@ -316,25 +384,25 @@ The file/HTTP demand shape is `demandSources`, not a nested
   "map": "../maps/district1_network.json",
   "demandParameters": "../demand/default_assumptions.json",
   "startTimeOfDay": "06:00",
-  "durationHours": 18,
+  "durationHours": 24,
   "seed": 20260728,
   "scale": 0.015,
 
   "zones": [
     {
-      "id": "entry-zone",
+      "id": "north-east-entries",
       "intersectionIds": ["N..."]
     },
     {
-      "id": "landmarks",
+      "id": "tourism-core",
       "buildingIds": ["B..."]
     }
   ],
 
   "demandSources": [
     {
-      "id": "cordon",
-      "from": {"kind": "ZONE", "zoneIds": ["entry-zone"]},
+      "id": "north-east-cordon",
+      "from": {"kind": "ZONE", "zoneIds": ["north-east-entries"]},
       "production": {
         "kind": "ABSOLUTE",
         "vehiclesPerDay": 3600
@@ -343,16 +411,16 @@ The file/HTTP demand shape is `demandSources`, not a nested
         {
           "id": "visitor",
           "purpose": "VISITOR",
-          "share": 0.20,
+          "share": 0.30,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.65},
-            {"type": "CAR", "share": 0.35}
+            {"type": "MOTORCYCLE", "share": 0.8955},
+            {"type": "CAR", "share": 0.1045}
           ],
           "curve": "VISITOR_DAYTIME",
           "completion": "REMOVE_AT_LAST_STOP",
           "legs": [
             {
-              "to": {"kind": "ZONE", "zoneIds": ["landmarks"]},
+              "to": {"kind": "ZONE", "zoneIds": ["tourism-core"]},
               "dwell": {
                 "kind": "RANGE",
                 "minSeconds": 3600,
@@ -366,16 +434,13 @@ The file/HTTP demand shape is `demandSources`, not a nested
   ],
 
   "events": [],
-  "vehicles": [
-    {
-      "id": "scripted-warm-start",
-      "type": "MOTORCYCLE",
-      "currentIntersectionId": "N...",
-      "destinationIntersectionId": "N..."
-    }
-  ]
+  "vehicles": []
 }
 ```
+
+The snippet abbreviates the other resident and cordon flows but uses their
+current field shape. The bundled case intentionally has no scripted warm-start
+traffic.
 
 The parameter catalog supplies all building-type parameters and named
 normalized curves. Its top-level `status` is `ASSUMPTION`.
@@ -410,8 +475,8 @@ Use these labels consistently:
 
 | Label | Meaning |
 |---|---|
-| **DATASET FACT** | Measured from committed repository data or deterministic output. It is a fact about this artifact, not automatically the city. |
-| **CITY-LEVEL PROXY** | External Ho Chi Minh City or historical evidence used to inform a plausible scenario shape. It is not former District 1 study-window calibration. |
+| **VERIFIED FACT** | Measured from committed repository data/deterministic output or stated by a cited official source. Its artifact/city/source scope must be explicit. |
+| **RESEARCH-INFORMED PROXY** | Official Ho Chi Minh City or historical evidence used only to inform a plausible ratio, shape, or order of magnitude. It is not former District 1 study-window calibration. |
 | **SYNTHETIC ASSUMPTION** | An authored model input with no matching local observation in this project. |
 
 The design supports replacing parameters later, but the current scenario still

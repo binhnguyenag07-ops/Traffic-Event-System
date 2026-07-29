@@ -2,6 +2,7 @@ package team.traffic.service;
 
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.demand.DemandScenario;
+import team.traffic.domain.demand.TripPlan;
 import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.network.RoadNetwork;
@@ -79,6 +80,9 @@ public interface SimulationService {
     }
     default DemandRunStatistics getDemandRunStatistics() {
         return DemandRunStatistics.empty();
+    }
+    default List<TripPlan> getDemandPlans() {
+        return List.of();
     }
     default void setParameters(double simulationSecondsPerTick, long playbackIntervalMillis) {
         throw new UnsupportedOperationException("Simulation parameters are not supported.");

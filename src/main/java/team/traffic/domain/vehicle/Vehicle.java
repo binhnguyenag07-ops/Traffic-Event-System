@@ -8,6 +8,8 @@ import team.traffic.domain.demand.PlaceKind;
 import team.traffic.domain.demand.ResolvedPlace;
 import team.traffic.domain.demand.TripPlan;
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.Building;
+import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.network.JunctionMovement;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
@@ -61,16 +63,25 @@ public abstract class Vehicle implements TrafficParticipant {
     private static final double QUEUEING_THRESHOLD_MPS = 0.2;
     /** Vehicles inside this distance participate in stop-line arbitration. */
     private static final double JUNCTION_APPROACH_DISTANCE_METRES = 50.0;
+    /** Low-speed movement between a building centre and its selected access node. */
+    public static final double BUILDING_ACCESS_SPEED_MPS = 15.0 / 3.6;
 
     private final String id;
     private String currentIntersectionId;
     private String destinationIntersectionId;
     private String originBuildingId;
     private String destinationBuildingId;
+    private ResolvedPlace originResolvedPlace;
+    private ResolvedPlace destinationResolvedPlace;
     private TripPlan tripPlan;
     private int currentTripLegIndex = -1;
     private ResolvedPlace currentResolvedPlace;
     private double dwellUntilSeconds = Double.NaN;
+    private JourneyPhase accessLinkPhase;
+    private double accessLinkDistanceMetres;
+    private double accessLinkTravelledMetres;
+    private boolean currentLegDepartureAccessComplete = true;
+    private boolean currentLegStopProcessed;
     private final RoutePlan routePlan = new RoutePlan();
     private final VehicleProfile profile;
     private double cruisingSpeedKph;
@@ -111,6 +122,9 @@ public abstract class Vehicle implements TrafficParticipant {
         this.id = id;
         this.currentIntersectionId = currentIntersectionId;
         this.destinationIntersectionId = destinationIntersectionId;
+        this.originResolvedPlace = ResolvedPlace.intersection(currentIntersectionId);
+        this.destinationResolvedPlace = ResolvedPlace.intersection(destinationIntersectionId);
+        this.currentResolvedPlace = this.originResolvedPlace;
         this.profile = profile;
         this.cruisingSpeedKph = cruisingSpeedKph;
         this.status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
@@ -161,6 +175,8 @@ public abstract class Vehicle implements TrafficParticipant {
                 var buildingPlan = routingService.findRouteToBuilding(
                         roadNetwork, currentIntersectionId, destinationBuildingId, preference);
                 destinationIntersectionId = buildingPlan.destinationAccess().intersectionId();
+                destinationResolvedPlace = ResolvedPlace.building(
+                        destinationBuildingId, destinationIntersectionId);
                 result = buildingPlan.routeResult();
             }
             routePlan.assign(
@@ -227,6 +243,10 @@ public abstract class Vehicle implements TrafficParticipant {
         Objects.requireNonNull(trafficState, "Traffic state must not be null.");
         if (!Double.isFinite(simulationSeconds) || simulationSeconds <= 0) {
             throw new IllegalArgumentException("Simulation seconds must be positive.");
+        }
+
+        if (isTraversingBuildingAccessLink()) {
+            return Optional.empty();
         }
 
         if (status == VehicleStatus.STOPPED || status == VehicleStatus.DWELLING) {
@@ -599,7 +619,9 @@ public abstract class Vehicle implements TrafficParticipant {
             boolean applyRuntimeEffects) {
         Objects.requireNonNull(roadNetwork, "Road network must not be null.");
         Objects.requireNonNull(trafficState, "Traffic state must not be null.");
-        if (hasReachedDestination() || status == VehicleStatus.DWELLING) {
+        if (isTraversingBuildingAccessLink()
+                || hasReachedDestination()
+                || status == VehicleStatus.DWELLING) {
             return Optional.empty();
         }
         if (placement.isOnRoad()) {
@@ -984,8 +1006,12 @@ public abstract class Vehicle implements TrafficParticipant {
         }
         this.tripPlan = plan;
         this.currentTripLegIndex = 0;
+        this.originResolvedPlace = plan.origin();
         this.currentResolvedPlace = plan.origin();
         this.dwellUntilSeconds = Double.NaN;
+        clearAccessLink();
+        this.currentLegDepartureAccessComplete = plan.origin().kind() != PlaceKind.BUILDING;
+        this.currentLegStopProcessed = false;
         this.originBuildingId = plan.origin().kind() == PlaceKind.BUILDING
                 ? plan.origin().id() : null;
         applyDestination(plan.legs().get(0).to());
@@ -1004,12 +1030,25 @@ public abstract class Vehicle implements TrafficParticipant {
         if (!Double.isFinite(elapsedSeconds) || elapsedSeconds < 0) {
             throw new IllegalArgumentException("Elapsed seconds must be finite and non-negative");
         }
-        if (tripPlan == null) return hasReachedDestination();
+        Objects.requireNonNull(roadNetwork, "Road network must not be null.");
+        Objects.requireNonNull(routingService, "Routing service must not be null.");
+
+        if (accessLinkPhase != null) return false;
+
+        if (!currentLegDepartureAccessComplete) {
+            if (beginBuildingAccess(
+                    JourneyPhase.DEPARTING_ORIGIN,
+                    originResolvedPlace,
+                    roadNetwork)) {
+                return false;
+            }
+            currentLegDepartureAccessComplete = true;
+        }
 
         if (status == VehicleStatus.DWELLING) {
             if (elapsedSeconds + 1e-9 < dwellUntilSeconds) return false;
             dwellUntilSeconds = Double.NaN;
-            if (currentTripLegIndex == tripPlan.legs().size() - 1) {
+            if (tripPlan == null || currentTripLegIndex == tripPlan.legs().size() - 1) {
                 status = VehicleStatus.ARRIVED;
                 return true;
             }
@@ -1017,7 +1056,29 @@ public abstract class Vehicle implements TrafficParticipant {
         }
         if (!hasReachedDestination()) return false;
 
-        currentResolvedPlace = tripPlan.legs().get(currentTripLegIndex).to();
+        if (!destinationResolvedPlace.equals(currentResolvedPlace)) {
+            if (beginBuildingAccess(
+                    JourneyPhase.ARRIVING_DESTINATION,
+                    destinationResolvedPlace,
+                    roadNetwork)) {
+                return false;
+            }
+            currentResolvedPlace = destinationResolvedPlace;
+        }
+
+        if (currentLegStopProcessed) {
+            return status == VehicleStatus.ARRIVED
+                    && (tripPlan == null
+                    || currentTripLegIndex == tripPlan.legs().size() - 1);
+        }
+        currentLegStopProcessed = true;
+
+        if (tripPlan == null) {
+            instantaneousSpeedMps = 0;
+            status = VehicleStatus.ARRIVED;
+            return true;
+        }
+
         double dwellSeconds = tripPlan.legs().get(currentTripLegIndex).dwellSeconds();
         if (dwellSeconds > 0) {
             releaseRoad(roadNetwork);
@@ -1038,6 +1099,12 @@ public abstract class Vehicle implements TrafficParticipant {
             double elapsedSeconds,
             RoadNetwork roadNetwork,
             RoutingService routingService) {
+        originResolvedPlace = currentResolvedPlace;
+        originBuildingId = originResolvedPlace.kind() == PlaceKind.BUILDING
+                ? originResolvedPlace.id() : null;
+        currentLegDepartureAccessComplete =
+                originResolvedPlace.kind() != PlaceKind.BUILDING;
+        currentLegStopProcessed = false;
         currentTripLegIndex++;
         if (currentTripLegIndex >= tripPlan.legs().size()) {
             status = VehicleStatus.ARRIVED;
@@ -1055,7 +1122,81 @@ public abstract class Vehicle implements TrafficParticipant {
         return false;
     }
 
+    /**
+     * Advances the authoritative off-network building link without occupying a
+     * road. Travel time is accumulated by the tick processor exactly once; this
+     * method records only the physical driveway distance.
+     */
+    public void advanceBuildingAccessLink(
+            double simulationSeconds,
+            double elapsedSeconds,
+            RoadNetwork roadNetwork,
+            RoutingService routingService) {
+        if (!isTraversingBuildingAccessLink()) return;
+        if (!Double.isFinite(simulationSeconds) || simulationSeconds <= 0) {
+            throw new IllegalArgumentException("Simulation seconds must be positive.");
+        }
+        double remaining = Math.max(0.0, accessLinkDistanceMetres - accessLinkTravelledMetres);
+        double travelled = Math.min(
+                remaining, BUILDING_ACCESS_SPEED_MPS * simulationSeconds);
+        accessLinkTravelledMetres += travelled;
+        trip.addDistanceKm(travelled / 1_000.0);
+        instantaneousSpeedMps = remaining > 1e-9 ? BUILDING_ACCESS_SPEED_MPS : 0.0;
+        if (accessLinkTravelledMetres + 1e-9 < accessLinkDistanceMetres) return;
+
+        JourneyPhase completedPhase = accessLinkPhase;
+        clearAccessLink();
+        instantaneousSpeedMps = 0.0;
+        if (completedPhase == JourneyPhase.DEPARTING_ORIGIN) {
+            currentLegDepartureAccessComplete = true;
+            status = hasReachedDestination() ? VehicleStatus.ARRIVED : VehicleStatus.WAITING;
+        } else {
+            currentResolvedPlace = destinationResolvedPlace;
+            status = VehicleStatus.ARRIVED;
+        }
+        updateTripPlanLifecycle(elapsedSeconds, roadNetwork, routingService);
+    }
+
+    private boolean beginBuildingAccess(
+            JourneyPhase phase,
+            ResolvedPlace place,
+            RoadNetwork roadNetwork) {
+        if (place == null || place.kind() != PlaceKind.BUILDING) return false;
+        double distanceMetres = drivewayDistanceMetres(place, roadNetwork);
+        if (distanceMetres <= 1e-9) return false;
+        releaseRoad(roadNetwork);
+        accessLinkPhase = phase;
+        accessLinkDistanceMetres = distanceMetres;
+        accessLinkTravelledMetres = 0.0;
+        instantaneousSpeedMps = BUILDING_ACCESS_SPEED_MPS;
+        status = VehicleStatus.MOVING;
+        return true;
+    }
+
+    private static double drivewayDistanceMetres(
+            ResolvedPlace place,
+            RoadNetwork roadNetwork) {
+        Building building = roadNetwork.getBuilding(place.id());
+        if (building == null) {
+            throw new IllegalStateException("Resolved building is missing: " + place.id());
+        }
+        return building.getAccessPoints().stream()
+                .filter(access -> access.intersectionId().equals(place.accessIntersectionId()))
+                .mapToDouble(BuildingAccessPoint::drivewayDistanceMetres)
+                .min()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Building " + place.id() + " has no access at "
+                                + place.accessIntersectionId()));
+    }
+
+    private void clearAccessLink() {
+        accessLinkPhase = null;
+        accessLinkDistanceMetres = 0.0;
+        accessLinkTravelledMetres = 0.0;
+    }
+
     private void applyDestination(ResolvedPlace place) {
+        destinationResolvedPlace = place;
         destinationIntersectionId = place.accessIntersectionId();
         destinationBuildingId = place.kind() == PlaceKind.BUILDING ? place.id() : null;
     }
@@ -1081,9 +1222,19 @@ public abstract class Vehicle implements TrafficParticipant {
     }
 
     public boolean isJourneyComplete() {
-        if (tripPlan == null) return hasReachedDestination();
+        if (tripPlan == null) {
+            if (destinationResolvedPlace.kind() != PlaceKind.BUILDING) {
+                return hasReachedDestination();
+            }
+            return hasReachedDestination()
+                    && accessLinkPhase == null
+                    && destinationResolvedPlace.equals(currentResolvedPlace)
+                    && status == VehicleStatus.ARRIVED;
+        }
         return currentTripLegIndex == tripPlan.legs().size() - 1
                 && hasReachedDestination()
+                && accessLinkPhase == null
+                && destinationResolvedPlace.equals(currentResolvedPlace)
                 && status == VehicleStatus.ARRIVED;
     }
 
@@ -1097,6 +1248,63 @@ public abstract class Vehicle implements TrafficParticipant {
         }
         this.originBuildingId = originBuildingId;
         this.destinationBuildingId = destinationBuildingId;
+        this.originResolvedPlace = ResolvedPlace.building(
+                originBuildingId, currentIntersectionId);
+        this.destinationResolvedPlace = ResolvedPlace.building(
+                destinationBuildingId, destinationIntersectionId);
+        this.currentResolvedPlace = originResolvedPlace;
+        clearAccessLink();
+        this.currentLegDepartureAccessComplete = false;
+        this.currentLegStopProcessed = false;
+    }
+
+    public ResolvedPlace getOriginResolvedPlace() {
+        return originResolvedPlace;
+    }
+
+    public ResolvedPlace getDestinationResolvedPlace() {
+        return destinationResolvedPlace;
+    }
+
+    /**
+     * Renderer-facing phase derived from authoritative placement and lifecycle
+     * state; it does not introduce a second movement state machine.
+     */
+    public JourneyPhase getJourneyPhase() {
+        if (accessLinkPhase != null) {
+            return accessLinkPhase;
+        }
+        if (status == VehicleStatus.DWELLING) {
+            return JourneyPhase.DWELLING;
+        }
+        if (status == VehicleStatus.ARRIVED && isJourneyComplete()) {
+            return JourneyPhase.ARRIVED;
+        }
+        if (placement.isOnRoad()) {
+            return JourneyPhase.ON_ROAD;
+        }
+        if (!currentLegDepartureAccessComplete
+                && routePlan.getNextStepIndex() == 0
+                && currentIntersectionId.equals(originResolvedPlace.accessIntersectionId())) {
+            return JourneyPhase.DEPARTING_ORIGIN;
+        }
+        return JourneyPhase.AT_JUNCTION;
+    }
+
+    public boolean isTraversingBuildingAccessLink() {
+        return accessLinkPhase == JourneyPhase.DEPARTING_ORIGIN
+                || accessLinkPhase == JourneyPhase.ARRIVING_DESTINATION;
+    }
+
+    public double getAccessLinkProgress() {
+        if (accessLinkDistanceMetres <= 0) {
+            return currentLegDepartureAccessComplete ? 1.0 : 0.0;
+        }
+        return Math.min(1.0, accessLinkTravelledMetres / accessLinkDistanceMetres);
+    }
+
+    public double getAccessLinkDistanceMetres() {
+        return accessLinkDistanceMetres;
     }
 
     public Route getCurrentRoute() {

@@ -36,11 +36,37 @@ district-wide network or census. See
 [`docs/DISTRICT1_SCENARIO.md`](../docs/DISTRICT1_SCENARIO.md) for the
 administrative-name note and sources.
 
-The counts above are **DATASET FACTS**: they describe this committed JSON file,
+The counts above are **VERIFIED FACTS**: they describe this committed JSON file,
 not the real number of roads, junctions or buildings in the former District 1
 area. The OSM snapshot date is not embedded in the map, and 885 of its 1162
 buildings are typed `OTHER`; neither coverage nor building use is complete
 enough for population forecasting.
+
+The road-direction audit is also a verified fact about the committed artifact
+and the fresh OSM extract used for review:
+
+| Audit measure | Result |
+|---|---:|
+| Directed roads | 730 |
+| Physical road segments | 560 |
+| One-way physical segments | 390 (69.6%) |
+| OSM `oneway=yes` / roundabout among those | 380 / 10 |
+| One-way segments with at least 3 lanes | 168 |
+| Direct OSM lane tag / inferred or default among those | 155 / 13 |
+| Unique source OSM ways checked after corrections | 439; no remaining direction, lane, or name mismatch |
+| Duplicate human-readable UI label groups | 0 intersections; 0 roads; 0 buildings |
+
+This does **not** mean that every three-lane street should be two-way: lane
+count describes width allocated in the tagged direction, while `oneway`
+describes permitted direction. Eleven audited ways also carry
+`oneway:motorcycle=no`; the current schema has one direction rule for all
+vehicle types and therefore cannot add a motorcycle-only reverse edge without
+incorrectly legalizing it for cars and buses.
+
+The label audit covers all 389 intersections, 730 roads, and 1162 buildings.
+Six-decimal coordinates disambiguate repeated/generic places; road labels also
+include directed endpoints, lane count, and rounded length in metres. Raw ids
+remain in API payloads for traceability, not as the operator's only clue.
 
 Road occupancy is runtime state. On scenario initialization and reset, the
 simulator clears legacy `currentVehicleCount`, density and congestion values,
@@ -66,21 +92,31 @@ and optional scripted vehicles. The same shape is accepted by
 map reference.
 
 `district1_typical_day.json` is the bundled default:
-**Central District 1 - Synthetic Weekday**. It combines generated demand with
-four scripted warm-start vehicles, because the first generated departure is at
-272.10 simulated seconds and a demo should not begin with an empty map.
+**Central District 1 - 24-hour Weekday Proxy**. It starts at 06:00, schedules a
+full 24 hours of departures through 06:00 on day `D+1`. It contains no scripted
+warm-start vehicles: every simulated vehicle is attributable to an exact
+scheduled plan.
 
 Its fixed acceptance snapshot is:
 
 | Measure | Seeded result |
 |---|---:|
-| Generated plans | 216 |
+| Generated plans | 156 |
 | Structural generation failures | 0 |
-| Generated motorcycles | 184 |
-| Generated cars | 32 |
-| Scripted vehicles present at `t = 0` | 4 |
+| Generated motorcycles | 142 |
+| Generated cars | 14 |
+| First generated departure | 68.79 s after 06:00 |
+| Scripted vehicles present at `t = 0` | 0 |
 
-These are **DETERMINISTIC MODEL OUTPUTS**, not observed traffic counts. They
+Purpose counts are `BUSINESS_OUTBOUND_PROXY` 1, `INBOUND_WORK` 56,
+`PRIVATE_INTERNAL` 13, `PRIVATE_OUTBOUND_PROXY` 12,
+`SCHOOL_OUTBOUND_ESCORT_PROXY` 6, `THROUGH` 21, `VISITOR` 31,
+`WORK_INTERNAL` 6, and `WORK_OUTBOUND_PROXY` 10. Configured flows that do not
+appear in this table seeded-stochastically round to zero at the checked-in
+scale.
+
+These are **VERIFIED FACTS about deterministic model output**, not observed
+traffic counts. They
 hold for the committed map, scenario, parameter table, demand algorithm and
 seed `20260728`. See
 [`docs/DISTRICT1_SCENARIO.md`](../docs/DISTRICT1_SCENARIO.md) for the evidence
@@ -93,19 +129,25 @@ parameter, the gravity distance-decay factor, and normalized 24-hour departure
 curves. Its top-level status and note explicitly mark the table as an assumption
 so later calibration is a data replacement rather than a Java change.
 
+`HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY` is the exception to wholly
+authored curve shape: it is a normalized digitization of a historical JICA
+HOUTRANS figure and is named `PROXY` to prevent it being mistaken for current
+District 1 counts. The other purpose-specific curves remain synthetic.
+
 The words are intentional:
 
-- **DATASET FACT** describes a value measured from the committed repository
-  data or a deterministic run.
-- **CITY-LEVEL PROXY** describes external Ho Chi Minh City evidence used only
-  to choose a plausible shape or order of magnitude. It is not former
-  District 1 study-window calibration.
+- **VERIFIED FACT** describes a value measured from the committed repository,
+  its deterministic regression test, or a cited official source. The scope of
+  the fact must always be stated.
+- **RESEARCH-INFORMED PROXY** describes official Ho Chi Minh City or historical
+  transport evidence used only to choose a plausible shape, ratio, or order of
+  magnitude. It is not former District 1 study-window calibration.
 - **SYNTHETIC ASSUMPTION** describes an authored input such as occupancy,
   production, modal mix, dwell time, hourly curve, gravity decay or `scale`.
 
-No bundled demand parameter is an observed estimate for the former District 1
-study window, and the scenario is neither a calibrated model nor a traffic
-forecast.
+No bundled demand parameter is a **current calibrated estimate** for this study
+window. Some ratios and one curve are historical HOUTRANS-derived proxies; the
+scenario remains neither a calibrated model nor a traffic forecast.
 
 ## results/
 

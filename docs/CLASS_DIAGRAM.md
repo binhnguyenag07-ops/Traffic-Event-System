@@ -37,12 +37,18 @@ classDiagram
         -int laneIndex
         -double roadProgress
         -VehicleStatus status
+        -JourneyPhase accessLinkPhase
+        -double accessLinkTravelledMetres
         +planMovement(...) Optional~MovementPlan~
         +commitMovement(...)
         +planJunctionApproach(...) Optional~JunctionApproach~
+        +assignTripPlan(TripPlan)
+        +advanceBuildingAccessLink(...)
+        +getJourneyPhase() JourneyPhase
         +stop()
         +resumeFromStop()
     }
+    class JourneyPhase
     class Car
     class Motorcycle
     class Bus {
@@ -54,6 +60,7 @@ classDiagram
     Vehicle <|-- Motorcycle
     Vehicle <|-- Bus
     Vehicle <|-- EmergencyVehicle
+    Vehicle --> JourneyPhase
 
     class TrafficState {
         +occupancyOf(roadId) RoadOccupancy
@@ -221,6 +228,7 @@ classDiagram
     class TripPlan
     class TripLeg
     class DemandDrivenSpawner
+    class TripScheduleEstimator
     class Vehicle
     TripDemandModel <|.. GravityDemandModel
     TripDemandModel <|.. ScriptedDemandModel
@@ -232,13 +240,16 @@ classDiagram
     TripPlan *-- TripLeg
     DemandDrivenSpawner --> TripDemandModel
     DemandDrivenSpawner --> Vehicle
+    TripScheduleEstimator --> TripPlan
     Vehicle o-- TripPlan
 ```
 
 `FlowSpec.purpose` is an open `PurposeId`, while destination selectors are
 resolved once into concrete places before a vehicle is spawned. The spawner is
 therefore independent of whether plans came from building gravity, a scripted
-list or a future OD matrix.
+list or a future OD matrix. `TripScheduleEstimator` is a read-only directed
+free-flow projection for the schedule API; runtime arrival remains owned by
+`Vehicle` and `TickProcessor`.
 
 Scene geometry, in `domain/scene`, derived from the network for the physical
 view and never stored:

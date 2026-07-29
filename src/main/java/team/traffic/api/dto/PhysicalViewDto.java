@@ -116,7 +116,15 @@ public record PhysicalViewDto(
                 vehicle.lengthMetres(), vehicle.widthMetres(),
                 vehicle.laneIndex(), vehicle.lateralOffsetMetres(),
                 vehicle.roadId(), vehicle.roadProgress(), vehicle.inJunction(),
-                vehicle.junctionFromRoadId(), vehicle.junctionToRoadId());
+                vehicle.junctionFromRoadId(), vehicle.junctionToRoadId(),
+                vehicle.journeyPhase().name(),
+                vehicle.originPlaceKind() == null ? null : vehicle.originPlaceKind().name(),
+                vehicle.originPlaceId(),
+                vehicle.originAccessIntersectionId(),
+                vehicle.destinationPlaceKind() == null
+                        ? null : vehicle.destinationPlaceKind().name(),
+                vehicle.destinationPlaceId(),
+                vehicle.destinationAccessIntersectionId());
     }
 
     private static List<double[]> project(List<GeoPoint> points, GeoPoint origin) {
@@ -168,6 +176,13 @@ public record PhysicalViewDto(
             double lengthMetres, double widthMetres,
             int laneIndex, double lateralOffsetMetres,
             String roadId, double roadProgress, boolean inJunction,
-            String junctionFromRoadId, String junctionToRoadId) {
+            String junctionFromRoadId, String junctionToRoadId,
+            String journeyPhase,
+            String originPlaceKind,
+            String originPlaceId,
+            String originAccessIntersectionId,
+            String destinationPlaceKind,
+            String destinationPlaceId,
+            String destinationAccessIntersectionId) {
     }
 }

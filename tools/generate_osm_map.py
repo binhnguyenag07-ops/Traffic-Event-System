@@ -13,6 +13,7 @@ import tempfile
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict, deque
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 BOUNDS = (10.7685, 106.6905, 10.7825, 106.7085)
@@ -22,6 +23,10 @@ OVERPASS_URLS = (
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
 )
+# A mirror or local cache older than this can silently preserve obsolete
+# oneway/lane tags. The bundled map is reproducible because it is committed;
+# regeneration should use a recent OSM snapshot unless offline mode is explicit.
+MAX_OSM_SNAPSHOT_LAG = timedelta(hours=24)
 SPEEDS = {"primary": 50, "secondary": 45, "tertiary": 40, "unclassified": 35,
           "residential": 30, "living_street": 20}
 CAPACITIES = {"primary": 100, "secondary": 80, "tertiary": 65, "unclassified": 50,
@@ -74,14 +79,49 @@ def geometry_distance(points):
     return sum(distance_km(points[index - 1], points[index]) for index in range(1, len(points)))
 
 
-def overpass(query, label):
-    """Runs one Overpass query, caching the response so reruns are offline."""
+def osm_snapshot_is_current(payload, now=None):
+    """Whether an Overpass response identifies a recent OSM base snapshot."""
+    if not isinstance(payload, dict):
+        return False
+    timestamp = (payload.get("osm3s") or {}).get("timestamp_osm_base")
+    if not timestamp:
+        return False
+    try:
+        snapshot_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return False
+    reference_time = now or datetime.now(timezone.utc)
+    return reference_time - snapshot_time <= MAX_OSM_SNAPSHOT_LAG
+
+
+def cached_elements(payload, allow_stale_cache=False, now=None):
+    """Returns usable elements, keeping legacy/stale caches opt-in."""
+    if isinstance(payload, dict) and isinstance(payload.get("elements"), list):
+        if allow_stale_cache or osm_snapshot_is_current(payload, now):
+            return payload["elements"]
+        return None
+    if allow_stale_cache and isinstance(payload, list):
+        # Before freshness metadata was retained, caches contained only this list.
+        return payload
+    return None
+
+
+def overpass(query, label, allow_stale_cache=False):
+    """Runs one Overpass query and caches a freshness-verifiable response."""
     cache_key = hashlib.sha256(query.encode()).hexdigest()[:12]
     cache_dir = Path(tempfile.gettempdir()) / "traffic-event-system-osm"
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache = cache_dir / f"{label}-{cache_key}.json"
     if cache.exists():
-        return json.loads(cache.read_text(encoding="utf-8"))
+        try:
+            elements = cached_elements(
+                json.loads(cache.read_text(encoding="utf-8")),
+                allow_stale_cache=allow_stale_cache)
+            if elements is not None:
+                return elements
+        except (OSError, json.JSONDecodeError):
+            # A truncated cache is recoverable: continue to the mirrors.
+            pass
     body = urllib.parse.urlencode({"data": query}).encode()
     last_error = None
     for url in OVERPASS_URLS:
@@ -89,22 +129,31 @@ def overpass(query, label):
             request = urllib.request.Request(
                 url, data=body, headers={"User-Agent": "Traffic-Event-System/1.0"})
             with urllib.request.urlopen(request, timeout=180) as response:
-                elements = json.load(response)["elements"]
-                cache.write_text(json.dumps(elements), encoding="utf-8")
+                payload = json.load(response)
+                elements = cached_elements(
+                    payload, allow_stale_cache=allow_stale_cache)
+                if elements is None:
+                    timestamp = (payload.get("osm3s") or {}).get(
+                        "timestamp_osm_base", "missing")
+                    raise RuntimeError(
+                        f"mirror snapshot is stale or unverifiable ({timestamp})")
+                temporary_cache = cache.with_suffix(".tmp")
+                temporary_cache.write_text(json.dumps(payload), encoding="utf-8")
+                temporary_cache.replace(cache)
                 return elements
         except Exception as exception:  # Try the next public Overpass mirror.
             last_error = exception
     raise RuntimeError(f"Unable to fetch OpenStreetMap {label}: {last_error}")
 
 
-def fetch_ways():
+def fetch_ways(allow_stale_cache=False):
     south, west, north, east = BOUNDS
     return overpass(f'''[out:json][timeout:180];
 way["highway"~"^({ROAD_CLASSES})$"]({south},{west},{north},{east});
-out body geom;''', "ways")
+out body geom;''', "ways", allow_stale_cache)
 
 
-def fetch_land_cover():
+def fetch_land_cover(allow_stale_cache=False):
     """Parks, water and yards. Without these the river and Tao Dan read as bare land."""
     south, west, north, east = BOUNDS
     return overpass(f'''[out:json][timeout:180];
@@ -112,7 +161,7 @@ def fetch_land_cover():
  way["landuse"]({south},{west},{north},{east});
  way["natural"="water"]({south},{west},{north},{east});
  way["waterway"="riverbank"]({south},{west},{north},{east}););
-out body geom;''', "landcover")
+out body geom;''', "landcover", allow_stale_cache)
 
 
 def land_cover_type_of(tags):
@@ -150,12 +199,12 @@ def build_land_cover(elements):
     return covers, counts
 
 
-def fetch_buildings():
+def fetch_buildings(allow_stale_cache=False):
     """Building footprints. Without these the map has nowhere for a trip to begin."""
     south, west, north, east = BOUNDS
     return overpass(f'''[out:json][timeout:180];
 way["building"]({south},{west},{north},{east});
-out body geom;''', "buildings")
+out body geom;''', "buildings", allow_stale_cache)
 
 
 def parse_speed(tags, road_class):
@@ -448,8 +497,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("output", nargs="?", default="data/maps/district1_network.json")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--offline-cache",
+        action="store_true",
+        help="explicitly allow an old/legacy Overpass cache without refreshing it")
     args = parser.parse_args()
-    network = build_map(fetch_ways(), fetch_buildings(), fetch_land_cover())
+    network = build_map(
+        fetch_ways(args.offline_cache),
+        fetch_buildings(args.offline_cache),
+        fetch_land_cover(args.offline_cache))
     print(f"Generated {len(network['intersections'])} intersections, "
           f"{len(network['roads'])} directed roads, {len(network['buildings'])} buildings, "
           f"{len(network['landCovers'])} land-cover polygons")

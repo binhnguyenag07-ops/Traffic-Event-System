@@ -60,6 +60,7 @@ public final class GravityDemandModel implements TripDemandModel {
         return generationFailedPlanIds;
     }
 
+    @Override
     public List<TripPlan> allPlans() {
         return plans;
     }
@@ -405,6 +406,13 @@ public final class GravityDemandModel implements TripDemandModel {
         private boolean canReach(ResolvedPlace from, ResolvedPlace to) {
             String start = from.accessIntersectionId();
             String destination = to.accessIntersectionId();
+            // Vehicle demand must traverse at least one directed road. Two
+            // different buildings frequently share the same generated access
+            // junction; accepting that zero-road pair spawns an already-arrived
+            // vehicle that never appears in the simulation.
+            if (start.equals(destination)) {
+                return false;
+            }
             if (!network.containsIntersection(start)
                     || !network.containsIntersection(destination)) {
                 return false;
