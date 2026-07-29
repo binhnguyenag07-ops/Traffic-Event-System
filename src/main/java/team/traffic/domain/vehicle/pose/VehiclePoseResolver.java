@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import team.traffic.domain.demand.PlaceKind;
+import team.traffic.domain.demand.ResolvedPlace;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
@@ -13,6 +15,7 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.routing.Route;
 import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Vehicle;
+import team.traffic.domain.vehicle.JourneyPhase;
 import team.traffic.domain.vehicle.dynamics.Carriageway;
 import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
 import team.traffic.domain.vehicle.dynamics.RoadLayout;
@@ -67,12 +70,112 @@ public final class VehiclePoseResolver {
             return Optional.empty();
         }
 
+        JourneyPhase phase = vehicle.getJourneyPhase();
+        if (phase == JourneyPhase.DEPARTING_ORIGIN
+                || phase == JourneyPhase.ARRIVING_DESTINATION) {
+            return poseOnBuildingAccess(vehicle, network, phase);
+        }
+        if (isStationaryAtBuilding(vehicle, phase)) {
+            return poseAtCurrentBuilding(vehicle, network);
+        }
+
         Road occupiedRoad = vehicle.getOccupiedRoadId() == null
                 ? null
                 : network.getRoad(vehicle.getOccupiedRoadId());
         return occupiedRoad == null
                 ? poseInJunction(vehicle, network)
                 : poseOnRoad(vehicle, network, occupiedRoad);
+    }
+
+    /** Resolves the authoritative low-speed link between a building and its access node. */
+    private Optional<VehiclePose> poseOnBuildingAccess(
+            Vehicle vehicle,
+            RoadNetwork network,
+            JourneyPhase phase) {
+        var buildingPlace = phase == JourneyPhase.DEPARTING_ORIGIN
+                ? vehicle.getOriginResolvedPlace()
+                : vehicle.getDestinationResolvedPlace();
+        if (buildingPlace == null
+                || buildingPlace.kind() != PlaceKind.BUILDING) {
+            return Optional.empty();
+        }
+        GeoPoint buildingCentre = buildingCentreOf(buildingPlace, network);
+        GeoPoint access = geoPointOf(
+                network.getIntersection(buildingPlace.accessIntersectionId()));
+        if (buildingCentre == null || access == null) {
+            return Optional.empty();
+        }
+
+        GeoPoint from = phase == JourneyPhase.DEPARTING_ORIGIN
+                ? buildingCentre : access;
+        GeoPoint to = phase == JourneyPhase.DEPARTING_ORIGIN
+                ? access : buildingCentre;
+        List<GeoPoint> link = List.of(from, to);
+        double progress = vehicle.getAccessLinkProgress();
+        GeoPoint position = PolylineGeometry.pointAt(link, progress);
+        if (position == null) return Optional.empty();
+        return Optional.of(new VehiclePose(
+                position,
+                PolylineGeometry.bearingAt(link, progress),
+                vehicle.getLength(),
+                vehicle.getWidth(),
+                null,
+                0,
+                0.0,
+                false));
+    }
+
+    /**
+     * A vehicle that has completed its arrival link stays at the building while
+     * it dwells or waits for final-arrival retention. Falling through to the
+     * junction queue would move it back to the stop line it already left.
+     */
+    private Optional<VehiclePose> poseAtCurrentBuilding(
+            Vehicle vehicle,
+            RoadNetwork network) {
+        ResolvedPlace place = vehicle.getCurrentResolvedPlace();
+        GeoPoint buildingCentre = buildingCentreOf(place, network);
+        if (buildingCentre == null) {
+            return Optional.empty();
+        }
+        GeoPoint access = geoPointOf(
+                network.getIntersection(place.accessIntersectionId()));
+        double heading = access != null
+                && PolylineGeometry.lengthMetres(List.of(access, buildingCentre)) > 0.01
+                ? PolylineGeometry.bearingAt(List.of(access, buildingCentre), 1.0)
+                : headingAtJunction(vehicle, network);
+        return Optional.of(new VehiclePose(
+                buildingCentre,
+                heading,
+                vehicle.getLength(),
+                vehicle.getWidth(),
+                null,
+                0,
+                0.0,
+                false));
+    }
+
+    private static boolean isStationaryAtBuilding(
+            Vehicle vehicle,
+            JourneyPhase phase) {
+        ResolvedPlace current = vehicle.getCurrentResolvedPlace();
+        return (phase == JourneyPhase.DWELLING || phase == JourneyPhase.ARRIVED)
+                && current != null
+                && current.kind() == PlaceKind.BUILDING;
+    }
+
+    private static GeoPoint buildingCentreOf(
+            ResolvedPlace place,
+            RoadNetwork network) {
+        if (place == null || place.kind() != PlaceKind.BUILDING) {
+            return null;
+        }
+        var building = network.getBuilding(place.id());
+        return building == null
+                || building.getLatitude() == null
+                || building.getLongitude() == null
+                ? null
+                : new GeoPoint(building.getLatitude(), building.getLongitude());
     }
 
     private Optional<VehiclePose> poseOnRoad(Vehicle vehicle, RoadNetwork network, Road road) {
@@ -82,8 +185,10 @@ public final class VehiclePoseResolver {
         // that entering a road puts the vehicle at the junction's far edge
         // rather than on its centre, and the turning curve it just followed
         // ends where the vehicle now is.
-        double fraction = new RoadExtent(network, roadLayout)
+        double frontBumperFraction = new RoadExtent(network, roadLayout)
                 .drivableFraction(road, vehicle.getRoadProgress());
+        double fraction = centreFractionBehindFront(
+                shape, frontBumperFraction, vehicle.getLength());
         GeoPoint position = PolylineGeometry.pointAt(shape, fraction);
         if (position == null) {
             return Optional.empty();
@@ -120,10 +225,10 @@ public final class VehiclePoseResolver {
      * junction gets the same coordinate, so a scenario that starts ten vehicles
      * at one node opens with ten bodies in a single heap.</p>
      *
-     * <p>So it is put on tarmac instead: at the exit of the road it arrived on —
-     * which is where the stop line is — or, before its first move, at the entry
-     * of the road it is about to take. Both carry the vehicle's lane and its
-     * side of the street, so it lines up with the queue it belongs to.</p>
+     * <p>So a vehicle that has travelled is put at the exit of the road it
+     * arrived on, which is where the stop line is. A newly spawned building or
+     * boundary trip is instead put at its resolved off-network source; it does
+     * not occupy tarmac until junction control admits it to the first road.</p>
      */
     private Optional<VehiclePose> poseInJunction(Vehicle vehicle, RoadNetwork network) {
         Road arrivedOn = routeRoadAt(vehicle, network, vehicle.getNextRouteStepIndex() - 1);
@@ -131,14 +236,7 @@ public final class VehiclePoseResolver {
             return approachPose(vehicle, network, arrivedOn, stopLineFraction(arrivedOn, network));
         }
 
-        // A vehicle that has not moved off yet holds no road, and the simulation
-        // means that literally: it is absent from the road's occupancy, so
-        // car-following cannot see it and the collision test skips it. Drawing
-        // it on the tarmac anyway made the picture lie twice over — traffic
-        // drove straight through it, and when it finally entered at progress
-        // zero it jumped backwards to the start of the road it was already
-        // standing on. It is left out until it is really on a road.
-        return Optional.empty();
+        return departurePose(vehicle, network);
     }
 
     /**
@@ -192,6 +290,12 @@ public final class VehiclePoseResolver {
      * {@link #poseInJunction}.</p>
      */
     private Approach approachOf(Vehicle vehicle, RoadNetwork network) {
+        JourneyPhase phase = vehicle.getJourneyPhase();
+        if (phase == JourneyPhase.DEPARTING_ORIGIN
+                || phase == JourneyPhase.ARRIVING_DESTINATION
+                || isStationaryAtBuilding(vehicle, phase)) {
+            return null;
+        }
         if (vehicle.getOccupiedRoadId() != null
                 && network.getRoad(vehicle.getOccupiedRoadId()) != null) {
             return null;
@@ -225,8 +329,17 @@ public final class VehiclePoseResolver {
             Vehicle vehicle, RoadNetwork network, Road road, double fraction, double queuedMetres) {
         List<GeoPoint> shape = shapeOf(road, network);
         double lengthMetres = PolylineGeometry.lengthMetres(shape);
-        if (lengthMetres > 0 && queuedMetres > 0) {
-            fraction = Math.max(0.0, fraction - Math.min(queuedMetres / lengthMetres, 1.0));
+        if (lengthMetres > 0) {
+            // Longitudinal progress is the front-bumper position throughout the
+            // microscopic model (leader gaps subtract the leader's full
+            // length). A pose is the vehicle centre, so the first vehicle's
+            // centre must be half a body behind the stop line. Without this
+            // conversion every sprite visibly overran a red light by half its
+            // length even though its authoritative front bumper had stopped.
+            double behindFrontMetres = queuedMetres + vehicle.getLength() / 2.0;
+            fraction = Math.max(
+                    0.0,
+                    fraction - Math.min(behindFrontMetres / lengthMetres, 1.0));
         }
         GeoPoint position = PolylineGeometry.pointAt(shape, fraction);
         if (position == null) {
@@ -247,6 +360,64 @@ public final class VehiclePoseResolver {
                 laneIndex,
                 lateralOffset,
                 true));
+    }
+
+    /**
+     * Gives an off-network demand source a real first pose.
+     *
+     * <p>A building-origin vehicle starts at the building centre and a boundary
+     * vehicle starts at its boundary access node. Neither pose occupies a road,
+     * so it remains absent from lane occupancy and cannot block traffic. The
+     * journey phase and resolved access id published with the frame let a
+     * renderer animate the short driveway/boundary-entry segment before the
+     * first authoritative road pose.</p>
+     */
+    private Optional<VehiclePose> departurePose(Vehicle vehicle, RoadNetwork network) {
+        var origin = vehicle.getOriginResolvedPlace();
+        if (origin == null || vehicle.getNextRouteStepIndex() != 0) {
+            return Optional.empty();
+        }
+
+        GeoPoint access = geoPointOf(network.getIntersection(origin.accessIntersectionId()));
+        GeoPoint position = switch (origin.kind()) {
+            case BUILDING -> vehicle.getAccessLinkProgress() >= 1.0 - 1e-9
+                    ? access
+                    : buildingCentreOf(origin, network);
+            case BOUNDARY -> geoPointOf(network.getIntersection(origin.accessIntersectionId()));
+            default -> null;
+        };
+        if (position == null) {
+            return Optional.empty();
+        }
+
+        double heading = access != null
+                && PolylineGeometry.lengthMetres(List.of(position, access)) > 0.01
+                ? PolylineGeometry.bearingAt(List.of(position, access), 0.0)
+                : headingAtJunction(vehicle, network);
+        return Optional.of(new VehiclePose(
+                position,
+                heading,
+                vehicle.getLength(),
+                vehicle.getWidth(),
+                null,
+                0,
+                0.0,
+                false));
+    }
+
+    /** Converts a front-bumper fraction to the centre point a sprite represents. */
+    private static double centreFractionBehindFront(
+            List<GeoPoint> shape,
+            double frontBumperFraction,
+            double vehicleLengthMetres) {
+        double lengthMetres = PolylineGeometry.lengthMetres(shape);
+        if (lengthMetres <= 0.0) {
+            return frontBumperFraction;
+        }
+        return Math.max(
+                0.0,
+                frontBumperFraction - Math.min(
+                        vehicleLengthMetres / (2.0 * lengthMetres), 1.0));
     }
 
     /**

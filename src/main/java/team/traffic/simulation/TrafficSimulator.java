@@ -4,6 +4,7 @@ import java.util.UUID;
 import team.traffic.domain.demand.DemandScenario;
 import team.traffic.domain.demand.GravityDemandModel;
 import team.traffic.domain.demand.TripDemandModel;
+import team.traffic.domain.demand.TripPlan;
 import team.traffic.domain.event.AccidentEvent;
 import team.traffic.domain.event.CongestionEvent;
 import team.traffic.domain.event.RoadClosureEvent;
@@ -47,6 +48,8 @@ import team.traffic.domain.vehicle.dynamics.WaitCause;
 
 public class TrafficSimulator {
     public static final double ARRIVED_RETENTION_SECONDS = 5.0;
+    private static final int MAX_INTERMEDIATE_FRAMES_PER_TICK = 3;
+    private static final double FRAME_TIME_EPSILON_SECONDS = 1e-9;
     private RoadNetwork network;
     private final RoutingService routingService;
     private final TrafficEventBus eventBus;
@@ -228,7 +231,7 @@ public class TrafficSimulator {
                 ? null
                 : new DemandDrivenSpawner(demandModel, network, routingService, vehicleFactory);
         spawnDemandThrough(0);
-        advancePlannedVehicleLifecycles(0);
+        advanceVehicleLifecycles(0);
         this.status = SimulationStatus.READY;
         this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
         this.flowRecorder.reset();
@@ -275,7 +278,7 @@ public class TrafficSimulator {
                 ? null
                 : new DemandDrivenSpawner(demandModel, network, routingService, vehicleFactory);
         spawnDemandThrough(0);
-        advancePlannedVehicleLifecycles(0);
+        advanceVehicleLifecycles(0);
         this.status = SimulationStatus.READY;
         this.vehicleTraceStore.reset(clock.getCurrentTick(), vehicles);
         this.flowRecorder.reset();
@@ -283,16 +286,38 @@ public class TrafficSimulator {
     }
 
     public synchronized void advanceTick() {
-        advancePlannedVehicleLifecycles(clock.getElapsedSeconds());
+        advanceVehicleLifecycles(clock.getElapsedSeconds());
         spawnDemandThrough(clock.getElapsedSeconds());
         removeExpiredArrivals();
+        double tickStartSeconds = clock.getElapsedSeconds();
+        double tickEndSeconds = tickStartSeconds + simulationSecondsPerTick;
+        double intermediateSpacingSeconds = simulationSecondsPerTick
+                / (MAX_INTERMEDIATE_FRAMES_PER_TICK + 1.0);
+        double[] lastIntermediateSeconds = {tickStartSeconds};
         tickProcessor.process(clock.getCurrentTick(), clock.getElapsedSeconds(),
                 network, vehicles, events, signals, simulationSecondsPerTick,
-                elapsedSeconds -> frameHistory.record(
-                        clock.getCurrentTick(), elapsedSeconds, status,
-                        network, vehicles, events, signals));
+                (elapsedSeconds, boundaryKind) -> {
+                    // The final post-lifecycle state is recorded once below.
+                    // For large overview ticks, retaining every one-second
+                    // physics sub-step copied the whole 730-road scene dozens
+                    // of times per scheduler callback. Keep at most three
+                    // intermediate replay points while preserving small-step
+                    // physical-view detail.
+                    boolean sampledPhysics = boundaryKind
+                            == TickProcessor.FrameBoundaryKind.PHYSICS_SUBSTEP;
+                    if (sampledPhysics
+                            && (elapsedSeconds >= tickEndSeconds - FRAME_TIME_EPSILON_SECONDS
+                            || elapsedSeconds - lastIntermediateSeconds[0]
+                            < intermediateSpacingSeconds - FRAME_TIME_EPSILON_SECONDS)) {
+                        return;
+                    }
+                    frameHistory.record(
+                            clock.getCurrentTick(), elapsedSeconds, status,
+                            network, vehicles, events, signals);
+                    lastIntermediateSeconds[0] = elapsedSeconds;
+                });
         clock.tick(simulationSecondsPerTick);
-        advancePlannedVehicleLifecycles(clock.getElapsedSeconds());
+        advanceVehicleLifecycles(clock.getElapsedSeconds());
         spawnDemandThrough(clock.getElapsedSeconds());
         vehicleTraceStore.record(clock.getCurrentTick(), vehicles);
         flowRecorder.record(clock.getCurrentTick(), clock.getElapsedSeconds(), network, vehicles);
@@ -463,11 +488,16 @@ public class TrafficSimulator {
                 configureDefaultBusStops(bus);
             }
             vehicles.add(vehicle);
+            vehicle.updateTripPlanLifecycle(clock.getElapsedSeconds(), network, routingService);
             recordCurrentFrame();
         }
     }
 
     public synchronized boolean removeVehicle(String vehicleId) {
+        return removeVehicleInternal(vehicleId, true);
+    }
+
+    private boolean removeVehicleInternal(String vehicleId, boolean recordFrame) {
         Vehicle vehicle = vehicles.stream()
                 .filter(candidate -> candidate.getId().equals(vehicleId))
                 .findFirst()
@@ -492,7 +522,7 @@ public class TrafficSimulator {
                 (cause, seconds) -> completedWaitingSecondsByCause.merge(
                         cause, seconds, Double::sum));
         boolean removed = vehicles.remove(vehicle);
-        if (removed) recordCurrentFrame();
+        if (removed && recordFrame) recordCurrentFrame();
         return removed;
     }
 
@@ -534,9 +564,8 @@ public class TrafficSimulator {
         }
     }
 
-    private void advancePlannedVehicleLifecycles(double elapsedSeconds) {
+    private void advanceVehicleLifecycles(double elapsedSeconds) {
         for (Vehicle vehicle : vehicles) {
-            if (vehicle.getTripPlan() == null) continue;
             boolean completed = vehicle.updateTripPlanLifecycle(elapsedSeconds, network, routingService);
             if (!completed) {
                 arrivedAtSeconds.remove(vehicle.getId());
@@ -552,6 +581,7 @@ public class TrafficSimulator {
             }
             if (vehicle instanceof Bus bus) configureDefaultBusStops(bus);
             vehicles.add(vehicle);
+            vehicle.updateTripPlanLifecycle(elapsedSeconds, network, routingService);
         }
     }
 
@@ -559,12 +589,20 @@ public class TrafficSimulator {
         return demandSpawner == null ? DemandRunStatistics.empty() : demandSpawner.statistics();
     }
 
+    /** The immutable pre-resolved demand schedule for audit and presentation. */
+    public synchronized List<TripPlan> getDemandPlans() {
+        return demandModel == null ? List.of() : demandModel.allPlans();
+    }
+
     private void removeExpiredArrivals() {
         List<String> expired = arrivedAtSeconds.entrySet().stream()
                 .filter(entry -> clock.getElapsedSeconds() - entry.getValue() >= ARRIVED_RETENTION_SECONDS)
                 .map(Map.Entry::getKey)
                 .toList();
-        expired.forEach(this::removeVehicle);
+        // advanceTick records one final authoritative frame after this batch.
+        // Recording a complete network frame per expired vehicle produced a
+        // large arrival-wave spike and every frame had the same timestamp.
+        expired.forEach(vehicleId -> removeVehicleInternal(vehicleId, false));
     }
 
     private void resetFrameHistory() {

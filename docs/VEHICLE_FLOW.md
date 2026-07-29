@@ -10,10 +10,10 @@ step in more depth.
 ## The whole path
 
 ```text
-created ──> routed ──> waiting at a junction ──> on a road ──> arrived ──> gone
-              ▲                │                     │
-              └── rerouted ────┴─────────────────────┘
-                  (an event blocked the way ahead)
+building ──> access link ──> routed/queued ──> on roads ──> access link ──> stop
+                                 ▲               │                         │
+                                 └── rerouted ───┘          dwell/next leg ┘
+                                     (live conditions)
 ```
 
 ## 1. Creation
@@ -29,9 +29,10 @@ or a due generated plan.
 | `DemandDrivenSpawner` | one resolved, due, possibly multi-leg `TripPlan` |
 
 The second resolves each building to the junction its access point names, picks
-the pair of access points with the cheapest route between them, and creates the
-vehicle there. It existed for some time before the map had any buildings for it
-to use.
+the pair of access points with the cheapest directed route, and creates the
+vehicle at the origin building. It does not place the body midway along a road.
+The Fleet UI lists human-readable building/street labels and the random control
+prefers a residential origin with a reachable, different-access destination.
 
 A vehicle is born with a `VehicleProfile` (length, width, top speed,
 acceleration) fixed by its type, and a `DriverProfile` varied deterministically
@@ -90,10 +91,13 @@ would drift back and forth over the line forever.
 Who blocks whom is decided by **lateral overlap**, not by a shared lane index.
 That is what lets a motorcycle ride the gap between two lanes.
 
-**Position convention, worth knowing.** `roadProgress` marks the vehicle's
-**front bumper**, and following gaps are measured from it. Anything drawing a
-vehicle body must set it back half its length, or half a car hangs over every
-stop line.
+**Position convention, worth knowing.** Dynamics `roadProgress` marks the
+vehicle's **front bumper**, and following/stop gaps are measured from it.
+`VehiclePoseResolver` converts that value to a **body-centre**
+latitude/longitude exactly once. Physical-view `x`/`y` are projected from that
+body centre, so the frontend must use them directly and must not apply another
+half-length setback. This single conversion keeps the entire body behind the
+painted stop line.
 
 ## 5. Junctions
 
@@ -102,11 +106,29 @@ grants crossings by right-of-way, priority level (an emergency vehicle outranks
 ordinary traffic), and — where a junction is signalled — whether its arm is
 green on this frame.
 
+On red, the dynamics cap the **front-bumper** progress at the incoming road's
+painted stop line. Pose resolution then places the body centre half a vehicle
+length behind that front, so neither the sprite nor the physical vehicle crosses
+the line while waiting.
+
 A vehicle may only leave a road when the next road has room. Without that check a
 junction would swallow traffic that has nowhere to go, and the queue would never
 back up. Spillback is a consequence of this rule, not a separate feature.
 
-## 6. Arrival and removal
+## 6. Building links, arrival, and removal
+
+For a resolved building trip the backend owns two off-road phases:
+
+```text
+DEPARTING_ORIGIN:      building centre → selected access node
+ARRIVING_DESTINATION: selected access node → building centre
+```
+
+They advance at 15 km/h using the access distance stored in the map. Time and
+distance count toward the same trip record, but the vehicle occupies no road
+while on a building link. A dwell/return plan uses the just-reached building as
+the next leg's origin, so it visibly leaves that building again instead of
+popping onto a road.
 
 On reaching its destination a vehicle becomes `ARRIVED`, releases its road, and
 stays visible for `ARRIVED_RETENTION_SECONDS` (5 s) before being removed — long
@@ -149,8 +171,15 @@ derived from the start offset and frame elapsed seconds.
 demand model may schedule **departures**. It does not stop the simulator.
 Travel, dwell and a return leg may finish after that horizon.
 
-The bundled scenario starts at 06:00 and has an 18-hour departure horizon, so
-generated departure scheduling ends at midnight.
+The bundled scenario starts at 06:00 and has a 24-hour departure horizon, so it
+covers every clock hour once and generated departure scheduling ends at 06:00
+on simulation day `D+1`.
+
+The top-bar clock comes from the authoritative live or selected historical
+frame. The **24-hour demand** panel is backed by
+`GET /api/simulation/demand/schedule`: it shows exact plan departures and named
+places, while leg arrival, next-departure, and return clocks are clearly marked
+as directed free-flow estimates rather than runtime observations.
 
 ### Plan lifecycle
 
@@ -186,7 +215,7 @@ Boundary roles are directional:
 The check is structural topology. A closure or capacity constraint that occurs
 during simulation remains a normal routing, retry and rerouting concern.
 
-The bundled scenario has 216 generated plans and 0 structural generation
+The bundled scenario has 156 generated plans and 0 structural generation
 failures for its committed seed and map.
 
 ### Initialization and phantom occupancy
@@ -212,7 +241,7 @@ Generated demand is declared with top-level `demandSources`; there is no nested
 ```jsonc
 {
   "startTimeOfDay": "06:00",
-  "durationHours": 18,
+  "durationHours": 24,
   "seed": 20260728,
   "scale": 0.015,
   "zones": [ /* named building/intersection groups */ ],
@@ -229,15 +258,20 @@ For `district1_typical_day.json`, the deterministic snapshot is:
 
 | Output | Count |
 |---|---:|
-| Generated plans | 216 |
+| Generated plans | 156 |
 | Structural generation failures | 0 |
-| Generated motorcycles | 184 |
-| Generated cars | 32 |
-| Scripted vehicles at `t = 0` | 4 |
+| Generated motorcycles | 142 |
+| Generated cars | 14 |
+| Scripted vehicles at `t = 0` | 0 |
 
-The first generated plan departs at 272.10 simulated seconds. The four scripted
-vehicles are deliberate warm starts so the physical demo is active immediately;
-they are excluded from the generated-demand counts.
+Purpose counts are `BUSINESS_OUTBOUND_PROXY` 1, `INBOUND_WORK` 56,
+`PRIVATE_INTERNAL` 13, `PRIVATE_OUTBOUND_PROXY` 12,
+`SCHOOL_OUTBOUND_ESCORT_PROXY` 6, `THROUGH` 21, `VISITOR` 31,
+`WORK_INTERNAL` 6, and `WORK_OUTBOUND_PROXY` 10. Configured flows absent from
+this table round to zero plans for this seed/scale.
+
+The first generated plan departs 68.79 seconds after the 06:00 start. There is no
+scripted warm-start traffic, so every vehicle is traceable to the schedule.
 
 Those values are deterministic model output, not observed traffic in the former
 District 1 study window.

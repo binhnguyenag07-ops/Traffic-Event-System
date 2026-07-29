@@ -1,6 +1,6 @@
 {
   "status": "ASSUMPTION",
-  "note": "Placeholder relative-demand inputs derived from no cited local survey. Replace these values during calibration; do not present generated counts as observed Ho Chi Minh City traffic.",
+  "note": "Research-informed proxy catalog, not a calibrated District 1 count. The named HOUTRANS curve is digitized from a historical JICA figure; all other rates, building factors and purpose-specific curves remain explicit scenario assumptions. See docs/DISTRICT1_SCENARIO.md.",
   "distanceDecayBeta": 0.35,
   "buildingTypes": {
     "RESIDENTIAL": {
@@ -87,6 +87,12 @@
       0.020, 0.030, 0.050, 0.090, 0.090, 0.090,
       0.090, 0.090, 0.090, 0.090, 0.090, 0.050,
       0.040, 0.025, 0.015, 0.010, 0.005, 0.005
+    ],
+    "HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY": [
+      0.000788, 0.000788, 0.001050, 0.001576, 0.007878, 0.036765,
+      0.128676, 0.097689, 0.051471, 0.036765, 0.048319, 0.066176,
+      0.042017, 0.033088, 0.034664, 0.029937, 0.073004, 0.081933,
+      0.057248, 0.067227, 0.044643, 0.039391, 0.016282, 0.002625
     ],
     "FLAT": [
       0.0416666667, 0.0416666667, 0.0416666667, 0.0416666667,

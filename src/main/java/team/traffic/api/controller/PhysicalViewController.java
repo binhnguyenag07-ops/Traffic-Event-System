@@ -161,7 +161,14 @@ public class PhysicalViewController {
                 vehicle.roadProgress(),
                 vehicle.inJunction(),
                 vehicle.junctionFromRoadId(),
-                vehicle.junctionToRoadId());
+                vehicle.junctionToRoadId(),
+                vehicle.journeyPhase(),
+                vehicle.originPlaceKind(),
+                vehicle.originPlaceId(),
+                vehicle.originAccessIntersectionId(),
+                vehicle.destinationPlaceKind(),
+                vehicle.destinationPlaceId(),
+                vehicle.destinationAccessIntersectionId());
     }
 
     private static Double parse(Context ctx, String name) {

@@ -1,5 +1,6 @@
 package team.traffic.simulation.trace;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,16 +13,26 @@ import team.traffic.domain.vehicle.dynamics.RoadLayout;
 
 /** Captures density, speed and flow without mutating the simulation. */
 public final class FlowRecorder {
+    public static final int DEFAULT_RETENTION_LIMIT = 100_000;
     private final RoadLayout roadLayout;
-    private final List<RoadFlowSample> samples = new ArrayList<>();
+    private final int retentionLimit;
+    private final ArrayDeque<RoadFlowSample> samples = new ArrayDeque<>();
 
     public FlowRecorder() {
-        this(new RoadDataRoadLayout());
+        this(new RoadDataRoadLayout(), DEFAULT_RETENTION_LIMIT);
     }
 
     public FlowRecorder(RoadLayout roadLayout) {
+        this(roadLayout, DEFAULT_RETENTION_LIMIT);
+    }
+
+    public FlowRecorder(RoadLayout roadLayout, int retentionLimit) {
         if (roadLayout == null) throw new IllegalArgumentException("Road layout is required.");
+        if (retentionLimit < 1) {
+            throw new IllegalArgumentException("Flow retention limit must be positive.");
+        }
         this.roadLayout = roadLayout;
+        this.retentionLimit = retentionLimit;
     }
 
     public void reset() {
@@ -45,7 +56,9 @@ public final class FlowRecorder {
             double laneKilometres = road.getDistance() * roadLayout.laneCountOf(road);
             double density = onRoad.size() / laneKilometres;
             double flow = density * meanSpeed * 3.6;
-            samples.add(new RoadFlowSample(roadId, tick, elapsedSeconds, onRoad.size(), meanSpeed, density, flow));
+            samples.addLast(new RoadFlowSample(
+                    roadId, tick, elapsedSeconds, onRoad.size(), meanSpeed, density, flow));
+            while (samples.size() > retentionLimit) samples.removeFirst();
         });
     }
 

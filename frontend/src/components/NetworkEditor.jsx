@@ -1,4 +1,5 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
+import { intersectionLabel, roadLabel } from '../displayLabels'
 
 const LOCATION_TYPES = ['NORMAL', 'COMMERCIAL', 'RESIDENTIAL', 'SCHOOL', 'HOSPITAL', 'BAR']
 const ROAD_STATUSES = ['OPEN', 'CONGESTED', 'BLOCKED', 'CLOSED']
@@ -33,6 +34,18 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
   const editable = status !== 'RUNNING'
   const selectedRoad = selected?.kind === 'road' ? selected.data : null
   const selectedIntersection = selected?.kind === 'intersection' ? selected.data : null
+  const intersectionById = useMemo(
+    () => new Map(intersections.map((intersection) => [intersection.id, intersection])),
+    [intersections],
+  )
+  const intersectionOptions = useMemo(
+    () => intersections.map((intersection) => (
+      <option key={intersection.id} value={intersection.id}>
+        {intersectionLabel(intersection)}
+      </option>
+    )),
+    [intersections],
+  )
 
   useEffect(() => {
     if (!selectedRoad) return
@@ -148,9 +161,9 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
             placeholder="Display name (optional)" /></Field>
           <div className="two-fields">
             <Field label="From"><select value={roadStart} onChange={(event) => setRoadStart(event.target.value)}>
-              <option value="">Choose</option>{intersections.map((item) => <option key={item.id}>{item.id}</option>)}</select></Field>
+              <option value="">Choose junction</option>{intersectionOptions}</select></Field>
             <Field label="To"><select value={roadEnd} onChange={(event) => setRoadEnd(event.target.value)}>
-              <option value="">Choose</option>{intersections.map((item) => <option key={item.id}>{item.id}</option>)}</select></Field>
+              <option value="">Choose junction</option>{intersectionOptions}</select></Field>
           </div>
           <div className="two-fields">
             <Field label="Speed km/h"><input type="number" min="1" value={speedLimit} onChange={(event) => setSpeedLimit(event.target.value)} /></Field>
@@ -174,18 +187,16 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
         <div className="editor-group">
           <div className="editor-group-title"><strong>Connected roads</strong><span>Incoming and outgoing</span></div>
           <div className="inline-search"><select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>
-            <option value="">Choose junction</option>{intersections.map((item) => (
-              <option key={item.id} value={item.id}>{item.id} · {item.name}</option>
-            ))}</select>
+            <option value="">Choose junction</option>{intersectionOptions}</select>
             <button disabled={!connectionId || busy} onClick={() => searchConnections()}>Show</button></div>
           {(connections.incoming.length || connections.outgoing.length) ? <div className="connection-results">
-            <span>IN {connections.incoming.map((road) => road.id).join(', ') || '—'}</span>
-            <span>OUT {connections.outgoing.map((road) => road.id).join(', ') || '—'}</span>
+            <span>IN {connections.incoming.map((road) => roadLabel(road, intersectionById)).join(', ') || '—'}</span>
+            <span>OUT {connections.outgoing.map((road) => roadLabel(road, intersectionById)).join(', ') || '—'}</span>
           </div> : null}
         </div>
 
         {selectedRoad ? <div className="editor-group selected-editor">
-          <div className="editor-group-title"><strong>Edit {selectedRoad.id}</strong><span>Condition and removal</span></div>
+          <div className="editor-group-title"><strong>Edit {selectedRoad.name || 'unnamed road'}</strong><span>Condition and removal</span></div>
           <div className="two-fields">
             <Field label="Status"><select value={conditionStatus} onChange={(event) => setConditionStatus(event.target.value)}>
               {ROAD_STATUSES.map((item) => <option key={item}>{item}</option>)}</select></Field>
@@ -207,7 +218,7 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
         </div> : null}
 
         {selectedIntersection ? <div className="editor-group selected-editor">
-          <div className="editor-group-title"><strong>{selectedIntersection.id}</strong><span>{selectedIntersection.name}</span></div>
+          <div className="editor-group-title"><strong>{intersectionLabel(selectedIntersection)}</strong><span>Selected junction</span></div>
           <div className="action-row"><button onClick={() => searchConnections(selectedIntersection.id)}>Show connections</button>
             <button className="danger-action" disabled={!editable || busy}
               onClick={async () => {

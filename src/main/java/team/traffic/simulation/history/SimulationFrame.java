@@ -12,8 +12,10 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.signal.SignalPhase;
 import team.traffic.domain.signal.TrafficSignal;
 import team.traffic.domain.vehicle.Vehicle;
+import team.traffic.domain.vehicle.JourneyPhase;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.demand.PlaceKind;
 import team.traffic.domain.vehicle.pose.VehiclePose;
 import team.traffic.domain.vehicle.pose.VehiclePoseResolver;
 import team.traffic.domain.vehicle.dynamics.WaitCause;
@@ -88,6 +90,13 @@ public record SimulationFrame(
             String id,
             VehicleType type,
             VehicleStatus status,
+            JourneyPhase journeyPhase,
+            PlaceKind originPlaceKind,
+            String originPlaceId,
+            String originAccessIntersectionId,
+            PlaceKind destinationPlaceKind,
+            String destinationPlaceId,
+            String destinationAccessIntersectionId,
             String currentIntersectionId,
             String destinationIntersectionId,
             String occupiedRoadId,
@@ -128,6 +137,13 @@ public record SimulationFrame(
                     vehicle.getId(),
                     vehicle.getType(),
                     vehicle.getStatus(),
+                    vehicle.getJourneyPhase(),
+                    vehicle.getOriginResolvedPlace().kind(),
+                    vehicle.getOriginResolvedPlace().id(),
+                    vehicle.getOriginResolvedPlace().accessIntersectionId(),
+                    vehicle.getDestinationResolvedPlace().kind(),
+                    vehicle.getDestinationResolvedPlace().id(),
+                    vehicle.getDestinationResolvedPlace().accessIntersectionId(),
                     vehicle.getCurrentIntersectionId(),
                     vehicle.getDestinationIntersectionId(),
                     vehicle.getOccupiedRoadId(),

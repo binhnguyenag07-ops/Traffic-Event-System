@@ -2,6 +2,7 @@ package team.traffic.service.impl;
 
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.demand.DemandScenario;
+import team.traffic.domain.demand.TripPlan;
 import team.traffic.domain.statistics.CompletedTrip;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.service.SimulationService;
@@ -179,6 +180,11 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
     @Override
     public DemandRunStatistics getDemandRunStatistics() {
         return simulator.getDemandRunStatistics();
+    }
+
+    @Override
+    public List<TripPlan> getDemandPlans() {
+        return simulator.getDemandPlans();
     }
 
     @Override

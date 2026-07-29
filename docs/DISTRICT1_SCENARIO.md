@@ -1,4 +1,4 @@
-# Synthetic weekday in the former District 1 study window
+# 24-hour weekday proxy in the former District 1 study window
 
 This is the evidence and reproducibility note for
 `data/scenarios/district1_typical_day.json`.
@@ -9,7 +9,7 @@ observed typical day or a forecast. “Typical” remains in the historical
 filename for compatibility; the reader-facing scenario name is:
 
 ```text
-Central District 1 - Synthetic Weekday
+Central District 1 - 24-hour Weekday Proxy
 ```
 
 ## Administrative-name note
@@ -37,8 +37,8 @@ context rather than demand evidence.
 
 | Label | Meaning |
 |---|---|
-| **DATASET FACT** | Directly measured from the committed map/scenario or produced by its deterministic regression test. It is a fact about this artifact, not automatically about the former District 1 area. |
-| **CITY-LEVEL PROXY** | Ho Chi Minh City-wide or historical transport evidence used only to motivate a plausible scenario shape. It is not a study-window count, OD matrix or modal calibration. |
+| **VERIFIED FACT** | Directly measured from the committed map/scenario or its deterministic regression test, or stated by the cited official source. The sentence must state whether its scope is this artifact, Ho Chi Minh City, or another source population. |
+| **RESEARCH-INFORMED PROXY** | Official Ho Chi Minh City-wide or historical transport evidence used only to motivate a plausible ratio, shape, or order of magnitude. It is not a study-window count, OD matrix, or vehicle-flow calibration. |
 | **SYNTHETIC ASSUMPTION** | An authored input without matching local observational evidence in this project. |
 
 The former District 1 area and role cited below are external scope/context
@@ -46,7 +46,7 @@ references, not demand calibration inputs.
 
 ## Geographic scope
 
-**DATASET FACT.** `tools/generate_osm_map.py` uses:
+**VERIFIED FACT (committed generator).** `tools/generate_osm_map.py` uses:
 
 ```text
 south  10.7685
@@ -84,9 +84,39 @@ The map also is not a census:
 | `HOSPITAL` | 17 |
 | `PARKING` | 2 |
 
-**DATASET FACT.** The OSM snapshot date is not embedded, and 76.2% of mapped
+**VERIFIED FACT (committed map).** The OSM snapshot date is not embedded, and 76.2% of mapped
 buildings are `OTHER`. Population and attraction derived from these footprints
 are therefore relative model inputs, not census estimates.
+
+### Direction and lane audit
+
+The map's large number of one-way roads is not, by itself, a data error. The
+complete audit compared all 439 source OSM ways with a fresh Overpass response
+and then corrected the committed direction, lane, and name mismatches found.
+
+| **VERIFIED FACT (audited artifact)** | Count |
+|---|---:|
+| Directed `Road` objects | 730 |
+| Physical road segments | 560 |
+| One-way physical segments | 390 (69.6%) |
+| One-way because OSM says `oneway=yes` | 380 |
+| One-way because the OSM way is a roundabout | 10 |
+| One-way segments with at least 3 lanes | 168 |
+| Those with a direct OSM lane tag | 155 |
+| Those using conservative inference/defaults | 13 |
+| Source OSM ways with a remaining direction/lane/name mismatch after fixes | 0 of 439 |
+
+A three-lane one-way road is internally consistent: `lanes=3` is the width
+available in that direction, not evidence of a reverse carriageway. When OSM
+says `lanes=3` and `oneway=no` without `lanes:forward`/`lanes:backward`, the
+generator conservatively creates one lane in each direction rather than
+inventing an asymmetric split.
+
+Eleven audited OSM ways have `oneway=yes` together with
+`oneway:motorcycle=no`. That is an explicitly documented limitation: the domain
+currently has one direction graph for all vehicle types, so adding a reverse
+road would incorrectly allow cars and buses as well. The committed graph keeps
+the general one-way direction until vehicle-specific access rules exist.
 
 ## What external evidence does and does not support
 
@@ -104,44 +134,84 @@ recognizable central corridor network. The notice is event-specific; it is
 
 ### Vehicle mix
 
-**CITY-LEVEL PROXY.** The Ho Chi Minh City Media Center reported in December
-2024 that the city managed more than 9.4 million vehicles, including about
-980,000 cars and more than 8.4 million motorcycles. Among only those two
-registered-stock categories, motorcycles are approximately 89.6%.
+**VERIFIED FACT (citywide registered stock, not study-window flow).** The Ho
+Chi Minh City Media Center reported in December 2024 that the city managed more
+than 9.4 million vehicles, including about 980,000 cars and more than 8.4
+million motorcycles, and that the bus system had roughly 2,200 vehicles.
+Among only the reported motorcycle and car stocks, motorcycles are
+approximately 89.6%.
 
 That is a stock ratio for the whole city, not:
 
 - traffic flow through this study window;
 - a trip-mode share;
 - a classified count for this study window;
-- a reason to set any exact scenario mix.
+- evidence that the scenario's exact vehicle mix was observed in District 1.
 
-**CITY-LEVEL PROXY.** A JBIC/JICA-hosted 1999 research paper described
-motorcycle-and-bicycle modal share above 90% in Hanoi and Ho Chi Minh City. It
-is historical, combines bicycles with motorcycles and predates current
-transport conditions. It supports only the broad statement that two-wheel
-travel has long been important; it cannot calibrate a 2026 scenario.
+**VERIFIED FACT (2013 person trips, not vehicle instances).** JICA's HOUTRANS
+follow-up report gives 2013 Ho Chi Minh City person-trip modal shares of 83.0%
+motorcycle, 5.3% car, and 6.3% bus. These figures count trips by people. A bus
+trip is one passenger trip, not one bus, and car/motorcycle occupancies are not
+converted by this project.
 
-**SYNTHETIC ASSUMPTION.** Every exact `vehicleMix` in the bundled scenario,
-including 65%, 80%, 85% and 90% motorcycle shares, remains authored demo input.
+The citywide stock ratio and the HOUTRANS shares are
+**RESEARCH-INFORMED PROXIES** only. In particular, the HOUTRANS 83.0/5.3/6.3
+shares must **not** be copied into `vehicleMix`: that field samples one simulated
+vehicle instance per plan. The random manual test-spawn button uses only the
+8.4-million/980-thousand registered-stock ratio as a transparent motorcycle/car
+proxy and excludes buses because no route, fleet allocation, or headway model
+exists.
+
+The scheduled scenario likewise applies `0.8955 / 0.1045` uniformly as a
+**RESEARCH-INFORMED PROXY**. Uniform application is a modeling assumption; the
+result must not be described as a current District 1 classified count.
 
 ### Volumes and time profiles
 
-No official open hourly cordon count or local household-trip table for this
-former District 1 study window is included in this repository.
+No current official open hourly cordon count or current local household-trip
+table for this former District 1 study window is included in this repository.
+The HOUTRANS tables below are historical evidence, not current calibration.
 
-The following are therefore all **SYNTHETIC ASSUMPTIONS**:
+TCVN 13592:2022 permits a peak-hour volume of 10–15% of daily traffic only as a
+fallback when no study is available. This is useful as a broad
+**RESEARCH-INFORMED PROXY/sanity range**, not a District 1 observation and not a
+24-hour curve. It does not determine the exact hourly weights below.
 
-- 1.8 `tripsPerPersonPerDay` for the resident/mixed-use source;
+Historical HOUTRANS evidence is used more directly, but still only as a proxy.
+Table 1.1.2 is a later JICA report's reproduction of the 2002 HOUTRANS
+trip-rate table:
+
+- Table 1.1.2 supplies a one-motorcycle-household non-home-purpose total of
+  1.84 and work/school/private/business shares
+  `0.3473 / 0.1130 / 0.5033 / 0.0364`;
+- former-District-1 Table 2.1.25 supplies historical internal/outbound splits:
+  work 26/74, school 42/58, private 40/60, and business 29/71;
+- the normalized
+  `HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY` curve digitizes Figures
+  2.1.18–2.1.19 on p. 2-32.
+
+These are **RESEARCH-INFORMED PROXIES**, not current household behavior or
+counts for the committed map. The 1.84 source value is placed into the current
+`tripsPerPersonPerDay` field even though the historical row is more specific;
+the outbound share ends at one of eight synthetic perimeter gateways because
+the network does not contain the true outside destination.
+
+The research-informed inputs are HOUTRANS-derived `1.84`, resident purpose
+shares, historical internal/outbound splits and digitized general curve, plus
+the 2024 registered-stock vehicle ratio. Their use on this map remains proxy
+modeling, not calibration.
+
+The following remain **SYNTHETIC ASSUMPTIONS**:
+
 - 3600 `vehiclesPerDay` at each of two cordons;
-- source flow shares;
+- cordon 20/50/30 flow shares;
 - `scale = 0.015`;
-- all four named hourly curves;
+- purpose-specific `COMMUTE_AM`, `SCHOOL_AM`, and `VISITOR_DAYTIME` curves;
 - building occupancy and attraction parameters;
 - gravity decay `β = 0.35`;
 - dwell ranges;
 - the seven-landmark visitor zone;
-- the four warm-start vehicles.
+- the mapping of perimeter gateways to unmodelled outside destinations.
 
 The top-level `status: "ASSUMPTION"` in
 `data/demand/default_assumptions.json` is deliberate.
@@ -151,17 +221,23 @@ The top-level `status: "ASSUMPTION"` in
 | Field | Value | Classification |
 |---|---:|---|
 | `startTimeOfDay` | 06:00 | SYNTHETIC ASSUMPTION |
-| `durationHours` | 18 | SYNTHETIC ASSUMPTION |
+| `durationHours` | 24 | SYNTHETIC ASSUMPTION |
 | `seed` | 20260728 | reproducibility control |
 | `scale` | 0.015 | SYNTHETIC ASSUMPTION |
 
-`durationHours` is the **departure horizon**, 06:00 to midnight. It does not
-auto-stop the simulation. Vehicles may still be travelling or dwelling after
-the horizon.
+`durationHours` is the **departure horizon**, from 06:00 on day `D` through
+06:00 on day `D+1`. This covers every clock hour exactly once. It does not
+auto-stop the simulator; vehicles may still be travelling, dwelling, or
+returning after the horizon.
+
+The header displays the authoritative simulation clock and day offset. The
+24-hour demand panel shows all exact seeded plan departures by clock hour and
+purpose, with named origin/destination buildings or boundary streets. Its
+arrival, next-departure, and return times are deterministic free-flow estimates;
+signals, queues, closures, and incidents determine actual runtime arrival.
 
 `scale` multiplies generated source-flow plan volume. It does not scale road
-capacity, simulation speed, dwell, travel time or the scripted warm-start
-fleet.
+capacity, simulation speed, dwell, or travel time.
 
 For one source/flow/hour:
 
@@ -190,9 +266,15 @@ The entry and exit intersections are deliberately directional.
 | `north-east-exits` | `N9727223522` Nguyễn Hữu Cảnh; `N11283907795` Lê Duẩn | incoming only |
 | `south-west-exits` | `N370821213` Cầu Khánh Hội; `N6786738898` Cách Mạng Tháng Tám | incoming only |
 
-**DATASET FACT.** Regression tests verify the intended entry-to-opposite-exit
-paths, all entry-to-tourism paths and all tourism-to-exit paths in the directed
-map.
+**VERIFIED FACT (regression-tested artifact).** Regression tests verify the
+intended entry-to-opposite-exit paths, all entry-to-tourism paths and all
+tourism-to-exit paths in the directed map.
+
+`perimeter-gateways` contains eight bidirectionally connected internal graph
+nodes around the study-window edge. They are a **SYNTHETIC ASSUMPTION** that
+lets an outbound resident plan visibly reach the model boundary, dwell as a
+proxy for activity outside the window, then return. They are not observed
+screenline stations or an OD survey.
 
 The `tourism-core` zone contains:
 
@@ -213,21 +295,34 @@ survey.
 
 ## Demand sources and flows
 
-All values in this section are **SYNTHETIC ASSUMPTIONS**.
+This section mixes research-informed proxies with explicit assumptions; the
+classification column is part of the contract.
 
-### Resident and mixed-use source
+### Residential source
 
-Origins are mapped `RESIDENTIAL` and `OTHER` buildings. Production uses
-footprint ground area, not storeys.
+Origins are only the 147 mapped `RESIDENTIAL` buildings. The 885 `OTHER`
+buildings are deliberately excluded rather than silently treated as homes.
+Production uses footprint ground area, no storeys, synthetic occupancy factors,
+and the HOUTRANS-informed 1.84 proxy.
 
-| Flow | Share | Motorcycle / car | Curve | Destination and dwell | Completion |
-|---|---:|---:|---|---|---|
-| `resident-commute` | 0.40 | 0.85 / 0.15 | `COMMUTE_AM` | office/commercial, 8–10 h | return to origin |
-| `resident-school-dropoff` | 0.08 | 0.90 / 0.10 | `SCHOOL_AM` | school, 5–15 min | return to origin |
-| `resident-shopping` | 0.12 | 0.90 / 0.10 | `MIDDAY` | commercial, 20–60 min | return to origin |
-| `resident-medical` | 0.05 | 0.80 / 0.20 | `DAYTIME` | hospital, 30–120 min | return to origin |
+All resident flows use the citywide registered-stock motorcycle/car ratio
+`0.8955 / 0.1045`; this is a **RESEARCH-INFORMED PROXY**, not a traffic mix.
 
-The shares total 0.65; 0.35 of production is intentionally unallocated.
+| Flow | Share | Time curve | Destination and dwell | Share/curve evidence |
+|---|---:|---|---|---|
+| `resident-work-internal` | 0.090298 | `COMMUTE_AM` | office/commercial, 10–11 h, return | HOUTRANS purpose × internal split; curve/dwell synthetic |
+| `resident-work-outbound` | 0.257002 | `COMMUTE_AM` | perimeter gateway, 10–11 h, return | HOUTRANS purpose × outbound split; gateway/curve/dwell synthetic |
+| `resident-school-internal` | 0.047460 | `SCHOOL_AM` | school, 5–15 min, return | HOUTRANS purpose × internal split; curve/dwell synthetic |
+| `resident-school-outbound` | 0.065540 | `SCHOOL_AM` | perimeter gateway, 5–15 min, return | HOUTRANS purpose × outbound split; gateway/curve/dwell synthetic |
+| `resident-private-internal` | 0.201320 | HOUTRANS digitized proxy | commercial/hospital/other, 0.5–3 h, return | HOUTRANS purpose × internal split and historical curve |
+| `resident-private-outbound` | 0.301980 | HOUTRANS digitized proxy | perimeter gateway, 0.5–3 h, return | HOUTRANS purpose × outbound split; gateway/dwell synthetic |
+| `resident-business-internal` | 0.010556 | HOUTRANS digitized proxy | office/commercial, 0.5–2 h, return | HOUTRANS purpose × internal split and historical curve |
+| `resident-business-outbound` | 0.025844 | HOUTRANS digitized proxy | perimeter gateway, 0.5–2 h, return | HOUTRANS purpose × outbound split; gateway/dwell synthetic |
+
+The shares total 1.0. At `scale = 0.015`, seeded stochastic rounding can still
+yield zero plans for a small configured flow; that is why the deterministic
+output table below, rather than the configuration table, is the actual plan
+count.
 
 ### North-east and south-west cordons
 
@@ -236,9 +331,14 @@ before `scale`.
 
 | Flow per cordon | Share | Motorcycle / car | Curve | Chain |
 |---|---:|---:|---|---|
-| through | 0.45 | 0.80 / 0.20 | `DOUBLE_PEAK` | entry → opposite exit |
-| inbound work | 0.35 | 0.80 / 0.20 | `COMMUTE_AM` | entry → office/commercial, dwell 8–10 h → any exit |
-| visitor | 0.20 | 0.65 / 0.35 | `VISITOR_DAYTIME` | entry → tourism core, dwell 1–3 h → any exit |
+| through | 0.20 | 0.8955 / 0.1045 | HOUTRANS digitized proxy | entry → opposite exit |
+| inbound work | 0.50 | 0.8955 / 0.1045 | `COMMUTE_AM` | entry → office/commercial, dwell 8–10 h → any exit |
+| visitor | 0.30 | 0.8955 / 0.1045 | `VISITOR_DAYTIME` | entry → tourism core, dwell 1–3 h → any exit |
+
+The common vehicle ratio is a **RESEARCH-INFORMED PROXY**. Cordon production,
+20/50/30 shares, `COMMUTE_AM`/`VISITOR_DAYTIME`, dwell, and exact gateway/POI
+allocation are **SYNTHETIC ASSUMPTIONS**. The HOUTRANS digitized curve supplies
+only the through-flow time shape; its 0.20 volume share is not observed.
 
 ## Reachability and failure semantics
 
@@ -259,7 +359,7 @@ effects still belong to routing/retry behavior.
 
 ## Legacy road-state reset
 
-**DATASET FACT.** The committed legacy map currently contains 14,117 persisted
+**VERIFIED FACT (committed map).** The committed legacy map currently contains 14,115 persisted
 road vehicle counts, but no matching vehicle objects. Those values previously
 consumed capacity and affected routing as invisible traffic.
 
@@ -279,41 +379,36 @@ traffic by default, so regenerated maps do not reintroduce this state.
 
 For the committed map, parameter catalog, scenario, algorithm and seed:
 
-| Measure | DATASET FACT |
+| Measure | VERIFIED FACT |
 |---|---:|
-| Generated plans scheduled | 216 |
+| Generated plans scheduled | 156 |
 | Structural generation failures | 0 |
-| Generated motorcycles | 184 |
-| Generated cars | 32 |
-| First generated departure | 272.10 s |
-| Scripted warm-start vehicles at `t = 0` | 4 |
+| Generated motorcycles | 142 |
+| Generated cars | 14 |
+| First generated departure | 68.79 s after 06:00 |
+| Scripted warm-start vehicles at `t = 0` | 0 |
 
 Purpose counts:
 
 | Purpose | Plans |
 |---|---:|
-| `COMMUTE` | 74 |
-| `INBOUND_WORK` | 37 |
-| `MEDICAL` | 5 |
-| `SCHOOL_DROPOFF` | 10 |
-| `SHOPPING` | 20 |
-| `THROUGH` | 48 |
-| `VISITOR` | 22 |
+| `BUSINESS_OUTBOUND_PROXY` | 1 |
+| `INBOUND_WORK` | 56 |
+| `PRIVATE_INTERNAL` | 13 |
+| `PRIVATE_OUTBOUND_PROXY` | 12 |
+| `SCHOOL_OUTBOUND_ESCORT_PROXY` | 6 |
+| `THROUGH` | 21 |
+| `VISITOR` | 31 |
+| `WORK_INTERNAL` | 6 |
+| `WORK_OUTBOUND_PROXY` | 10 |
 
-The generated modal result is 85.2% motorcycles (`184 / 216`). It is a seeded
-output of synthetic mixes, not an observed mode share.
+Configured flows absent from the table seeded-stochastically round to zero at
+`scale = 0.015`.
 
-The four scripted vehicles are present immediately:
-
-| Vehicle | Type | Route |
-|---|---|---|
-| `warm-cau-khanh-hoi-to-ben-thanh` | motorcycle | Cầu Khánh Hội → Chợ Bến Thành |
-| `warm-cach-mang-thang-8-to-bitexco` | motorcycle | Cách Mạng Tháng Tám → Bitexco |
-| `warm-nguyen-du-to-saigon-centre` | car | Nguyễn Du → Saigon Centre |
-| `warm-ton-duc-thang-to-opera-house` | motorcycle | Tôn Đức Thắng → Nhà hát Thành phố |
-
-They are a presentation aid and are excluded from the 216 generated plans and
-184/32 split.
+The generated vehicle-instance result is 91.0% motorcycles (`142 / 156`). It is
+a seeded output of the citywide registered-stock proxy, not an observed traffic
+mode share. There is no scripted traffic: every vehicle in the run maps to one
+listed demand plan.
 
 Regression tests intentionally pin these values. A map, parameter, curve,
 selector, random-call-order, reachability or seed change may legitimately
@@ -325,7 +420,7 @@ reviewing the cause.
 This scenario does not model:
 
 - the full former District 1 boundary;
-- observed hourly demand or an OD matrix;
+- current calibrated hourly demand or an OD matrix;
 - a representative OSM building census or storeys;
 - walking, cycling, metro or scheduled public transport;
 - vehicle occupancy or conversion from person trips to vehicle trips;
@@ -350,8 +445,23 @@ suitable for policy, capacity or travel-demand forecasting.
   [UBND Quận 1, “Tổng quan”](https://quan1.hochiminhcity.gov.vn/GIOI-THIEU/Tong-quan-dia-ly-lich-su/Tong-quan).
 - Ho Chi Minh City registered vehicle stock, published 20 December 2024:
   [Ho Chi Minh City Media Center](https://ttbc-hcm.gov.vn/tphcm-phat-trien-giao-thong-xanh-huong-den-tin-chi-carbon-1017682.html).
+- 2013 citywide person-trip modal shares (Table 4.3 in the JICA HOUTRANS
+  follow-up report):
+  [JICA, Data Collection Survey on Railways in Major Cities in Vietnam](https://openjicareport.jica.go.jp/pdf/12305124_01.pdf).
+- Reproduction of the historical HOUTRANS trip-rate/purpose table (Table
+  1.1.2):
+  [JICA, Data Collection Survey on Traffic Conditions of Southern Roads and Bridges, Appendix 1](https://openjicareport.jica.go.jp/pdf/12305017_02.pdf).
+- Historical former-District-1 internal/outbound table and digitized
+  all-non-walking hourly figures:
+  [JICA, HOUTRANS Volume 2, Main Text](https://openjicareport.jica.go.jp/pdf/11764636_02.pdf).
+- Peak-hour fallback of 10–15% of daily volume only when no study is available:
+  [TCVN 13592:2022, Urban Roads — Design Requirements](https://sgtvt.hochiminhcity.gov.vn/Files/1032/01-TCVN%2013592_2022_%C4%90%C6%B0%E1%BB%9Dng%20%C4%91%C3%B4%20th%E1%BB%8B_Y%C3%AAu%20c%E1%BA%A7u%20thi%E1%BA%BFt%20k%E1%BA%BF%20%281%29.pdf).
 - Named central corridors and event-specific alternatives, published
   23 March 2025:
   [Phòng Cảnh sát giao thông Thành phố Hồ Chí Minh](https://csgt-congan.hochiminhcity.gov.vn/wps/portal/Home/trang-chu/noi-dung-chi-tiet/tin-giao-thong/doi3_dieuchinhgtlehoitdtt2025).
-- Historical two-wheel/public-transport context, published December 1999:
-  [JBIC Research Paper No. 4, hosted by JICA](https://www.jica.go.jp/jica-ri/IFIC_and_JBICI-Studies/jica-ri/publication/archives/jbic/report/paper/pdf/rp04_e.pdf).
+- Official Traffic Police route-direction notice used as a directionality
+  cross-check during the road audit:
+  [Phòng Cảnh sát giao thông Thành phố Hồ Chí Minh](https://csgt-congan.hochiminhcity.gov.vn/wps/portal/Home/trang-chu/noi-dung-chi-tiet/tin-giao-thong/d3_36_28426).
+- Road topology, `oneway`, lane, roundabout, and name tags audited through a
+  fresh Overpass extract:
+  [OpenStreetMap copyright and data licence](https://www.openstreetmap.org/copyright).

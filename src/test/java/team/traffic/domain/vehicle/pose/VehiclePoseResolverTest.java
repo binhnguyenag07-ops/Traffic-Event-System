@@ -7,6 +7,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.GeoPoint;
+import team.traffic.domain.network.Building;
+import team.traffic.domain.network.BuildingAccessPoint;
+import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
@@ -17,6 +20,7 @@ import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.routing.Route;
 import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Car;
+import team.traffic.domain.vehicle.JourneyPhase;
 import team.traffic.domain.vehicle.dynamics.RoadDataRoadLayout;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
 import team.traffic.simulation.SimulationStatus;
@@ -72,12 +76,11 @@ class VehiclePoseResolverTest {
     }
 
     @Test
-    void aVehicleThatHasNotStartedIsNotDrawnAtAll() {
-        // It holds no road, and the simulation means that literally: it is
-        // absent from the road's occupancy, so car-following cannot see it and
-        // the collision test skips it. Drawing it on the tarmac anyway made
-        // traffic drive straight through it, and made it jump backwards to
-        // progress zero the moment it really entered.
+    void aLegacyIntersectionVehicleThatHasNotStartedIsNotDrawnAtAll() {
+        // Unlike a resolved building or boundary source, a bare graph
+        // intersection has no honest off-network departure pose. It also holds
+        // no road, so putting it on tarmac would make the picture disagree with
+        // occupancy and allow traffic to drive through a visible body.
         assertThat(resolver.resolve(car, network)).isEmpty();
     }
 
@@ -107,7 +110,37 @@ class VehiclePoseResolverTest {
         double junctionRadius = new RoadExtent(network, new RoadDataRoadLayout())
                 .junctionRadiusMetres("B");
         assertThat(junctionRadius).isPositive();
-        assertThat(metresShortOfJunction).isCloseTo(junctionRadius, within(0.01));
+        assertThat(metresShortOfJunction)
+                .as("the pose is the centre, half a vehicle behind its front bumper")
+                .isCloseTo(junctionRadius + car.getLength() / 2.0, within(0.01));
+        double frontBumperShortOfJunction =
+                metresShortOfJunction - car.getLength() / 2.0;
+        assertThat(frontBumperShortOfJunction)
+                .as("the authoritative front bumper stops exactly at the painted line")
+                .isCloseTo(junctionRadius, within(0.01));
+    }
+
+    @Test
+    void aBuildingDemandVehicleStartsAtItsBuildingBeforeEnteringTheRoad() {
+        Building home = new Building(
+                "HOME",
+                "Home",
+                BuildingType.RESIDENTIAL,
+                0,
+                0,
+                10.7699,
+                106.6999,
+                List.of(new BuildingAccessPoint("HOME-A", "A", 16.0)));
+        network.addBuilding(home);
+        car.assignBuildingTrip("HOME", "OFFICE");
+
+        VehiclePose pose = resolver.resolve(car, network).orElseThrow();
+
+        assertThat(car.getJourneyPhase()).isEqualTo(JourneyPhase.DEPARTING_ORIGIN);
+        assertThat(pose.roadId()).isNull();
+        assertThat(pose.inJunction()).isFalse();
+        assertThat(pose.latitude()).isEqualTo(home.getLatitude());
+        assertThat(pose.longitude()).isEqualTo(home.getLongitude());
     }
 
     @Test
@@ -145,6 +178,22 @@ class VehiclePoseResolverTest {
                     .isPresent();
             drive(1);
         }
+    }
+
+    @Test
+    void aLegacyIntersectionArrivalRemainsAtItsFinalApproach() {
+        for (int tick = 0; tick < 120 && !car.hasReachedDestination(); tick++) {
+            drive(1);
+        }
+        assertThat(car.hasReachedDestination()).isTrue();
+
+        VehiclePose pose = resolver.resolveAll(List.of(car), network)
+                .get(car.getId());
+
+        assertThat(pose).isNotNull();
+        assertThat(pose.inJunction()).isTrue();
+        assertThat(pose.headingDegrees()).isCloseTo(90.0, within(1.0));
+        assertThat(pose.longitude()).isLessThan(106.710);
     }
 
     @Test

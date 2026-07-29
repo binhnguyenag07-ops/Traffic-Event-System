@@ -22,7 +22,6 @@ import team.traffic.routing.DijkstraPathFindingStrategy;
 import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.impl.RoutingServiceImpl;
 import team.traffic.simulation.TrafficSimulator;
-import team.traffic.simulation.VehicleConfig;
 
 class JsonScenarioLoaderTest {
     private static final Path SHIPPED_SCENARIO =
@@ -35,7 +34,9 @@ class JsonScenarioLoaderTest {
         var demand = loaded.demand().orElseThrow();
 
         assertThat(loaded.id()).isEqualTo("district-1");
-        assertThat(loaded.name()).isEqualTo("Central District 1 - Synthetic Weekday");
+        assertThat(loaded.name()).isEqualTo("Central District 1 - 24-hour Weekday Proxy");
+        assertThat(demand.startTimeOfDaySeconds()).isEqualTo(6 * 3_600);
+        assertThat(demand.durationSeconds()).isEqualTo(24 * 3_600);
         assertThat(loaded.network().getIntersectionCount()).isGreaterThan(100);
         assertThat(loaded.network().getBuildingCount()).isEqualTo(1162);
         assertThat(demand.seed()).isEqualTo(20260728);
@@ -45,14 +46,9 @@ class JsonScenarioLoaderTest {
                 "south-west-entries",
                 "north-east-exits",
                 "south-west-exits",
-                "tourism-core");
-        assertThat(loaded.vehicles())
-                .extracting(VehicleConfig::id)
-                .containsExactly(
-                        "warm-cau-khanh-hoi-to-ben-thanh",
-                        "warm-cach-mang-thang-8-to-bitexco",
-                        "warm-nguyen-du-to-saigon-centre",
-                        "warm-ton-duc-thang-to-opera-house");
+                "tourism-core",
+                "perimeter-gateways");
+        assertThat(loaded.vehicles()).isEmpty();
         assertThat(loaded.events()).isEmpty();
 
         GravityDemandModel first =
@@ -60,8 +56,8 @@ class JsonScenarioLoaderTest {
         GravityDemandModel replay =
                 new GravityDemandModel(loaded.network(), demand);
 
-        assertThat(first.allPlans()).isEqualTo(replay.allPlans()).hasSize(216);
-        assertThat(first.scheduledTripCount()).isEqualTo(216);
+        assertThat(first.allPlans()).isEqualTo(replay.allPlans()).hasSize(156);
+        assertThat(first.scheduledTripCount()).isEqualTo(156);
         assertThat(first.generationFailedPlanIds()).isEmpty();
         assertThat(first.allPlans())
                 .allSatisfy(plan -> assertThat(
@@ -75,25 +71,33 @@ class JsonScenarioLoaderTest {
         assertThat(first.allPlans().stream().collect(Collectors.groupingBy(
                         plan -> plan.purpose().value(),
                         Collectors.counting())))
-                .containsExactlyInAnyOrderEntriesOf(Map.of(
-                        "COMMUTE", 74L,
-                        "INBOUND_WORK", 37L,
-                        "MEDICAL", 5L,
-                        "SCHOOL_DROPOFF", 10L,
-                        "SHOPPING", 20L,
-                        "THROUGH", 48L,
-                        "VISITOR", 22L));
+                .containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
+                        Map.entry("BUSINESS_OUTBOUND_PROXY", 1L),
+                        Map.entry("INBOUND_WORK", 56L),
+                        Map.entry("PRIVATE_INTERNAL", 13L),
+                        Map.entry("PRIVATE_OUTBOUND_PROXY", 12L),
+                        Map.entry("SCHOOL_OUTBOUND_ESCORT_PROXY", 6L),
+                        Map.entry("THROUGH", 21L),
+                        Map.entry("VISITOR", 31L),
+                        Map.entry("WORK_INTERNAL", 6L),
+                        Map.entry("WORK_OUTBOUND_PROXY", 10L)));
         assertThat(first.allPlans().stream().collect(Collectors.groupingBy(
                         TripPlan::vehicleType,
                         Collectors.counting())))
                 .containsExactlyInAnyOrderEntriesOf(Map.of(
-                        VehicleType.MOTORCYCLE, 184L,
-                        VehicleType.CAR, 32L));
-        assertThat(first.allPlans().get(0).departAtSeconds()).isLessThan(300);
+                        VehicleType.MOTORCYCLE, 142L,
+                        VehicleType.CAR, 14L));
+        assertThat(first.allPlans().get(0).departAtSeconds()).isLessThan(5 * 60);
+        assertThat(first.allPlans())
+                .anySatisfy(plan -> assertThat(plan.departAtSeconds())
+                        .isGreaterThan(18 * 3_600));
+        assertThat(first.allPlans())
+                .allSatisfy(plan -> assertThat(plan.departAtSeconds())
+                        .isLessThan(24 * 3_600));
     }
 
     @Test
-    void curatedCordonTourismAndWarmStartRoutesAreDirectedAndRoleCorrect()
+    void curatedCordonTourismAndPerimeterGatewaysAreDirectedAndRoleCorrect()
             throws Exception {
         JsonScenarioLoader.LoadedScenario loaded =
                 new JsonScenarioLoader().load(SHIPPED_SCENARIO);
@@ -111,6 +115,8 @@ class JsonScenarioLoaderTest {
                 .map(network::getBuilding)
                 .map(building -> building.getAccessPoints().get(0).intersectionId())
                 .toList();
+        Set<String> perimeterGateways =
+                zones.get("perimeter-gateways").intersectionIds();
 
         northEastEntries.forEach(entry -> {
             assertThat(network.findOutgoingRoads(entry)).isNotEmpty();
@@ -138,11 +144,10 @@ class JsonScenarioLoaderTest {
             concat(northEastExits, southWestExits).forEach(exit ->
                     assertReachable(network, origin, exit));
         }
-        loaded.vehicles().forEach(config ->
-                assertReachable(
-                        network,
-                        config.startIntersectionId(),
-                        config.destinationIntersectionId()));
+        perimeterGateways.forEach(gateway -> {
+            assertThat(network.findIncomingRoads(gateway)).isNotEmpty();
+            assertThat(network.findOutgoingRoads(gateway)).isNotEmpty();
+        });
     }
 
     @Test
@@ -167,9 +172,7 @@ class JsonScenarioLoaderTest {
             assertThat(road.getCondition().getRoadStatus()).isEqualTo(RoadStatus.OPEN);
         });
         assertThat(simulator.getVehicles())
-                .extracting(vehicle -> vehicle.getId())
-                .containsExactlyInAnyOrderElementsOf(
-                        loaded.vehicles().stream().map(VehicleConfig::id).toList());
+                .isEmpty();
     }
 
     private static List<String> concat(Set<String> first, Set<String> second) {

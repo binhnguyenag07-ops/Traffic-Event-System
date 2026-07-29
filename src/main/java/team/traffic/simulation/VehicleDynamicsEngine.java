@@ -262,8 +262,10 @@ public class VehicleDynamicsEngine {
 
     /** A vehicle that has finished its trip takes no further part in the step. */
     private static boolean isDormant(Vehicle vehicle) {
-        return vehicle.hasReachedDestination()
+        return vehicle.isTraversingBuildingAccessLink()
+                || vehicle.hasReachedDestination()
                 || vehicle.getStatus() == VehicleStatus.ARRIVED
-                || vehicle.getStatus() == VehicleStatus.STOPPED;
+                || vehicle.getStatus() == VehicleStatus.STOPPED
+                || vehicle.getStatus() == VehicleStatus.DWELLING;
     }
 }
