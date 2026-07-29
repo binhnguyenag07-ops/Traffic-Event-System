@@ -4253,7 +4253,7 @@
     },
     {
       "id": "W35113279-0F",
-      "name": "Đường Cao Bá Quát",
+      "name": "Cao Bá Quát",
       "physicalRoadId": "W35113279-0",
       "startIntersectionId": "N411925940",
       "endIntersectionId": "N411925939",
@@ -4280,7 +4280,7 @@
     },
     {
       "id": "W35113279-1F",
-      "name": "Đường Cao Bá Quát",
+      "name": "Cao Bá Quát",
       "physicalRoadId": "W35113279-1",
       "startIntersectionId": "N411925939",
       "endIntersectionId": "N411926702",
@@ -5099,7 +5099,7 @@
     },
     {
       "id": "W35114033-0F",
-      "name": "Đặng Trần Côn",
+      "name": "Đường Đặng Trần Côn",
       "physicalRoadId": "W35114033-0",
       "startIntersectionId": "N411926058",
       "endIntersectionId": "N411926055",
@@ -5133,6 +5133,45 @@
         [
           10.772146,
           106.6944476
+        ]
+      ]
+    },
+    {
+      "id": "W35114033-0R",
+      "name": "Đường Đặng Trần Côn",
+      "physicalRoadId": "W35114033-0",
+      "startIntersectionId": "N411926055",
+      "endIntersectionId": "N411926058",
+      "distance": 0.1333,
+      "speedLimit": 30,
+      "capacity": 40,
+      "currentVehicleCount": 7,
+      "congestionLevel": 0.05,
+      "vehicleDensity": 0.175,
+      "roadStatus": "OPEN",
+      "roadClass": "RESIDENTIAL",
+      "laneCount": 1,
+      "laneWidthMetres": 3.0,
+      "geometry": [
+        [
+          10.772146,
+          106.6944476
+        ],
+        [
+          10.7723162,
+          106.6942629
+        ],
+        [
+          10.77234,
+          106.6942371
+        ],
+        [
+          10.772626,
+          106.6939269
+        ],
+        [
+          10.7729591,
+          106.6935515
         ]
       ]
     },
@@ -8633,37 +8672,6 @@
         [
           10.7769646,
           106.7037077
-        ]
-      ]
-    },
-    {
-      "id": "W287132223-0R",
-      "name": "Công trường Lam Sơn",
-      "physicalRoadId": "W287132223-0",
-      "startIntersectionId": "N2907818488",
-      "endIntersectionId": "N2907818487",
-      "distance": 0.0378,
-      "speedLimit": 30,
-      "capacity": 40,
-      "currentVehicleCount": 9,
-      "congestionLevel": 0.11,
-      "vehicleDensity": 0.225,
-      "roadStatus": "OPEN",
-      "roadClass": "RESIDENTIAL",
-      "laneCount": 1,
-      "laneWidthMetres": 3.0,
-      "geometry": [
-        [
-          10.7769646,
-          106.7037077
-        ],
-        [
-          10.7770464,
-          106.7036061
-        ],
-        [
-          10.77718,
-          106.7034401
         ]
       ]
     },
@@ -13122,7 +13130,7 @@
       "vehicleDensity": 0.4,
       "roadStatus": "OPEN",
       "roadClass": "SECONDARY",
-      "laneCount": 2,
+      "laneCount": 1,
       "laneWidthMetres": 3.25,
       "geometry": [
         [
@@ -16828,7 +16836,7 @@
       "vehicleDensity": 0.188,
       "roadStatus": "OPEN",
       "roadClass": "SECONDARY",
-      "laneCount": 2,
+      "laneCount": 3,
       "laneWidthMetres": 3.25,
       "geometry": [
         [
@@ -20802,7 +20810,7 @@
       "vehicleDensity": 0.512,
       "roadStatus": "CONGESTED",
       "roadClass": "SECONDARY",
-      "laneCount": 2,
+      "laneCount": 3,
       "laneWidthMetres": 3.25,
       "geometry": [
         [
@@ -24299,7 +24307,7 @@
       "vehicleDensity": 0.225,
       "roadStatus": "OPEN",
       "roadClass": "SECONDARY",
-      "laneCount": 2,
+      "laneCount": 3,
       "laneWidthMetres": 3.25,
       "geometry": [
         [
@@ -24373,7 +24381,7 @@
       "vehicleDensity": 0.1,
       "roadStatus": "OPEN",
       "roadClass": "SECONDARY",
-      "laneCount": 2,
+      "laneCount": 3,
       "laneWidthMetres": 3.25,
       "geometry": [
         [
@@ -24408,7 +24416,7 @@
       "vehicleDensity": 0.113,
       "roadStatus": "OPEN",
       "roadClass": "SECONDARY",
-      "laneCount": 2,
+      "laneCount": 3,
       "laneWidthMetres": 3.25,
       "geometry": [
         [

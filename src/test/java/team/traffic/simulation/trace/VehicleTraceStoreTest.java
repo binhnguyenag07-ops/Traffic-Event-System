@@ -60,4 +60,20 @@ class VehicleTraceStoreTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("fromTick");
     }
+
+    @Test
+    void evictsTheOldestTickAtTheConfiguredRetentionBoundary() {
+        VehicleTraceStore store = new VehicleTraceStore(3);
+        Car vehicle = new Car("car-1", "A", "B");
+
+        store.reset(0, List.of(vehicle));
+        store.record(1, List.of(vehicle));
+        store.record(2, List.of(vehicle));
+        store.record(3, List.of(vehicle));
+
+        assertThat(store.hasTick(0)).isFalse();
+        assertThat(store.getSummary().firstTick()).isEqualTo(1);
+        assertThat(store.getSummary().lastTick()).isEqualTo(3);
+        assertThat(store.getSummary().recordedTickCount()).isEqualTo(3);
+    }
 }

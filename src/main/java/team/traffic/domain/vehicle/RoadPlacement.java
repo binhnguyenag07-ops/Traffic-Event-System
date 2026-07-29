@@ -4,7 +4,8 @@ package team.traffic.domain.vehicle;
  * Where a vehicle physically sits on the road network.
  *
  * <p>Seven values that are only ever meaningful together: the road being
- * occupied, the two junctions it runs between, how far along it the vehicle is,
+ * occupied, the two junctions it runs between, how far its front bumper has
+ * travelled along it,
  * and the lane and lateral offset it holds across it. A vehicle either has all
  * of them or none, and it acquires and discards them as one act.</p>
  *

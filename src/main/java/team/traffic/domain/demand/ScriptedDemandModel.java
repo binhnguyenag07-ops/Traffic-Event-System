@@ -34,6 +34,11 @@ public final class ScriptedDemandModel implements TripDemandModel {
         return plans.size();
     }
 
+    @Override
+    public List<TripPlan> allPlans() {
+        return plans;
+    }
+
     private static void validateInterval(double from, double to) {
         if (!Double.isFinite(from) || !Double.isFinite(to) || to < from) {
             throw new IllegalArgumentException("Demand interval must be finite and ordered");

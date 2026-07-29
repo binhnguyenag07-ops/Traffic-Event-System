@@ -9,6 +9,8 @@ import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.scene.LaneGeometry;
 import team.traffic.domain.scene.PhysicalScene;
 import team.traffic.domain.scene.SceneVehicle;
+import team.traffic.domain.demand.PlaceKind;
+import team.traffic.domain.vehicle.JourneyPhase;
 
 /**
  * The projection from latitude and longitude to local metres is one of the two
@@ -78,6 +80,30 @@ class PhysicalViewDtoTest {
         assertThat(drawn.roadId()).isEqualTo("R-12");
         assertThat(drawn.roadProgress()).isEqualTo(0.42);
         assertThat(drawn.inJunction()).isFalse();
+    }
+
+    @Test
+    void carriesResolvedPlaceAndJourneyPhaseForDrivewayRendering() {
+        GeoPoint origin = new GeoPoint(LAT, LON);
+        SceneVehicle leavingHome = new SceneVehicle(
+                "V-home", "CAR", LAT, LON, 45.0, 0.0, 4.5, 1.8, 0, 0.0,
+                null, 0.0, false, null, null,
+                JourneyPhase.DEPARTING_ORIGIN,
+                PlaceKind.BUILDING, "HOME", "ACCESS-HOME",
+                PlaceKind.BOUNDARY, "EDGE-E", "EDGE-E");
+        PhysicalScene scene = new PhysicalScene(
+                origin, 200, List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), List.of(leavingHome));
+
+        PhysicalViewDto.VehicleDto vehicle =
+                PhysicalViewDto.of(scene, "t", 1, 0).vehicles().get(0);
+
+        assertThat(vehicle.journeyPhase()).isEqualTo("DEPARTING_ORIGIN");
+        assertThat(vehicle.originPlaceKind()).isEqualTo("BUILDING");
+        assertThat(vehicle.originPlaceId()).isEqualTo("HOME");
+        assertThat(vehicle.originAccessIntersectionId()).isEqualTo("ACCESS-HOME");
+        assertThat(vehicle.destinationPlaceKind()).isEqualTo("BOUNDARY");
+        assertThat(vehicle.destinationAccessIntersectionId()).isEqualTo("EDGE-E");
     }
 
     private PhysicalScene sceneWithLaneFrom(GeoPoint a, GeoPoint b) {

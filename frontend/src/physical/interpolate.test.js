@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import { interpolateVehicles, shortestTurn } from './interpolate'
 
+function bearingBetweenPoses(from, to) {
+  return (
+    Math.atan2(to.x - from.x, to.y - from.y) * 180 / Math.PI
+    + 360
+  ) % 360
+}
+
+function headingToTrajectoryError(source, target, fraction, geometry) {
+  const sample = 1e-3
+  const [before] = interpolateVehicles(
+    [source], [target], fraction - sample, geometry)
+  const [at] = interpolateVehicles([source], [target], fraction, geometry)
+  const [after] = interpolateVehicles(
+    [source], [target], fraction + sample, geometry)
+  const tangent = bearingBetweenPoses(before, after)
+  return Math.abs(shortestTurn(at.headingDegrees, tangent))
+}
+
 describe('shortestTurn', () => {
   it('turns the short way across the 360/0 seam', () => {
     expect(shortestTurn(350, 10)).toBe(20)
@@ -40,6 +58,56 @@ describe('interpolateVehicles', () => {
     expect(result).toHaveLength(0)
   })
 
+  it('moves monotonically between consecutive authoritative driveway frames', () => {
+    const source = {
+      ...a0,
+      x: -20,
+      y: 0,
+      journeyPhase: 'DEPARTING_ORIGIN',
+      originPlaceKind: 'BUILDING',
+      originPlaceId: 'HOME',
+      originAccessIntersectionId: 'J',
+      accessLinkProgress: 0,
+    }
+    const target = {
+      ...source,
+      x: -10,
+      accessLinkProgress: 0.5,
+    }
+
+    const [drawn] = interpolateVehicles([source], [target], 0.5)
+
+    expect(drawn.y).toBeCloseTo(0, 6)
+    expect(drawn.x).toBeCloseTo(-15, 6)
+    expect(drawn.accessLinkProgress).toBe(0.5)
+  })
+
+  it('follows authoritative arrival frames and does not invent a removal ghost', () => {
+    const source = {
+      ...a0,
+      x: 0,
+      y: 0,
+      journeyPhase: 'ARRIVING_DESTINATION',
+      destinationPlaceKind: 'BUILDING',
+      destinationPlaceId: 'OFFICE',
+      destinationAccessIntersectionId: 'J',
+      accessLinkProgress: 0,
+    }
+    const target = {
+      ...source,
+      x: -20,
+      accessLinkProgress: 1,
+    }
+
+    const [halfway] = interpolateVehicles([source], [target], 0.5)
+    const removed = interpolateVehicles([target], [], 0.5)
+
+    expect(halfway.journeyPhase).toBe('ARRIVING_DESTINATION')
+    expect(halfway.x).toBeCloseTo(-10, 6)
+    expect(halfway.y).toBeCloseTo(0, 6)
+    expect(removed).toHaveLength(0)
+  })
+
   it('keeps type and other fields from the newer frame', () => {
     const [drawn] = interpolateVehicles([a0], [{ ...a1, type: 'BUS', laneIndex: 2 }], 0.5)
     expect(drawn.type).toBe('BUS')
@@ -70,6 +138,31 @@ describe('interpolateVehicles', () => {
 
     expect(drawn.x).toBeCloseTo(0, 6)
     expect(drawn.y).toBeCloseTo(10, 6)
+  })
+
+  it('keeps its heading tangent to a lane instead of yawing before its bend', () => {
+    const source = {
+      ...a0, x: 0, y: 20, headingDegrees: 180,
+      roadId: 'R', roadProgress: 0, laneIndex: 0,
+    }
+    const target = {
+      ...a1, x: 2, y: 0, headingDegrees: 90,
+      roadId: 'R', roadProgress: 1, laneIndex: 0,
+    }
+    const geometry = {
+      lanes: [{
+        roadId: 'R',
+        laneIndex: 0,
+        centreline: [[0, 20], [0, 0], [2, 0]],
+      }],
+    }
+
+    const [halfway] = interpolateVehicles([source], [target], 0.5, geometry)
+
+    expect(halfway.x).toBeCloseTo(0, 6)
+    expect(halfway.y).toBeGreaterThan(8)
+    expect(Math.abs(shortestTurn(halfway.headingDegrees, 180))).toBeLessThan(1)
+    expect(headingToTrajectoryError(source, target, 0.5, geometry)).toBeLessThan(1)
   })
 })
 
@@ -162,7 +255,7 @@ describe('a junction, using only what the backend says', () => {
     expect(interpolateVehicles([source], [target], 1, geometry)[0]).toEqual(target)
   })
 
-  it('turns smoothly at every sampled animation step', () => {
+  it('keeps connector rotation locally bounded at every sampled animation step', () => {
     const poses = Array.from({ length: 41 }, (_, index) => (
       interpolateVehicles([waiting], [departing], index / 40, geometry)[0]
     ))
@@ -171,7 +264,7 @@ describe('a junction, using only what the backend says', () => {
       expect(Math.abs(shortestTurn(
         poses[index - 1].headingDegrees,
         poses[index].headingDegrees,
-      ))).toBeLessThan(6)
+      ))).toBeLessThan(12)
     }
   })
 
@@ -251,6 +344,29 @@ describe('a junction, using only what the backend says', () => {
     }
   })
 
+  it('does not rotate early when a skipped frame includes a long junction approach', () => {
+    const farApproach = {
+      ...approaching,
+      roadProgress: 0.75,
+      y: 10,
+    }
+    const fractions = [0.2, 0.4, 0.5, 0.6, 0.75, 0.85]
+    const poses = fractions.map((fraction) => (
+      interpolateVehicles([farApproach], [departing], fraction, geometry)[0]
+    ))
+
+    // The midpoint is still more than three metres before the connector. A
+    // direct source→target heading interpolation used to yaw the sprite 45°
+    // here even though its position was travelling due south.
+    expect(poses[2].y).toBeGreaterThan(3)
+    expect(Math.abs(shortestTurn(poses[2].headingDegrees, 180))).toBeLessThan(1)
+    fractions.forEach((fraction) => {
+      expect(headingToTrajectoryError(
+        farApproach, departing, fraction, geometry,
+      )).toBeLessThan(1)
+    })
+  })
+
   it('follows a curved approach before the connector instead of cutting through a block', () => {
     const curvedApproach = {
       ...geometry,
@@ -322,5 +438,20 @@ describe('U-turn heading ambiguity', () => {
     expect(middle.y).toBeGreaterThan(0.9)
     expect(interpolateVehicles([source], [target], 0, geometry)[0]).toEqual(source)
     expect(interpolateVehicles([source], [target], 1, geometry)[0]).toEqual(target)
+  })
+
+  it('keeps the U-turn direction monotonic along the connector tangent', () => {
+    const poses = Array.from({ length: 17 }, (_, index) => (
+      interpolateVehicles([source], [target], index / 16, geometry)[0]
+    ))
+
+    for (let index = 1; index < poses.length; index += 1) {
+      const turn = shortestTurn(
+        poses[index - 1].headingDegrees,
+        poses[index].headingDegrees,
+      )
+      expect(turn).toBeLessThanOrEqual(1e-6)
+      expect(turn).toBeGreaterThan(-45)
+    }
   })
 })

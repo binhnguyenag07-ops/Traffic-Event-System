@@ -11,6 +11,9 @@ import team.traffic.domain.demand.ScriptedDemandModel;
 import team.traffic.domain.demand.TripLeg;
 import team.traffic.domain.demand.TripPlan;
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.Building;
+import team.traffic.domain.network.BuildingAccessPoint;
+import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
@@ -18,11 +21,188 @@ import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.VehicleType;
+import team.traffic.domain.vehicle.Vehicle;
+import team.traffic.domain.vehicle.JourneyPhase;
+import team.traffic.domain.vehicle.pose.VehiclePoseResolver;
+import team.traffic.domain.demand.PlaceKind;
 import team.traffic.routing.DijkstraPathFindingStrategy;
 import team.traffic.routing.RoutingStrategyRegistry;
 import team.traffic.service.impl.RoutingServiceImpl;
 
 class DemandBackendIntegrationTest {
+    @Test
+    void advancesBuildingAccessAtFifteenKphWithoutRoadOccupancyOrDoubleCountingTime() {
+        RoadNetwork network = geographicBuildingNetwork(12.5, 8.0);
+        TripPlan plan = new TripPlan(
+                "driveway-progress",
+                new PurposeId("COMMUTE"),
+                VehicleType.CAR,
+                ResolvedPlace.building("HOME", "A"),
+                List.of(new TripLeg(ResolvedPlace.building("WORK", "B"), 0)),
+                CompletionPolicy.REMOVE_AT_LAST_STOP,
+                0);
+        TrafficSimulator simulator = new TrafficSimulator(network, routing());
+        simulator.setSimulationSecondsPerTick(1);
+        simulator.initialize(
+                new ScriptedDemandModel(List.of(plan)),
+                0,
+                List.of(),
+                List.of());
+
+        var vehicle = simulator.getVehicles().get(0);
+        assertThat(vehicle.isTraversingBuildingAccessLink()).isTrue();
+        assertThat(vehicle.getJourneyPhase()).isEqualTo(JourneyPhase.DEPARTING_ORIGIN);
+        assertThat(vehicle.getOccupiedRoadId()).isNull();
+        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
+
+        simulator.advanceTick();
+
+        assertThat(vehicle.getAccessLinkProgress()).isCloseTo(
+                1.0 / 3.0, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(vehicle.getTravelTimeSeconds()).isCloseTo(
+                1.0, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(vehicle.getDistanceTravelledKm()).isCloseTo(
+                Vehicle.BUILDING_ACCESS_SPEED_MPS / 1_000.0,
+                org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(vehicle.getOccupiedRoadId()).isNull();
+        assertThat(network.getRoad("AB").getCurrentVehicleCount()).isZero();
+
+        var pose = new VehiclePoseResolver().resolve(vehicle, network).orElseThrow();
+        assertThat(pose.latitude()).isCloseTo(
+                10.7699 + (10.7700 - 10.7699) / 3.0,
+                org.assertj.core.data.Offset.offset(1e-8));
+        assertThat(pose.roadId()).isNull();
+    }
+
+    @Test
+    void completesDestinationAccessBeforeDwellAndDepartsFromThatBuildingOnReturn() {
+        RoadNetwork network = geographicBuildingNetwork(
+                Vehicle.BUILDING_ACCESS_SPEED_MPS,
+                2 * Vehicle.BUILDING_ACCESS_SPEED_MPS);
+        ResolvedPlace home = ResolvedPlace.building("HOME", "A");
+        ResolvedPlace work = ResolvedPlace.building("WORK", "B");
+        TripPlan plan = new TripPlan(
+                "building-return",
+                new PurposeId("COMMUTE"),
+                VehicleType.MOTORCYCLE,
+                home,
+                List.of(
+                        new TripLeg(work, 2),
+                        new TripLeg(home, 0)),
+                CompletionPolicy.RETURN_TO_ORIGIN,
+                0);
+        TrafficSimulator simulator = new TrafficSimulator(network, routing());
+        simulator.setSimulationSecondsPerTick(1);
+        simulator.initialize(
+                new ScriptedDemandModel(List.of(plan)),
+                0,
+                List.of(),
+                List.of());
+        var vehicle = simulator.getVehicles().get(0);
+
+        simulator.advanceTick(); // leave HOME and wait at access A
+        assertThat(vehicle.getJourneyPhase()).isEqualTo(JourneyPhase.AT_JUNCTION);
+        var departurePose = new VehiclePoseResolver()
+                .resolveAll(List.of(vehicle), network)
+                .get(vehicle.getId());
+        assertThat(departurePose).isNotNull();
+        assertThat(departurePose.latitude()).isCloseTo(
+                10.7700, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(departurePose.longitude()).isCloseTo(
+                106.7000, org.assertj.core.data.Offset.offset(1e-9));
+        vehicle.moveTo("B");
+
+        simulator.advanceTick();
+        assertThat(vehicle.getJourneyPhase()).isEqualTo(JourneyPhase.ARRIVING_DESTINATION);
+        assertThat(vehicle.getAccessLinkProgress()).isCloseTo(
+                0.5, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(vehicle.getStatus()).isNotEqualTo(VehicleStatus.DWELLING);
+        var arrivingPose = new VehiclePoseResolver()
+                .resolveAll(List.of(vehicle), network)
+                .get(vehicle.getId());
+        assertThat(arrivingPose).isNotNull();
+        assertThat(arrivingPose.latitude()).isCloseTo(
+                10.77105, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(arrivingPose.longitude()).isCloseTo(
+                106.7000, org.assertj.core.data.Offset.offset(1e-9));
+
+        simulator.advanceTick();
+        assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.DWELLING);
+        assertThat(vehicle.getCurrentResolvedPlace()).isEqualTo(work);
+        var dwellingPose = new VehiclePoseResolver()
+                .resolveAll(List.of(vehicle), network)
+                .get(vehicle.getId());
+        assertThat(dwellingPose).isNotNull();
+        assertThat(dwellingPose.latitude()).isCloseTo(
+                10.7711, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(dwellingPose.longitude()).isCloseTo(
+                106.7000, org.assertj.core.data.Offset.offset(1e-9));
+
+        simulator.advanceTick();
+        simulator.advanceTick();
+
+        assertThat(vehicle.getCurrentTripLegIndex()).isEqualTo(1);
+        assertThat(vehicle.getJourneyPhase()).isEqualTo(JourneyPhase.DEPARTING_ORIGIN);
+        assertThat(vehicle.getOriginResolvedPlace()).isEqualTo(work);
+        assertThat(vehicle.getDestinationResolvedPlace()).isEqualTo(home);
+        assertThat(vehicle.getOccupiedRoadId()).isNull();
+        assertThat(network.getRoad("BA").getCurrentVehicleCount()).isZero();
+
+        simulator.advanceTick();
+        simulator.advanceTick();
+        assertThat(vehicle.getJourneyPhase()).isEqualTo(JourneyPhase.AT_JUNCTION);
+        vehicle.moveTo("A");
+        simulator.advanceTick();
+
+        assertThat(vehicle.isJourneyComplete()).isTrue();
+        assertThat(vehicle.getJourneyPhase()).isEqualTo(JourneyPhase.ARRIVED);
+        var arrivedPose = new VehiclePoseResolver()
+                .resolveAll(List.of(vehicle), network)
+                .get(vehicle.getId());
+        assertThat(arrivedPose).isNotNull();
+        assertThat(arrivedPose.latitude()).isCloseTo(
+                10.7699, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(arrivedPose.longitude()).isCloseTo(
+                106.7000, org.assertj.core.data.Offset.offset(1e-9));
+    }
+
+    @Test
+    void preservesResolvedBuildingEndpointsAndPublishesAnOffNetworkDeparturePhase() {
+        RoadNetwork network = bidirectionalNetwork();
+        network.addBuilding(new Building(
+                "HOME", "Home", BuildingType.RESIDENTIAL,
+                0, 0, null, null,
+                List.of(new BuildingAccessPoint("HOME-A", "A", 12.0))));
+        network.addBuilding(new Building(
+                "WORK", "Work", BuildingType.OFFICE,
+                1, 0, null, null,
+                List.of(new BuildingAccessPoint("WORK-B", "B", 8.0))));
+        TripPlan plan = new TripPlan(
+                "building-commute",
+                new PurposeId("COMMUTE"),
+                VehicleType.MOTORCYCLE,
+                ResolvedPlace.building("HOME", "A"),
+                List.of(new TripLeg(ResolvedPlace.building("WORK", "B"), 0)),
+                CompletionPolicy.REMOVE_AT_LAST_STOP,
+                0);
+        TrafficSimulator simulator = new TrafficSimulator(network, routing());
+
+        simulator.initialize(
+                new ScriptedDemandModel(List.of(plan)),
+                6 * 3600,
+                List.of(),
+                List.of());
+
+        var vehicle = simulator.getVehicles().get(0);
+        assertThat(vehicle.getJourneyPhase()).isEqualTo(JourneyPhase.DEPARTING_ORIGIN);
+        assertThat(vehicle.getOriginResolvedPlace().kind()).isEqualTo(PlaceKind.BUILDING);
+        assertThat(vehicle.getOriginResolvedPlace().id()).isEqualTo("HOME");
+        assertThat(vehicle.getOriginResolvedPlace().accessIntersectionId()).isEqualTo("A");
+        assertThat(vehicle.getDestinationResolvedPlace().kind()).isEqualTo(PlaceKind.BUILDING);
+        assertThat(vehicle.getDestinationResolvedPlace().id()).isEqualTo("WORK");
+        assertThat(vehicle.getDestinationResolvedPlace().accessIntersectionId()).isEqualTo("B");
+    }
+
     @Test
     void spawnsOneVehicleThatDwellsReturnsAndIsArchivedOnlyAfterTheWholePlan() {
         RoadNetwork network = bidirectionalNetwork();
@@ -148,6 +328,31 @@ class DemandBackendIntegrationTest {
         network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
         network.addRoad(road("AB", "A", "B"));
         network.addRoad(road("BA", "B", "A"));
+        return network;
+    }
+
+    private static RoadNetwork geographicBuildingNetwork(
+            double homeDrivewayMetres,
+            double workDrivewayMetres) {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection(
+                "A", "A", 106.7000, 10.7700, LocationType.NORMAL,
+                10.7700, 106.7000));
+        network.addIntersection(new Intersection(
+                "B", "B", 106.7000, 10.7710, LocationType.NORMAL,
+                10.7710, 106.7000));
+        network.addRoad(road("AB", "A", "B"));
+        network.addRoad(road("BA", "B", "A"));
+        network.addBuilding(new Building(
+                "HOME", "Home", BuildingType.RESIDENTIAL,
+                0, 0, 10.7699, 106.7000,
+                List.of(new BuildingAccessPoint(
+                        "HOME-A", "A", homeDrivewayMetres))));
+        network.addBuilding(new Building(
+                "WORK", "Work", BuildingType.OFFICE,
+                0, 1, 10.7711, 106.7000,
+                List.of(new BuildingAccessPoint(
+                        "WORK-B", "B", workDrivewayMetres))));
         return network;
     }
 

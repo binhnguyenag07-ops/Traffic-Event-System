@@ -125,16 +125,14 @@ export function buildVehicleTextures(renderer, supplied = {}) {
 export function vehicleTransform(vehicle) {
   const length = Math.max(vehicle.lengthMetres, 1.5)
   const radians = (vehicle.headingDegrees * Math.PI) / 180
-  // The simulation reports a vehicle by its front bumper: road progress is
-  // where its nose is, and following distances are measured from it. Drawing
-  // the body centred on that point pushed half a car past every stop line and
-  // made a queue look like it overlapped itself, so the body is set back along
-  // its own heading by half its length.
-  const centreX = vehicle.x - Math.sin(radians) * (length / 2)
-  const centreY = vehicle.y - Math.cos(radians) * (length / 2)
+  // Dynamics keeps roadProgress at the front bumper, but the Physical View
+  // boundary resolves that value to the body centre exactly once. x/y are
+  // therefore already the point a centred Pixi sprite needs; applying another
+  // half-length setback here would move every vehicle one full half-body behind
+  // its authoritative stop-line/queue pose.
   return {
-    x: centreX,
-    y: -centreY,
+    x: vehicle.x,
+    y: -vehicle.y,
     rotation: radians,
     width: Math.max(vehicle.widthMetres, 0.7),
     height: length,
