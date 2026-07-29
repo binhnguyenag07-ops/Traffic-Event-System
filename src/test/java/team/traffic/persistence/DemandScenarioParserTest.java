@@ -1,5 +1,6 @@
 package team.traffic.persistence;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,6 +48,52 @@ class DemandScenarioParserTest {
                 objectMapper.readTree(json), network(), Path.of(".")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("completion is required");
+    }
+
+    @Test
+    void warmUpDefaultsToZeroAndAcceptsABoundedPreRoll() throws Exception {
+        var withoutWarmUp = parser.parseOptional(
+                objectMapper.readTree(validDemand()), network(), Path.of("."))
+                .orElseThrow();
+        var withWarmUp = parser.parseOptional(
+                objectMapper.readTree(validDemand().replace(
+                        "\"scale\": 1,",
+                        "\"scale\": 1, \"warmUpSeconds\": 300,")),
+                network(),
+                Path.of("."))
+                .orElseThrow();
+
+        assertThat(withoutWarmUp.warmUpSeconds()).isZero();
+        assertThat(withWarmUp.warmUpSeconds()).isEqualTo(300);
+    }
+
+    @Test
+    void automaticCollisionEventsDefaultOnAndCanBeDisabledExplicitly() throws Exception {
+        var defaultPolicy = parser.parseOptional(
+                objectMapper.readTree(validDemand()), network(), Path.of("."))
+                .orElseThrow();
+        var disabled = parser.parseOptional(
+                objectMapper.readTree(validDemand().replace(
+                        "\"scale\": 1,",
+                        "\"scale\": 1, \"automaticCollisionEvents\": false,")),
+                network(),
+                Path.of("."))
+                .orElseThrow();
+
+        assertThat(defaultPolicy.automaticCollisionEvents()).isTrue();
+        assertThat(disabled.automaticCollisionEvents()).isFalse();
+    }
+
+    @Test
+    void rejectsWarmUpThatConsumesTheWholeScenario() throws Exception {
+        String json = validDemand().replace(
+                "\"scale\": 1,",
+                "\"scale\": 1, \"warmUpSeconds\": 3600,");
+
+        assertThatThrownBy(() -> parser.parseOptional(
+                objectMapper.readTree(json), network(), Path.of(".")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("warm-up");
     }
 
     private static RoadNetwork network() {

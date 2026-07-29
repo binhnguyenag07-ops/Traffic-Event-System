@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.domain.vehicle.pose.VehiclePoseResolver;
 
 public class SimulationSnapshotDto {
@@ -33,10 +34,13 @@ public class SimulationSnapshotDto {
         // position and heading; without one it carries progress along a road
         // only, and the client is left to place it.
         VehiclePoseResolver poseResolver = new VehiclePoseResolver();
+        var publishedVehicles = snapshot.vehicles().stream()
+                .filter(vehicle -> vehicle.getStatus() != VehicleStatus.DWELLING)
+                .toList();
         var poses = network == null
                 ? Map.<String, team.traffic.domain.vehicle.pose.VehiclePose>of()
-                : poseResolver.resolveAll(snapshot.vehicles(), network);
-        this.vehicles = snapshot.vehicles().stream()
+                : poseResolver.resolveAll(publishedVehicles, network);
+        this.vehicles = publishedVehicles.stream()
                 .map(vehicle -> network == null
                         ? new VehicleDto(vehicle)
                         : new VehicleDto(vehicle, poses.get(vehicle.getId())))

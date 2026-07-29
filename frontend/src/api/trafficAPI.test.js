@@ -40,6 +40,23 @@ describe('extended traffic API', () => {
     )
   })
 
+  it('loads only one bounded page of the demand schedule', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      totalPlans: 39000,
+      offset: 24,
+      limit: 12,
+      returnedPlans: 12,
+      plans: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await simulationApi.demandSchedule(24, 12)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/simulation/demand/schedule?offset=24&limit=12',
+      expect.any(Object),
+    )
+  })
+
   it('loads full physical geometry once and polls its light frame state separately', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       origin: { latitude: 10.77, longitude: 106.69 },
@@ -48,11 +65,17 @@ describe('extended traffic API', () => {
       signals: [],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
 
-    await simulationApi.physicalView(10.77, 106.69, 220, { fullMap: true })
+    await simulationApi.physicalView(
+      10.77,
+      106.69,
+      220,
+      { fullMap: true, includeState: false },
+    )
     await simulationApi.physicalViewState(10.77, 106.69, 1500)
 
     expect(fetchMock.mock.calls[0][0]).toBe(
-      '/api/simulation/physical-view?lat=10.77&lon=106.69&radiusMetres=220&fullMap=true',
+      '/api/simulation/physical-view?lat=10.77&lon=106.69&radiusMetres=220&fullMap=true'
+        + '&includeState=false',
     )
     expect(fetchMock.mock.calls[1][0]).toBe(
       '/api/simulation/physical-view/state?lat=10.77&lon=106.69&radiusMetres=1500',

@@ -137,17 +137,16 @@ public final class AdaptiveNavigationCoordinator {
         for (Vehicle vehicle : orderedVehicles) {
             Optional<LocalPerception> local = vehicle.getLocalPerception();
             if (local.isEmpty()) continue;
-            RoutingSnapshot visibleSnapshot = snapshot.visibleTo(
-                    network,
-                    vehicle.getDriverKnowledge(),
-                    vehicle.getOccupiedRoadId(),
-                    simulationSeconds);
             DriverContext context = new DriverContext(
                     local.get(),
                     vehicle.getDriverKnowledge(),
                     vehicle.getNavigationState(),
                     vehicle.getStallState(),
-                    remainingCost(vehicle, network, visibleSnapshot),
+                    // The current policy does not inspect route cost until it
+                    // actually asks for a reroute. Keep this cheap, meaningful
+                    // context value here and construct the much larger
+                    // driver-visible snapshot only for a real request below.
+                    remainingCost(vehicle, network, snapshot),
                     vehicle.getDriverProfile(),
                     simulationSeconds);
             DriverDecision decision = decisionPolicy.decide(context);
@@ -169,11 +168,16 @@ public final class AdaptiveNavigationCoordinator {
                 if (reason == RerouteReason.STALL_TIMEOUT) {
                     recordStallEscalation(context.stall().cause());
                 }
+                RoutingSnapshot visibleSnapshot = snapshot.visibleTo(
+                        network,
+                        vehicle.getDriverKnowledge(),
+                        vehicle.getOccupiedRoadId(),
+                        simulationSeconds);
                 vehicle.getNavigationState().markEvaluating();
                 requests.add(new Request(
                         vehicle,
                         reason,
-                        context.currentRemainingCost(),
+                        remainingCost(vehicle, network, visibleSnapshot),
                         RouteCandidate.fingerprintOf(
                                 vehicle.getCurrentRoute()),
                         uTurn));

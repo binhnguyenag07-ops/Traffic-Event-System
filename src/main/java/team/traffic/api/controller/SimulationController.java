@@ -27,6 +27,9 @@ import team.traffic.simulation.SimulationSnapshot;
 import team.traffic.simulation.SimulationStatus;
 
 public class SimulationController {
+    private static final int DEFAULT_DEMAND_SCHEDULE_LIMIT = 250;
+    private static final int MAX_DEMAND_SCHEDULE_LIMIT = 1_000;
+
     private final SimulationService simulationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -43,11 +46,7 @@ public class SimulationController {
         app.post("/api/simulation/tick", this::tick);
         app.get("/api/simulation/status", this::getStatus);
         app.get("/api/simulation/snapshot", this::getSnapshot);
-        app.get("/api/simulation/demand/schedule", ctx -> ctx.json(DemandScheduleDto.of(
-                simulationService.getDemandPlans(),
-                simulationService.getDemandRunStatistics(),
-                simulationService.getNetwork(),
-                simulationService.getStartTimeOfDaySeconds())));
+        app.get("/api/simulation/demand/schedule", this::getDemandSchedule);
         app.get("/api/simulation/diagnostics", ctx -> {
             Object diagnostics = simulationService.getDiagnostics();
             ctx.json(diagnostics == null ? Map.of() : diagnostics);
@@ -79,6 +78,59 @@ public class SimulationController {
             listener.accept(simulationService.getSnapshot());
             client.keepAlive();
         });
+    }
+
+    private void getDemandSchedule(Context ctx) {
+        try {
+            int offset = parseNonNegativeInteger(ctx.queryParam("offset"), "offset", 0);
+            int limit = parsePositiveInteger(
+                    ctx.queryParam("limit"),
+                    "limit",
+                    DEFAULT_DEMAND_SCHEDULE_LIMIT);
+            if (limit > MAX_DEMAND_SCHEDULE_LIMIT) {
+                throw new IllegalArgumentException(
+                        "limit must not exceed " + MAX_DEMAND_SCHEDULE_LIMIT);
+            }
+            ctx.json(DemandScheduleDto.of(
+                    simulationService.getDemandPlans(),
+                    simulationService.getDemandRunStatistics(),
+                    simulationService.getNetwork(),
+                    simulationService.getStartTimeOfDaySeconds(),
+                    offset,
+                    limit));
+        } catch (IllegalArgumentException exception) {
+            ctx.status(400).json(error(exception.getMessage()));
+        }
+    }
+
+    private static int parseNonNegativeInteger(
+            String raw,
+            String field,
+            int fallback) {
+        if (raw == null || raw.isBlank()) return fallback;
+        try {
+            int value = Integer.parseInt(raw);
+            if (value < 0) throw new NumberFormatException();
+            return value;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    field + " must be a non-negative integer");
+        }
+    }
+
+    private static int parsePositiveInteger(
+            String raw,
+            String field,
+            int fallback) {
+        if (raw == null || raw.isBlank()) return fallback;
+        try {
+            int value = Integer.parseInt(raw);
+            if (value <= 0) throw new NumberFormatException();
+            return value;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    field + " must be a positive integer");
+        }
     }
 
     private void initialize(Context ctx) {

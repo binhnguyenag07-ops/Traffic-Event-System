@@ -129,6 +129,9 @@ class DemandBackendIntegrationTest {
         simulator.advanceTick();
         assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.DWELLING);
         assertThat(vehicle.getCurrentResolvedPlace()).isEqualTo(work);
+        assertThat(simulator.getCurrentFrame().vehicles()).isEmpty();
+        assertThat(simulator.getVehicleStatesAtTick(simulator.getCurrentTick()))
+                .isEmpty();
         var dwellingPose = new VehiclePoseResolver()
                 .resolveAll(List.of(vehicle), network)
                 .get(vehicle.getId());

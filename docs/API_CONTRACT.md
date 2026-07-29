@@ -144,7 +144,7 @@ during the lateral movement.
 | POST | `/api/simulation/tick` | One manual logical tick |
 | PUT | `/api/simulation/parameters` | Logical seconds per tick and/or playback interval |
 | GET | `/api/simulation/status` | Status, clock, playback settings, and demand counters |
-| GET | `/api/simulation/demand/schedule` | Exact seeded plans with named places and estimated leg/dwell/return clocks |
+| GET | `/api/simulation/demand/schedule?offset={n}&limit={n}` | Paged seeded plans plus full-schedule hourly/purpose/vehicle aggregates |
 | GET | `/api/simulation/tick/current` | Current integer trace tick |
 | GET | `/api/simulation/snapshot` | Current snapshot |
 | GET | `/api/simulation/diagnostics` | Adaptive navigation, information, wait, U-turn, and deadlock evidence |
@@ -159,7 +159,7 @@ during the lateral movement.
 | GET | `/api/simulation/trace/flow` | Per-road density/speed/flow samples |
 | GET | `/api/simulation/trace/fundamental` | Density-bin averages for a fundamental diagram |
 | GET | `/api/simulation/trace/roads/{roadId}/time-space` | Per-vehicle road trajectories |
-| GET | `/api/simulation/physical-view` | Static physical scene plus current frame state |
+| GET | `/api/simulation/physical-view` | Static physical scene plus optional current frame state |
 | GET | `/api/simulation/physical-view/state` | Lightweight current physical state |
 | GET | `/api/statistics` | Traffic and algorithm metrics |
 | GET | `/api/statistics/traffic` | Traffic metrics only |
@@ -186,6 +186,21 @@ Arrived vehicles stay in snapshots for at least five simulated seconds, then
 move to completed-trip history. Initialize, reset, scenario activation, and map
 replacement clear traces and completed-trip history.
 
+Long-dwell multi-leg vehicles remain in the authoritative simulator so they can
+depart for their next leg, and traffic statistics count them under
+`dwellingVehicles`. They are deliberately omitted from renderer frames,
+snapshot vehicle arrays and per-tick traces while dwelling inside a building.
+This prevents thousands of parked agents from being serialized/drawn at one
+point; their trace has a documented gap and they reappear at the authoritative
+building-access pose when the next leg begins.
+
+`GET /api/simulation/physical-view` accepts `fullMap=true` for retained static
+geometry and `includeState=false` to omit live vehicles/signals from that
+potentially large response. The Physical View uses both flags at boot, then
+immediately requests camera-bounded moving state from
+`/api/simulation/physical-view/state`. Omitting `includeState` preserves the
+older combined-response behavior.
+
 Tick-indexed vehicle traces retain the latest 5,000 ticks. Flow recording
 retains the latest 100,000 per-road samples. Renderer history separately keeps
 900 timestamps. These are bounded in-memory windows rather than unbounded
@@ -193,10 +208,12 @@ full-day exports.
 
 Initialization accepts the complete demand shape documented in
 `DEMAND_AND_SCENARIO_DESIGN.md`: `demandParameters`, clock/duration, seed,
-scale, zones, and `demandSources`. Legacy `vehicles` and `events` remain valid
-and may be combined with generated traffic. A source may select buildings,
-boundaries, zones or an explicit place; arbitrary new purpose identifiers do
-not require a Java enum.
+scale, optional `warmUpSeconds`, optional `automaticCollisionEvents`, zones,
+and `demandSources`. The collision flag defaults to `true`; the bundled
+typical-day scenario opts out because it has no calibrated crash-frequency
+model. Legacy `vehicles` and `events` remain valid and may be combined with
+generated traffic. A source may select buildings, boundaries, zones or an
+explicit place; arbitrary new purpose identifiers do not require a Java enum.
 
 `GET /api/simulation/status` contains a `demand` object with
 `scheduledTrips`, `spawnedTrips`, `failedTrips`, `pendingTrips`, and
@@ -208,14 +225,31 @@ no directed path. Traffic statistics separately report `roadActiveVehicles`,
 ### Exact demand schedule
 
 `GET /api/simulation/demand/schedule` is a read-only projection of the resolved
-`TripPlan` list. It never rolls new destinations. A shortened response shape is:
+`TripPlan` list. It never rolls new destinations. `offset` defaults to 0;
+`limit` defaults to 250 and must be between 1 and 1,000. Invalid values return
+`400`. Only the requested page receives the directed free-flow route estimate;
+the lightweight aggregates always describe the complete schedule. A shortened
+response shape is:
 
 ```jsonc
 {
   "startTimeOfDaySeconds": 21600.0,
-  "totalPlans": 156,
+  "totalPlans": 38518,
+  "offset": 0,
+  "limit": 250,
+  "returnedPlans": 250,
   "failedPlans": 0,
   "failedPlanIds": [],
+  "hourlyPlanCounts": [/* 24 full-schedule counts, midnight through 23:00 */],
+  "purposeCounts": {
+    "INBOUND_WORK": 18000,
+    "THROUGH": 7199,
+    "VISITOR": 10800
+  },
+  "vehicleTypeCounts": {
+    "MOTORCYCLE": 34506,
+    "CAR": 4012
+  },
   "estimateBasis": "DIRECTED_FREE_FLOW_SHORTEST_TIME_PLUS_BUILDING_DRIVEWAYS_AND_DWELL",
   "plans": [{
     "id": "resident-work-internal-...",
@@ -299,31 +333,37 @@ network geometry.
 ```jsonc
 {
   "status": "READY",
-  "currentTick": 0,
-  "elapsedSeconds": 0.0,
+  "currentTick": 300,
+  "elapsedSeconds": 300.0,
   "simulationSecondsPerTick": 0.5,
   "playbackIntervalMs": 1000,
   "startTimeOfDaySeconds": 21600.0,   // the run began at 06:00
-  "timeOfDaySeconds": 21600.0,
-  "timeOfDay": "06:00",
+  "timeOfDaySeconds": 21900.0,
+  "timeOfDay": "06:05",
   "demand": {
-    "scheduledTrips": 156,
-    "spawnedTrips": 0,
+    "scheduledTrips": 38518,
+    "spawnedTrips": 300,
     "failedTrips": 0,
-    "pendingTrips": 156,
+    "pendingTrips": 38218,
     "failedPlanIds": []
   }
 }
 ```
 
-This is the initial status of the checked-in District 1 scenario. It has no
-scripted warm-start vehicles; every vehicle in the run is attributable to a
+This is the initial status of the checked-in District 1 scenario. The 300
+seconds are a one-time microscopic initialization pre-roll using ordinary
+demand, signals, routing and vehicle dynamics. Pre-roll frames/traces are not
+retained; only the resulting 06:05 state becomes the first replay frame. It has
+no scripted warm-start vehicles, so every vehicle remains attributable to a
 scheduled demand plan.
 
 Those playback values are the backend's pre-dashboard defaults. When the
 frontend activates a 24-hour demand scenario it sends
 `simulationSecondsPerTick=30` and `playbackIntervalMs=250` (120× overview);
-opening Physical View sends `0.5` and `250` (2× detail).
+opening Physical View sends `0.25` and `250` (1× live camera). A direct
+Physical View launch uses that live pace before playback starts and therefore
+never receives even one 30-second overview tick. Opening or closing the camera
+does not seek or reset elapsed time.
 
 `startTimeOfDaySeconds` is published so a client can label **any** recorded
 frame with its clock time from that frame's own `elapsedSeconds`:

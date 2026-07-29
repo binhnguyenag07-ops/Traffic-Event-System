@@ -4,12 +4,14 @@ import NetworkEditor from './components/NetworkEditor'
 import ExperimentPanel from './components/ExperimentPanel'
 import TimelineScrubber from './components/TimelineScrubber'
 import DemandSchedulePanel from './components/DemandSchedulePanel'
+import { shouldShowDemandSchedule } from './components/demandScheduleUtils'
 import { useTrafficDashboard } from './hooks/useTrafficDashboard'
 import { DEFAULT_PHYSICAL_ZOOM } from './mapViewport'
 import { isVehicleVisibleOnMap } from './vehicleVisibility'
 import { inspectorEntries } from './inspector'
 import { buildingLabel, intersectionLabel, roadLabel } from './displayLabels'
 import { formatTimeOfDay, timeOfDaySeconds } from './simulationTime'
+import { enterPhysicalLivePace } from './physical/livePace'
 
 // PixiJS is only needed in the lane-level view. Keeping it out of the initial
 // dashboard bundle makes the normal Leaflet view interactive sooner and avoids
@@ -31,11 +33,10 @@ const EVENT_TYPES = [
 ]
 
 const SIMULATION_PACES = [
-  { id: 'DETAIL', label: 'Lane detail · 2 sim s/s', step: 0.5, interval: 250 },
+  { id: 'REALTIME', label: 'Real time · 1 sim s/s', step: 0.25, interval: 250 },
   { id: 'BALANCED', label: 'Balanced · 10 sim s/s', step: 2.5, interval: 250 },
   { id: 'DAY', label: '24 h overview · 120 sim s/s', step: 30, interval: 250 },
 ]
-const PHYSICAL_DETAIL_PACE = SIMULATION_PACES[0]
 
 function Metric({ label, value, tone = '' }) {
   return (
@@ -144,7 +145,6 @@ function LabBanner({ scenario, cases, onSelectCase, onLeave, busy }) {
 }
 
 export default function App() {
-  const dashboard = useTrafficDashboard()
   const [labId, setLabId] = useState(labIdFromUrl)
   const [initialPhysical] = useState(physicalTargetFromUrl)
   const [physicalOpen, setPhysicalOpen] = useState(Boolean(initialPhysical))
@@ -156,11 +156,13 @@ export default function App() {
         radiusMetres: initialPhysical.radiusMetres,
       }
     : null)
+  const dashboard = useTrafficDashboard({ physicalLiveMode: physicalOpen })
   const {
     intersections, roads, networkRoads, viewRoads, buildings, scenarios, activeScenario, snapshot, viewFrame,
     timeline, viewingHistory, historyLoading, statistics, algorithms,
-    route, comparison, selected, loading, error, tickDelay, streamConnected, importSummary,
-    simulationClock, demandSchedule, setSimulationPace,
+    route, comparison, selected, loading, error, tickDelay, streamConnected,
+    physicalRuntimeStatus, importSummary,
+    simulationClock, demandSchedule, demandScheduleLoading, setSimulationPace,
   } = dashboard
   const [routeStart, setRouteStart] = useState('')
   const [routeEnd, setRouteEnd] = useState('')
@@ -229,24 +231,24 @@ export default function App() {
     setPhysicalOpen(true)
   }, [labViewport])
 
-  // Large overview ticks are useful for crossing a full simulated day, but one
-  // live frame can span several junctions. The lane-level view switches back to
-  // the sub-second authoritative cadence so its interpolation always has the
-  // road/connector endpoints needed to keep vehicles on the tarmac.
+  // Physical View is a camera on the live head, never a 24-hour transport
+  // control. It changes only the reversible frame cadence: no tick, seek,
+  // reset, scenario activation or elapsed-time field is touched here.
   useEffect(() => {
-    if (!physicalOpen || simulationClock.simulationSecondsPerTick <= 1) return
-    if (!prePhysicalPaceRef.current) {
-      prePhysicalPaceRef.current = {
-        step: simulationClock.simulationSecondsPerTick,
-        interval: Number(tickDelay),
-      }
-    }
+    if (!physicalOpen || loading) return
+    const transition = enterPhysicalLivePace({
+      simulationSecondsPerTick: simulationClock.simulationSecondsPerTick,
+      playbackIntervalMs: Number(tickDelay),
+    }, prePhysicalPaceRef.current)
+    prePhysicalPaceRef.current = transition.savedBeforeOpen
+    if (!transition.shouldApply) return
     setSimulationPace(
-      PHYSICAL_DETAIL_PACE.step,
-      PHYSICAL_DETAIL_PACE.interval,
+      transition.target.simulationSecondsPerTick,
+      transition.target.playbackIntervalMs,
     ).catch(() => {})
   }, [
     physicalOpen,
+    loading,
     setSimulationPace,
     simulationClock.simulationSecondsPerTick,
     tickDelay,
@@ -305,7 +307,10 @@ export default function App() {
     const previousPace = prePhysicalPaceRef.current
     prePhysicalPaceRef.current = null
     if (previousPace) {
-      setSimulationPace(previousPace.step, previousPace.interval).catch(() => {})
+      setSimulationPace(
+        previousPace.simulationSecondsPerTick,
+        previousPace.playbackIntervalMs,
+      ).catch(() => {})
     }
   }, [setSimulationPace])
 
@@ -381,6 +386,21 @@ export default function App() {
     viewFrame,
     simulationClock.startTimeOfDaySeconds,
   ))
+  const liveClock = physicalOpen
+    ? formatTimeOfDay(simulationClock.timeOfDaySeconds)
+    : formatTimeOfDay(timeOfDaySeconds(
+      snapshot,
+      simulationClock.startTimeOfDaySeconds,
+    ))
+  const physicalStatus = physicalRuntimeStatus?.status || snapshot.status
+  const physicalStatusConnected = physicalRuntimeStatus?.connected !== false
+  const physicalStep = Number(
+    physicalRuntimeStatus?.simulationSecondsPerTick
+      ?? simulationClock.simulationSecondsPerTick,
+  )
+  const physicalInterval = Number(
+    physicalRuntimeStatus?.playbackIntervalMs ?? tickDelay,
+  )
   const selectedPace = SIMULATION_PACES.find((pace) => (
     Math.abs(pace.step - simulationClock.simulationSecondsPerTick) < 1e-9
     && pace.interval === Number(tickDelay)
@@ -459,11 +479,23 @@ export default function App() {
           <div><span className="eyebrow">Urban traffic simulator</span><h1>Flow control</h1></div>
         </div>
         <div className="live-strip" role="status" aria-live="polite">
-          <span className={`connection-dot ${streamConnected ? 'connected' : ''}`} />
-          <span>{viewingHistory ? 'Recorded frame' : streamConnected ? 'Live stream' : 'Reconnecting'}</span>
-          <strong>{viewingHistory ? 'HISTORY' : snapshot.status}</strong>
-          <b className="simulation-clock" aria-label={`Simulation time ${clock}`}>{clock}</b>
-          <b>T+{formatDuration(viewFrame.elapsedSeconds)}</b>
+          <span className={`connection-dot ${
+            physicalOpen ? physicalStatusConnected ? 'connected' : '' : streamConnected ? 'connected' : ''
+          }`} />
+          <span>{physicalOpen
+            ? physicalStatusConnected ? 'Viewport state stream' : 'Status reconnecting'
+            : viewingHistory ? 'Recorded frame' : streamConnected ? 'Live stream' : 'Reconnecting'}</span>
+          <strong>{physicalOpen ? physicalStatus : viewingHistory ? 'HISTORY' : snapshot.status}</strong>
+          {physicalOpen ? (
+            <b className="simulation-clock" aria-label={`Simulation time ${liveClock}`}>
+              {liveClock}
+            </b>
+          ) : (
+            <>
+              <b className="simulation-clock" aria-label={`Simulation time ${clock}`}>{clock}</b>
+              <b>T+{formatDuration(viewFrame.elapsedSeconds)}</b>
+            </>
+          )}
         </div>
         <div className="scenario-switcher">
           <label><span>Scenario</span>
@@ -515,9 +547,9 @@ export default function App() {
         busy={loading}
       />
 
-      <section className="workspace">
+      <section className={`workspace ${physicalOpen ? 'physical-mode' : ''}`}>
         <div className="map-stage">
-          {!labMode && <TrafficMap
+          {!labMode && !physicalOpen && <TrafficMap
             intersections={intersections}
             roads={viewRoads}
             vehicles={visibleVehicles}
@@ -537,6 +569,10 @@ export default function App() {
               setCaptureIntersection(false)
             }}
             onOpenPhysical={(viewport) => {
+              // The physical renderer always reads the authoritative live
+              // frame. Leave history inspection before opening it so the
+              // visible clock can never describe a different point in time.
+              dashboard.returnToLive()
               setMapViewport(viewport)
               setPhysicalOpen(true)
             }}
@@ -559,6 +595,12 @@ export default function App() {
                 // banner and the picker both showed the new case.
                 key={activeScenario}
                 viewport={mapViewport}
+                clockLabel={liveClock}
+                startTimeOfDaySeconds={simulationClock.startTimeOfDaySeconds}
+                simulationStatus={physicalStatus}
+                simulationSecondsPerTick={physicalStep}
+                playbackIntervalMs={physicalInterval}
+                statusConnected={physicalStatusConnected}
                 onViewportChange={setMapViewport}
                 onClose={labMode
                   // Closing in the lab would leave an empty stage, since the
@@ -568,7 +610,7 @@ export default function App() {
               />
             </Suspense>
           )}
-          <div className="map-metrics" aria-label={viewingHistory ? 'Historical traffic summary' : 'Live traffic summary'}>
+          {!physicalOpen ? <div className="map-metrics" aria-label={viewingHistory ? 'Historical traffic summary' : 'Live traffic summary'}>
             <Metric label="Fleet" value={visibleVehicles.length} />
             <Metric label={viewingHistory ? 'Frame time' : 'Average trip'}
               value={viewingHistory ? formatDuration(viewFrame.elapsedSeconds) : formatDuration(traffic.averageTravelTimeSeconds)} />
@@ -576,10 +618,10 @@ export default function App() {
             <Metric label="Active incidents" value={viewActiveEvents.length} tone={viewActiveEvents.length ? 'warning' : ''} />
             <Metric label={viewingHistory ? 'Frame ID' : 'Arrived'}
               value={viewingHistory ? viewFrame.frameId : traffic.arrivedVehicles || 0} />
-          </div>
+          </div> : null}
         </div>
 
-        <aside className="command-rail">
+        {!physicalOpen ? <aside className="command-rail">
           <section className="rail-section simulation-section">
             <div className="section-heading"><div><span className="eyebrow">Playback</span><h2>{scenarioName}</h2></div>
               <span className={`status-chip ${snapshot.status.toLowerCase()}`}>{snapshot.status}</span></div>
@@ -595,11 +637,17 @@ export default function App() {
                 disabled={loading || snapshot.status === 'RUNNING' || activeScenario === 'imported'}>
                 Reload scenario
               </button>
-              <Field label="Simulation pace">
-                <select value={selectedPace} onChange={(event) => {
+              <Field label="Overview pace">
+                <select value={physicalOpen ? 'PHYSICAL_LIVE' : selectedPace}
+                  disabled={physicalOpen}
+                  aria-describedby={physicalOpen ? 'physical-pace-note' : undefined}
+                  onChange={(event) => {
                   const pace = SIMULATION_PACES.find((item) => item.id === event.target.value)
                   if (pace) safely(() => setSimulationPace(pace.step, pace.interval))
                 }}>
+                  {physicalOpen
+                    ? <option value="PHYSICAL_LIVE">Live camera · 1 sim s/s</option>
+                    : null}
                   {selectedPace === 'CUSTOM' ? <option value="CUSTOM">Current custom pace</option> : null}
                   {SIMULATION_PACES.map((pace) => (
                     <option key={pace.id} value={pace.id}>{pace.label}</option>
@@ -607,15 +655,25 @@ export default function App() {
                 </select>
               </Field>
             </div>
+            {physicalOpen ? <p id="physical-pace-note" className="playback-note">
+              Physical View follows the current simulation clock at real-time
+              detail cadence. Closing it restores this overview pace.
+            </p> : null}
           </section>
 
-          <DemandSchedulePanel
-            schedule={demandSchedule}
-            currentTimeOfDaySeconds={timeOfDaySeconds(
-              viewFrame,
-              simulationClock.startTimeOfDaySeconds,
-            )}
-          />
+          {shouldShowDemandSchedule(demandSchedule?.totalPlans, labMode) ? (
+            <DemandSchedulePanel
+              schedule={demandSchedule}
+              loading={demandScheduleLoading}
+              onPageChange={(offset, limit) => {
+                dashboard.loadDemandSchedulePage(offset, limit).catch(() => {})
+              }}
+              currentTimeOfDaySeconds={timeOfDaySeconds(
+                viewFrame,
+                simulationClock.startTimeOfDaySeconds,
+              )}
+            />
+          ) : null}
 
           <details className="rail-section" open>
             <summary><span>Route lab</span><b>{route ? route.algorithm : 'Plan a trip'}</b></summary>
@@ -730,13 +788,13 @@ export default function App() {
           </details>
 
           <ExperimentPanel />
-        </aside>
+        </aside> : null}
       </section>
 
-      <TimelineScrubber timeline={timeline} frame={viewFrame} viewingHistory={viewingHistory}
+      {!physicalOpen ? <TimelineScrubber timeline={timeline} frame={viewFrame} viewingHistory={viewingHistory}
         loading={historyLoading} onSeek={dashboard.seekFrame} onLive={dashboard.returnToLive}
         roadCount={roads.length} intersectionCount={intersections.length}
-        incidentCount={viewActiveEvents.length} />
+        incidentCount={viewActiveEvents.length} /> : null}
     </main>
   )
 }

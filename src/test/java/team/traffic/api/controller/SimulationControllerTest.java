@@ -208,6 +208,28 @@ class SimulationControllerTest {
         assertThat(timeSpace.body()).contains("\"roadId\":\"AB\"", "\"points\":[]");
     }
 
+    @Test
+    void demandScheduleIsBoundedAndRejectsUnboundedPageRequests() throws Exception {
+        HttpResponse<String> page = get(
+                "/api/simulation/demand/schedule?offset=20&limit=50");
+        HttpResponse<String> tooLarge = get(
+                "/api/simulation/demand/schedule?limit=1001");
+        HttpResponse<String> invalidOffset = get(
+                "/api/simulation/demand/schedule?offset=-1");
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains(
+                "\"totalPlans\":0",
+                "\"offset\":20",
+                "\"limit\":50",
+                "\"returnedPlans\":0",
+                "\"hourlyPlanCounts\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]");
+        assertThat(tooLarge.statusCode()).isEqualTo(400);
+        assertThat(tooLarge.body()).contains("must not exceed 1000");
+        assertThat(invalidOffset.statusCode()).isEqualTo(400);
+        assertThat(invalidOffset.body()).contains("non-negative integer");
+    }
+
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + app.port() + path))
