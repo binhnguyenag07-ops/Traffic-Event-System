@@ -20,6 +20,78 @@ import team.traffic.domain.vehicle.VehicleType;
 
 class GravityDemandModelTest {
     @Test
+    void permitsTheSameFlowIdInDifferentSourcesWithoutSharingCachedDestinations() {
+        RoadNetwork network = new RoadNetwork();
+        for (String id : List.of("A", "B", "C")) {
+            network.addIntersection(new Intersection(id, id, 0, 0, LocationType.NORMAL));
+        }
+        network.addRoad(road("AB", "A", "B"));
+        network.addRoad(road("AC", "A", "C"));
+        DemandCurve hourSix = new DemandCurve(
+                "HOUR_SIX",
+                java.util.stream.IntStream.range(0, 24)
+                        .mapToObj(hour -> hour == 6 ? 1.0 : 0.0)
+                        .toList());
+        FlowSpec firstFlow = new FlowSpec(
+                "shared-flow-id",
+                new PurposeId("FIRST_SOURCE"),
+                1.0,
+                List.of(new VehicleMixEntry(VehicleType.CAR, 1.0)),
+                hourSix,
+                CompletionPolicy.REMOVE_AT_LAST_STOP,
+                List.of(new LegSpec(
+                        PlaceSpec.explicitIntersection("B"),
+                        DwellSpec.fixed(0))));
+        FlowSpec secondFlow = new FlowSpec(
+                "shared-flow-id",
+                new PurposeId("SECOND_SOURCE"),
+                1.0,
+                List.of(new VehicleMixEntry(VehicleType.MOTORCYCLE, 1.0)),
+                hourSix,
+                CompletionPolicy.REMOVE_AT_LAST_STOP,
+                List.of(new LegSpec(
+                        PlaceSpec.explicitIntersection("C"),
+                        DwellSpec.fixed(0))));
+        DemandScenario scenario = new DemandScenario(
+                6 * 3600,
+                3600,
+                93,
+                1,
+                List.of(
+                        new DemandSource(
+                                "first-source",
+                                PlaceSpec.explicitIntersection("A"),
+                                ProductionSpec.absolute(1),
+                                List.of(firstFlow)),
+                        new DemandSource(
+                                "second-source",
+                                PlaceSpec.explicitIntersection("A"),
+                                ProductionSpec.absolute(1),
+                                List.of(secondFlow))),
+                Map.of(),
+                parameters());
+
+        GravityDemandModel model = new GravityDemandModel(network, scenario);
+        GravityDemandModel replay = new GravityDemandModel(network, scenario);
+
+        assertThat(model.allPlans()).isEqualTo(replay.allPlans()).hasSize(2);
+        TripPlan firstPlan = model.allPlans().stream()
+                .filter(plan -> plan.purpose().value().equals("FIRST_SOURCE"))
+                .findFirst()
+                .orElseThrow();
+        TripPlan secondPlan = model.allPlans().stream()
+                .filter(plan -> plan.purpose().value().equals("SECOND_SOURCE"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(firstPlan.id()).startsWith("first-source-shared-flow-id-");
+        assertThat(firstPlan.legs()).extracting(TripLeg::to)
+                .containsExactly(ResolvedPlace.intersection("B"));
+        assertThat(secondPlan.id()).startsWith("second-source-shared-flow-id-");
+        assertThat(secondPlan.legs()).extracting(TripLeg::to)
+                .containsExactly(ResolvedPlace.intersection("C"));
+    }
+
+    @Test
     void generatesDeterministicClosedPlansForAnOpenPurposeIdentifier() {
         RoadNetwork network = new RoadNetwork();
         network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
@@ -60,6 +132,18 @@ class GravityDemandModelTest {
 
         assertThat(first.allPlans()).isEqualTo(replay.allPlans()).hasSize(10);
         assertThat(first.generationFailedPlanIds()).isEmpty();
+        TripPlan earliest = first.allPlans().get(0);
+        TripPlan second = first.allPlans().get(1);
+        assertThat(first.tripsBeginningIn(-1e-9, earliest.departAtSeconds()))
+                .containsExactly(earliest);
+        assertThat(first.tripsBeginningIn(
+                        earliest.departAtSeconds(),
+                        second.departAtSeconds()))
+                .containsExactly(second);
+        assertThat(first.tripsBeginningIn(
+                        earliest.departAtSeconds(),
+                        earliest.departAtSeconds()))
+                .isEmpty();
         assertThat(first.allPlans())
                 .allSatisfy(plan -> {
                     assertThat(plan.purpose().value()).isEqualTo("DELIVERY_WITH_PICKUP");

@@ -1,7 +1,10 @@
 package team.traffic.api.dto;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import team.traffic.domain.demand.CompletionPolicy;
 import team.traffic.domain.demand.PlaceKind;
 import team.traffic.domain.demand.ResolvedPlace;
@@ -23,13 +26,22 @@ import team.traffic.simulation.SimulationClock;
 public record DemandScheduleDto(
         double startTimeOfDaySeconds,
         int totalPlans,
+        int offset,
+        int limit,
+        int returnedPlans,
         int failedPlans,
         List<String> failedPlanIds,
+        List<Integer> hourlyPlanCounts,
+        Map<String, Integer> purposeCounts,
+        Map<String, Integer> vehicleTypeCounts,
         String estimateBasis,
         List<DemandPlanDto> plans) {
 
     public DemandScheduleDto {
         failedPlanIds = List.copyOf(failedPlanIds);
+        hourlyPlanCounts = List.copyOf(hourlyPlanCounts);
+        purposeCounts = Map.copyOf(purposeCounts);
+        vehicleTypeCounts = Map.copyOf(vehicleTypeCounts);
         plans = List.copyOf(plans);
     }
 
@@ -38,19 +50,80 @@ public record DemandScheduleDto(
             DemandRunStatistics statistics,
             RoadNetwork network,
             double startTimeOfDaySeconds) {
+        int planCount = plans == null ? 0 : plans.size();
+        return of(
+                plans,
+                statistics,
+                network,
+                startTimeOfDaySeconds,
+                0,
+                Math.max(1, planCount));
+    }
+
+    public static DemandScheduleDto of(
+            List<TripPlan> plans,
+            DemandRunStatistics statistics,
+            RoadNetwork network,
+            double startTimeOfDaySeconds,
+            int offset,
+            int limit) {
+        if (offset < 0) throw new IllegalArgumentException("Schedule offset must not be negative");
+        if (limit <= 0) throw new IllegalArgumentException("Schedule limit must be positive");
         List<TripPlan> safePlans = plans == null ? List.of() : List.copyOf(plans);
         DemandRunStatistics safeStatistics =
                 statistics == null ? DemandRunStatistics.empty() : statistics;
         TripScheduleEstimator estimator = new TripScheduleEstimator(network);
+        int fromIndex = Math.min(offset, safePlans.size());
+        int toIndex = (int) Math.min(
+                safePlans.size(),
+                (long) fromIndex + limit);
+        List<TripPlan> page = safePlans.subList(fromIndex, toIndex);
         return new DemandScheduleDto(
                 startTimeOfDaySeconds,
                 safePlans.size(),
+                offset,
+                limit,
+                page.size(),
                 safeStatistics.failedTrips(),
                 safeStatistics.failedPlanIds(),
+                hourlyPlanCounts(safePlans, startTimeOfDaySeconds),
+                countsByPurpose(safePlans),
+                countsByVehicleType(safePlans),
                 TripScheduleEstimator.BASIS,
-                safePlans.stream()
+                page.stream()
                         .map(plan -> plan(plan, estimator, network, startTimeOfDaySeconds))
                         .toList());
+    }
+
+    private static List<Integer> hourlyPlanCounts(
+            List<TripPlan> plans,
+            double startTimeOfDaySeconds) {
+        int[] counts = new int[24];
+        for (TripPlan plan : plans) {
+            double timeOfDay = SimulationClock.timeOfDayAt(
+                    startTimeOfDaySeconds,
+                    plan.departAtSeconds());
+            counts[(int) (timeOfDay / 3_600)]++;
+        }
+        List<Integer> result = new ArrayList<>(24);
+        for (int count : counts) result.add(count);
+        return List.copyOf(result);
+    }
+
+    private static Map<String, Integer> countsByPurpose(List<TripPlan> plans) {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (TripPlan plan : plans) {
+            counts.merge(plan.purpose().value(), 1, Integer::sum);
+        }
+        return new LinkedHashMap<>(counts);
+    }
+
+    private static Map<String, Integer> countsByVehicleType(List<TripPlan> plans) {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (TripPlan plan : plans) {
+            counts.merge(plan.vehicleType().name(), 1, Integer::sum);
+        }
+        return new LinkedHashMap<>(counts);
     }
 
     private static DemandPlanDto plan(

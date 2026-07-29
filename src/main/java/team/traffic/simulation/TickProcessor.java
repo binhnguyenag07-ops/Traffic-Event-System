@@ -54,6 +54,7 @@ public class TickProcessor {
     private final TrafficEventBus eventBus;
     private final VehicleDynamicsEngine dynamicsEngine;
     private final CollisionDetector collisionDetector;
+    private final boolean automaticCollisionEvents;
     private final AdaptiveNavigationCoordinator navigationCoordinator;
     private final TrafficEventCoordinator eventCoordinator = new TrafficEventCoordinator();
     private final Map<String, Set<String>> stoppedVehicleIdsByEventId = new HashMap<>();
@@ -89,6 +90,17 @@ public class TickProcessor {
             VehicleDynamicsEngine dynamicsEngine,
             AdaptiveTrafficConfig adaptiveTrafficConfig,
             long scenarioSeed) {
+        this(routingService, eventBus, dynamicsEngine, adaptiveTrafficConfig,
+                scenarioSeed, true);
+    }
+
+    public TickProcessor(
+            RoutingService routingService,
+            TrafficEventBus eventBus,
+            VehicleDynamicsEngine dynamicsEngine,
+            AdaptiveTrafficConfig adaptiveTrafficConfig,
+            long scenarioSeed,
+            boolean automaticCollisionEvents) {
         if (dynamicsEngine == null) {
             throw new IllegalArgumentException("Vehicle dynamics engine is required.");
         }
@@ -97,6 +109,7 @@ public class TickProcessor {
         this.dynamicsEngine = dynamicsEngine;
         this.dynamicsEngine.configureDeadlock(adaptiveTrafficConfig);
         this.collisionDetector = new CollisionDetector();
+        this.automaticCollisionEvents = automaticCollisionEvents;
         this.navigationCoordinator = new AdaptiveNavigationCoordinator(
                 adaptiveTrafficConfig, scenarioSeed);
     }
@@ -187,7 +200,8 @@ public class TickProcessor {
         }
         List<Vehicle> movable = new ArrayList<>();
         for (Vehicle vehicle : vehicles) {
-            if (vehicle.isJourneyComplete()) {
+            if (vehicle.isJourneyComplete()
+                    || vehicle.getStatus() == VehicleStatus.DWELLING) {
                 continue;
             }
             // Trip time follows the simulator's established tick accounting:
@@ -204,7 +218,8 @@ public class TickProcessor {
         }
 
         while (cursorSeconds < tickEndSeconds - TIME_EPSILON_SECONDS) {
-            if (detectCollisions(network, vehicles, events, cursorSeconds)) {
+            if (automaticCollisionEvents
+                    && detectCollisions(network, vehicles, events, cursorSeconds)) {
                 frameObserver.accept(cursorSeconds, FrameBoundaryKind.STATE_TRANSITION);
             }
             double boundarySeconds = nextEventBoundary(events, cursorSeconds, tickEndSeconds);
@@ -221,7 +236,8 @@ public class TickProcessor {
 
         if (!navigationCoordinator.isEnabled()) {
             for (Vehicle vehicle : movable) {
-                if (vehicle.getStatus() == VehicleStatus.BLOCKED) {
+                if (vehicle.getStatus() == VehicleStatus.BLOCKED
+                        && !vehicle.hasRoutableRemainingRoute(network)) {
                     vehicle.recomputeRoute(network, routingService);
                 }
             }

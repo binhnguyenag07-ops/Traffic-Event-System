@@ -12,12 +12,23 @@ remain available from the repository root. OpenStreetMap basemap tiles require
 internet access; routing, demand, physics, and vehicle poses run locally.
 
 The normal launch loads and initializes **Central District 1 - 24-hour Weekday
-Proxy**. It starts at 06:00 with seed `20260728`, 156 deterministic demand
-plans, and no scripted warm-start traffic. The earliest plan departs 68.79
-simulated seconds after start. The scenario covers research-informed historical
-resident internal/outbound proxies plus synthetic through, inbound-work, and
-visitor cordon flows across the central study window. These are not observed or
-calibrated current District 1 traffic counts. Use the
+Proxy**. Its demand horizon starts at 06:00 with seed `20260728` and 38,518
+deterministic demand plans / 69,837 vehicle legs. Initialization executes five
+minutes of ordinary microscopic dynamics, so the first interactive frame is
+06:05 with 300 due plans already spawned. It has no separately scripted
+warm-start traffic. The scenario covers research-informed historical resident
+internal/outbound proxies plus synthetic through, inbound-work, and visitor
+cordon flows across the central study window.
+
+The typical-day run begins with zero incidents and disables spontaneous
+collision-event generation because it has no calibrated crash-frequency model.
+Use the incident controls or the **Crashed vehicles must stay put** lab when
+demonstrating accidents; ordinary car following and collision-safe spacing
+remain active in the demand run.
+
+The runtime is an approximately 1:9 microscopic agent sample against the
+documented 0.6-million-leg/day historical midpoint, not an observed or
+calibrated current District 1 count. Use the
 [scenario evidence note](DISTRICT1_SCENARIO.md) if the audience asks which
 claims are verified facts, research-informed proxies, or synthetic assumptions.
 
@@ -42,12 +53,13 @@ POST /api/scenarios/district-1/activate
 Reloading creates a new timeline and clears the old traces and completed-trip
 history.
 
-The 24-hour scenario initially selects **24 h overview · 120 sim s/s**, so its
-first departure at 68.79 simulated seconds appears in under one wall second and
-the complete demand day takes about 12 wall minutes. Select **Balanced · 10 sim
-s/s** for the normal macro walkthrough. Opening Physical View automatically
-returns to **Lane detail · 2 sim s/s**, because a 30-second logical overview
-tick is suitable for aggregate progression, not close-up turn animation.
+The 24-hour scenario initially selects **24 h overview · 120 sim s/s** on the
+macro dashboard, so the complete demand day takes about 12 wall minutes.
+Select **Balanced · 10 sim s/s** for a slower aggregate walkthrough. Opening
+Physical View switches to **Live camera · 1 sim s/s**: four 0.25-second
+authoritative ticks per wall second. It does not replay the day, seek the clock,
+or run close-up turns with 30-second overview ticks. Closing the camera restores
+the previous macro pace.
 
 ## Recommended walkthrough
 
@@ -64,20 +76,21 @@ tick is suitable for aggregate progression, not close-up turn animation.
    fields, not something the presenter must memorize.
 
 3. Read the top-bar 24-hour clock, then open **24-hour demand**. Show the
-   departure histogram, filter by hour/purpose, and expand a plan to see its
-   named origin, destination, dwell, and estimated return. Explain that
-   departures are exact seeded plans; arrival/return clocks are directed
-   free-flow estimates and live queues/signals decide actual arrival. Generic
-   or repeated place names include six-decimal coordinates so two households
-   sharing the same label are still distinguishable without exposing raw ids.
+   read-only departure histogram and expand one of the 12 server-paged plans to
+   see its named origin, destination, dwell, and estimated return. Explain that
+   the histogram aggregates all 38,518 departures and is not a time selector;
+   every plan spawns automatically when the backend clock reaches it.
+   Arrival/return clocks are directed free-flow estimates and live
+   queues/signals decide actual arrival. Generic or repeated place names include
+   six-decimal coordinates so two households sharing the same label are still
+   distinguishable without exposing raw ids.
 
-4. Select **Lane detail · 2 sim s/s** and open the physical view near a
-   junction. Watch a vehicle turn through
-   several frames. The default logical step is 0.5 simulated seconds, and the
-   backend frame carries `inJunction`, incoming/outgoing road ids, position, and
-   heading. The PixiJS renderer follows the lane connector curve, so a vehicle
-   should not spin, cut a straight chord, or choose its own direction at the
-   intersection.
+4. Open the physical view near a junction. The control locks to
+   **Live camera · 1 sim s/s** and shows the authoritative 24-hour clock. Watch
+   a vehicle turn through several 0.25-second frames. The backend frame carries
+   `inJunction`, incoming/outgoing road ids, position, and heading. The PixiJS
+   renderer follows the lane connector curve, so a vehicle should not spin,
+   cut a straight chord, or choose its own direction at the intersection.
 
 5. Pause and press **Step** a few times if the audience wants to inspect that
    junction movement slowly. Manual step returns `409` while playback is
@@ -91,8 +104,9 @@ tick is suitable for aggregate progression, not close-up turn animation.
 
 7. Inspect `GET /api/simulation/status` and the Performance panel. Relate
    `scheduledTrips`, `spawnedTrips`, `pendingTrips`, and `failedPlanIds` to the
-   seeded demand. With no warm-start entries, every vehicle can be matched to
-   one plan in `GET /api/simulation/demand/schedule`.
+   seeded demand. The 06:05 starting fleet came from the first 300 due plans,
+   not an untraceable warm-start list. Every vehicle can be matched to one plan
+   through the paged `GET /api/simulation/demand/schedule`.
 
 8. Open **Fleet** and click **Spawn random test vehicle**. The control submits a
    real `POST /api/vehicles` request for a reachable building-to-building car or
@@ -140,11 +154,12 @@ tick is suitable for aggregate progression, not close-up turn animation.
 
 14. In the physical view, pan and zoom across the already loaded full-network
     geometry. Static lanes, junctions, buildings, and land cover load once per
-    timeline; only vehicle and signal state is polled afterwards. Client
-    interpolation smooths two backend poses for display and never changes
-    physics. A filtering motorcycle can be drawn between lane centres, with a
-    short trail behind it. Closing the physical view returns the macro map to
-    the same camera area.
+    timeline; later vehicle/signal requests follow the camera radius with a 20%
+    prefetch ring, and Pixi submits only sprites intersecting the viewport.
+    Client interpolation smooths two backend poses for display and never
+    changes physics. A filtering motorcycle can be drawn between lane centres,
+    with a short trail behind it. Closing the physical view returns the macro
+    map to the same camera area and restores the former overview pace.
 
     Add `?physical=<lat>,<lon>` to the URL to open directly at a known junction.
 

@@ -17,7 +17,6 @@ import team.traffic.domain.routing.RoutePreference;
 import team.traffic.domain.routing.RouteRequest;
 import team.traffic.domain.routing.RouteResult;
 import team.traffic.domain.routing.RouteStep;
-import team.traffic.domain.vehicle.VehicleType;
 
 /** Shared movement-aware search used by the legacy strategy facades. */
 final class EdgeStateSearch {
@@ -36,7 +35,28 @@ final class EdgeStateSearch {
             double congestionThreshold,
             Mode mode,
             Heuristic heuristic) {
-        long started = System.currentTimeMillis();
+        return find(
+                network,
+                request,
+                algorithmName,
+                congestionThreshold,
+                mode,
+                heuristic,
+                true,
+                System.currentTimeMillis(),
+                0);
+    }
+
+    private static RouteResult find(
+            RoadNetwork network,
+            RouteRequest request,
+            String algorithmName,
+            double congestionThreshold,
+            Mode mode,
+            Heuristic heuristic,
+            boolean allowCongestedFallback,
+            long started,
+            int previouslyVisited) {
         String startId = request.getStartIntersectionId();
         String destinationId = request.getDestinationIntersectionId();
         if (startId.equals(destinationId)) {
@@ -51,7 +71,7 @@ final class EdgeStateSearch {
                 .mapToDouble(Road::getSpeedLimit)
                 .max()
                 .orElse(1.0);
-        State start = new State(startId, null);
+        State start = new State(startId, request.getIncomingRoadId());
         Map<State, Double> costs = new HashMap<>();
         Map<State, Previous> previous = new HashMap<>();
         PriorityQueue<QueueEntry> queue = new PriorityQueue<>(
@@ -78,7 +98,7 @@ final class EdgeStateSearch {
                     network,
                     current.junctionId(),
                     current.incomingRoadId(),
-                    VehicleType.CAR)) {
+                    request.getVehicleType())) {
                 Road road = network.getRoad(movement.toRoadId());
                 if (road == null || RouteBuilder.isRoadAvoidable(road, congestionThreshold)) continue;
                 double edgeCost = mode == Mode.BFS
@@ -103,6 +123,23 @@ final class EdgeStateSearch {
             }
         }
         if (destination == null) {
+            if (allowCongestedFallback && congestionThreshold < 1.0) {
+                // Congestion avoidance is a preference, not a topological
+                // closure. If every legal route is saturated, return a route
+                // through that queue and let microscopic admission hold the
+                // vehicle at the stop line/boundary instead of rejecting the
+                // trip as impossible.
+                return find(
+                        network,
+                        request,
+                        algorithmName,
+                        1.0,
+                        mode,
+                        heuristic,
+                        false,
+                        started,
+                        previouslyVisited + visited);
+            }
             throw new NoSuchElementException(
                     "No route found from " + startId + " to " + destinationId);
         }
@@ -134,7 +171,7 @@ final class EdgeStateSearch {
                 new Route(steps, totalDistance, totalTimeHours, totalCost),
                 algorithmName,
                 System.currentTimeMillis() - started,
-                visited);
+                previouslyVisited + visited);
     }
 
     private static double movementPenalty(

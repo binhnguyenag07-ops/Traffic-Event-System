@@ -44,10 +44,28 @@ public final class GravityDemandModel implements TripDemandModel {
                 || toInclusiveSeconds < fromExclusiveSeconds) {
             throw new IllegalArgumentException("Demand interval must be finite and ordered");
         }
-        return plans.stream()
-                .filter(plan -> plan.departAtSeconds() > fromExclusiveSeconds
-                        && plan.departAtSeconds() <= toInclusiveSeconds)
-                .toList();
+        int fromIndex = firstDepartureAfter(fromExclusiveSeconds);
+        int toIndex = firstDepartureAfter(toInclusiveSeconds);
+        return plans.subList(fromIndex, toIndex);
+    }
+
+    /**
+     * Binary upper-bound lookup keeps each scheduler poll logarithmic in the
+     * full-day plan count. A physical-view tick must not rescan tens of
+     * thousands of future departures merely to discover the handful due now.
+     */
+    private int firstDepartureAfter(double seconds) {
+        int low = 0;
+        int high = plans.size();
+        while (low < high) {
+            int middle = (low + high) >>> 1;
+            if (plans.get(middle).departAtSeconds() <= seconds) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        return low;
     }
 
     @Override
@@ -71,6 +89,10 @@ public final class GravityDemandModel implements TripDemandModel {
         Random random = new Random(scenario.seed());
         List<TripPlan> generated = new ArrayList<>();
         List<String> failedPlanIds = new ArrayList<>();
+        Map<CandidateKey, List<List<ResolvedPlace>>> candidatesByFlowAndOrigin =
+                new HashMap<>();
+        Map<DestinationChoiceKey, WeightedDestinations> destinationChoices =
+                new HashMap<>();
         int[] sequence = {0};
 
         for (DemandSource source : scenario.sources()) {
@@ -89,16 +111,19 @@ public final class GravityDemandModel implements TripDemandModel {
                             * source.production().tripsPerPersonPerDay();
                     generateForOrigin(network, scenario, resolver, reachability,
                             random, generated, sequence,
-                            failedPlanIds, source, origin, dailyProduction);
+                            failedPlanIds, candidatesByFlowAndOrigin,
+                            destinationChoices, source, origin, dailyProduction);
                 }
             } else {
                 for (FlowSpec flow : source.flows()) {
                     List<ResolvedPlace> viableOrigins = origins.stream()
                             .filter(origin -> hasViablePlan(
-                                    resolver,
-                                    reachability,
-                                    flow,
-                                    origin))
+                                     resolver,
+                                     reachability,
+                                     candidatesByFlowAndOrigin,
+                                     source.id(),
+                                     flow,
+                                     origin))
                             .toList();
                     if (viableOrigins.isEmpty()) {
                         throw new IllegalArgumentException(
@@ -107,7 +132,9 @@ public final class GravityDemandModel implements TripDemandModel {
                     }
                     generateFlow(network, scenario, resolver, reachability,
                             random, generated, sequence,
-                            failedPlanIds, source.id(), flow, source.production().vehiclesPerDay(),
+                            failedPlanIds, candidatesByFlowAndOrigin,
+                            destinationChoices, source.id(), flow,
+                            source.production().vehiclesPerDay(),
                             () -> viableOrigins.get(random.nextInt(viableOrigins.size())));
                 }
             }
@@ -130,27 +157,38 @@ public final class GravityDemandModel implements TripDemandModel {
             List<TripPlan> generated,
             int[] sequence,
             List<String> failedPlanIds,
+            Map<CandidateKey, List<List<ResolvedPlace>>> candidatesByFlowAndOrigin,
+            Map<DestinationChoiceKey, WeightedDestinations> destinationChoices,
             DemandSource source,
             ResolvedPlace origin,
             double dailyProduction) {
         for (FlowSpec flow : source.flows()) {
-            if (!hasViablePlan(resolver, reachability, flow, origin)) {
+            if (!hasViablePlan(
+                    resolver,
+                    reachability,
+                    candidatesByFlowAndOrigin,
+                    source.id(),
+                    flow,
+                    origin)) {
                 continue;
             }
             generateFlow(network, scenario, resolver, reachability,
                     random, generated, sequence,
-                    failedPlanIds, source.id(), flow, dailyProduction, () -> origin);
+                    failedPlanIds, candidatesByFlowAndOrigin,
+                    destinationChoices, source.id(), flow,
+                    dailyProduction, () -> origin);
         }
     }
 
     private boolean hasViablePlan(
             PlaceResolver resolver,
             ReachabilityIndex reachability,
+            Map<CandidateKey, List<List<ResolvedPlace>>> candidatesByFlowAndOrigin,
+            String sourceId,
             FlowSpec flow,
             ResolvedPlace origin) {
-        List<List<ResolvedPlace>> candidatesByLeg = flow.legs().stream()
-                .map(legSpec -> resolver.resolve(legSpec.to(), origin))
-                .toList();
+        List<List<ResolvedPlace>> candidatesByLeg = candidatesFor(
+                resolver, candidatesByFlowAndOrigin, sourceId, flow, origin);
         return canCompleteSuffix(
                 origin,
                 0,
@@ -170,6 +208,8 @@ public final class GravityDemandModel implements TripDemandModel {
             List<TripPlan> generated,
             int[] sequence,
             List<String> failedPlanIds,
+            Map<CandidateKey, List<List<ResolvedPlace>>> candidatesByFlowAndOrigin,
+            Map<DestinationChoiceKey, WeightedDestinations> destinationChoices,
             String sourceId,
             FlowSpec flow,
             double sourceDailyProduction,
@@ -193,7 +233,8 @@ public final class GravityDemandModel implements TripDemandModel {
                 String planId = sourceId + "-" + flow.id() + "-" + String.format("%07d", sequence[0]++);
                 Optional<TripPlan> plan = resolvePlan(
                         network, scenario, resolver, reachability, random, planId,
-                        flow, vehicleType, origin, departure);
+                        candidatesByFlowAndOrigin, destinationChoices,
+                        sourceId, flow, vehicleType, origin, departure);
                 if (plan.isPresent()
                         && TripPlanReachability.isReachable(network, plan.orElseThrow())) {
                     generated.add(plan.orElseThrow());
@@ -212,36 +253,50 @@ public final class GravityDemandModel implements TripDemandModel {
             ReachabilityIndex reachability,
             RandomGenerator random,
             String planId,
+            Map<CandidateKey, List<List<ResolvedPlace>>> candidatesByFlowAndOrigin,
+            Map<DestinationChoiceKey, WeightedDestinations> destinationChoices,
+            String sourceId,
             FlowSpec flow,
             VehicleType vehicleType,
             ResolvedPlace origin,
             double departure) {
-        List<List<ResolvedPlace>> candidatesByLeg = flow.legs().stream()
-                .map(legSpec -> resolver.resolve(legSpec.to(), origin))
-                .toList();
-        Map<ViabilityKey, Boolean> suffixViability = new HashMap<>();
+        List<List<ResolvedPlace>> candidatesByLeg = candidatesFor(
+                resolver, candidatesByFlowAndOrigin, sourceId, flow, origin);
         List<TripLeg> legs = new ArrayList<>();
         ResolvedPlace current = origin;
         for (int legIndex = 0; legIndex < flow.legs().size(); legIndex++) {
-            LegSpec legSpec = flow.legs().get(legIndex);
+            int currentLegIndex = legIndex;
+            LegSpec legSpec = flow.legs().get(currentLegIndex);
             ResolvedPlace legOrigin = current;
-            int suffixStartIndex = legIndex + 1;
-            List<ResolvedPlace> candidates = candidatesByLeg.get(legIndex).stream()
-                    .filter(candidate -> reachability.canReach(legOrigin, candidate))
-                    .filter(candidate -> canCompleteSuffix(
-                            candidate,
-                            suffixStartIndex,
-                            origin,
-                            flow,
-                            candidatesByLeg,
-                            reachability,
-                            suffixViability))
-                    .toList();
-            if (candidates.isEmpty()) {
+            int suffixStartIndex = currentLegIndex + 1;
+            DestinationChoiceKey key = new DestinationChoiceKey(
+                    sourceId, flow.id(), currentLegIndex, origin, legOrigin);
+            WeightedDestinations choices = destinationChoices.computeIfAbsent(
+                    key,
+                    ignored -> {
+                        Map<ViabilityKey, Boolean> suffixViability = new HashMap<>();
+                        List<ResolvedPlace> candidates = candidatesByLeg.get(currentLegIndex).stream()
+                                .filter(candidate -> reachability.canReach(
+                                        legOrigin, candidate))
+                                .filter(candidate -> canCompleteSuffix(
+                                        candidate,
+                                        suffixStartIndex,
+                                        origin,
+                                        flow,
+                                        candidatesByLeg,
+                                        reachability,
+                                        suffixViability))
+                                .toList();
+                        return weightedDestinations(
+                                network,
+                                scenario.parameters(),
+                                legOrigin,
+                                candidates);
+                    });
+            if (choices.isEmpty()) {
                 return Optional.empty();
             }
-            ResolvedPlace destination = chooseDestination(
-                    network, scenario.parameters(), current, candidates, random);
+            ResolvedPlace destination = choices.choose(random);
             legs.add(new TripLeg(destination, legSpec.dwell().resolve(random)));
             current = destination;
         }
@@ -256,6 +311,19 @@ public final class GravityDemandModel implements TripDemandModel {
                 legs,
                 flow.completion(),
                 departure));
+    }
+
+    private List<List<ResolvedPlace>> candidatesFor(
+            PlaceResolver resolver,
+            Map<CandidateKey, List<List<ResolvedPlace>>> candidatesByFlowAndOrigin,
+            String sourceId,
+            FlowSpec flow,
+            ResolvedPlace origin) {
+        return candidatesByFlowAndOrigin.computeIfAbsent(
+                new CandidateKey(sourceId, flow.id(), origin),
+                ignored -> flow.legs().stream()
+                        .map(legSpec -> resolver.resolve(legSpec.to(), origin))
+                        .toList());
     }
 
     private boolean canCompleteSuffix(
@@ -292,37 +360,32 @@ public final class GravityDemandModel implements TripDemandModel {
         return viable;
     }
 
-    private ResolvedPlace chooseDestination(
+    private WeightedDestinations weightedDestinations(
             RoadNetwork network,
             DemandParameters parameters,
             ResolvedPlace current,
-            List<ResolvedPlace> candidates,
-            RandomGenerator random) {
+            List<ResolvedPlace> candidates) {
+        if (candidates.isEmpty()) return WeightedDestinations.empty();
         List<ResolvedPlace> usable = candidates.size() <= 1
                 ? candidates
                 : candidates.stream().filter(candidate -> !candidate.equals(current)).toList();
         if (usable.isEmpty()) usable = candidates;
 
-        double[] weights = new double[usable.size()];
+        double[] cumulativeWeights = new double[usable.size()];
         double total = 0;
         for (int index = 0; index < usable.size(); index++) {
             ResolvedPlace candidate = usable.get(index);
             double attraction = attractionOf(network, parameters, candidate);
             double distanceKm = distanceKm(network, current, candidate);
             double weight = attraction * Math.exp(-parameters.distanceDecayBeta() * distanceKm);
-            weights[index] = Double.isFinite(weight) && weight > 0 ? weight : 0;
-            total += weights[index];
+            total += Double.isFinite(weight) && weight > 0 ? weight : 0;
+            cumulativeWeights[index] = total;
         }
         if (total <= 0) {
             throw new IllegalArgumentException(
                     "Destination candidates have no positive attraction weight");
         }
-        double draw = random.nextDouble() * total;
-        for (int index = 0; index < usable.size(); index++) {
-            draw -= weights[index];
-            if (draw <= 0) return usable.get(index);
-        }
-        return usable.get(usable.size() - 1);
+        return new WeightedDestinations(usable, cumulativeWeights, total);
     }
 
     private double attractionOf(
@@ -393,6 +456,52 @@ public final class GravityDemandModel implements TripDemandModel {
     }
 
     private record ViabilityKey(String accessIntersectionId, int nextLegIndex) {}
+
+    private record CandidateKey(
+            String sourceId,
+            String flowId,
+            ResolvedPlace origin) {}
+
+    private record DestinationChoiceKey(
+            String sourceId,
+            String flowId,
+            int legIndex,
+            ResolvedPlace origin,
+            ResolvedPlace current) {}
+
+    private record WeightedDestinations(
+            List<ResolvedPlace> places,
+            double[] cumulativeWeights,
+            double totalWeight) {
+
+        private WeightedDestinations {
+            places = List.copyOf(places);
+            cumulativeWeights = cumulativeWeights.clone();
+        }
+
+        private static WeightedDestinations empty() {
+            return new WeightedDestinations(List.of(), new double[0], 0);
+        }
+
+        private boolean isEmpty() {
+            return places.isEmpty();
+        }
+
+        private ResolvedPlace choose(RandomGenerator random) {
+            double draw = random.nextDouble() * totalWeight;
+            int low = 0;
+            int high = cumulativeWeights.length - 1;
+            while (low < high) {
+                int middle = (low + high) >>> 1;
+                if (draw <= cumulativeWeights[middle]) {
+                    high = middle;
+                } else {
+                    low = middle + 1;
+                }
+            }
+            return places.get(low);
+        }
+    }
 
     /** Directed-topology reachability cache shared by every plan in one generation run. */
     private static final class ReachabilityIndex {

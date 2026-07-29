@@ -12,3 +12,7 @@ export function hourlyDemandCounts(plans) {
   })
   return counts
 }
+
+export function shouldShowDemandSchedule(totalPlans, labMode) {
+  return !labMode && Number(totalPlans) > 0
+}
