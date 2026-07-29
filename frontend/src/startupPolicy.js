@@ -7,6 +7,16 @@ export const STARTUP_ACTION = Object.freeze({
   DEMO: 'DEMO',
 })
 
+export const DEMAND_OVERVIEW_PACE = Object.freeze({
+  simulationSecondsPerTick: 30,
+  playbackIntervalMs: 250,
+})
+
+export function hasScheduledDemand(demandStatistics) {
+  return Number(demandStatistics?.scheduledTrips) > 0
+    || Number(demandStatistics?.pendingTrips) > 0
+}
+
 /**
  * Chooses how the dashboard should attach to the server-owned simulation.
  *
@@ -20,8 +30,7 @@ export function decideStartupAction(snapshot, demandStatistics) {
 
   const hasActiveVehicles = (snapshot.vehicles || [])
     .some((vehicle) => vehicle.status !== 'ARRIVED')
-  const hasDemand = Number(demandStatistics.scheduledTrips) > 0
-    || Number(demandStatistics.pendingTrips) > 0
+  const hasDemand = hasScheduledDemand(demandStatistics)
   const hasServerSimulation = hasActiveVehicles || hasDemand
 
   if (!hasServerSimulation) {

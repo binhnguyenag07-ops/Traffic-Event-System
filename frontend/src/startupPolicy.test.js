@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { decideStartupAction, STARTUP_ACTION } from './startupPolicy'
+import {
+  decideStartupAction,
+  hasScheduledDemand,
+  STARTUP_ACTION,
+} from './startupPolicy'
 
 const EMPTY_DEMAND = {
   scheduledTrips: 0,
@@ -14,6 +18,12 @@ function snapshot(status = 'READY', vehicles = []) {
 }
 
 describe('dashboard startup policy', () => {
+  it('recognises both scheduled and still-pending demand', () => {
+    expect(hasScheduledDemand({ scheduledTrips: 1, pendingTrips: 0 })).toBe(true)
+    expect(hasScheduledDemand({ scheduledTrips: 0, pendingTrips: 1 })).toBe(true)
+    expect(hasScheduledDemand(EMPTY_DEMAND)).toBe(false)
+  })
+
   it('waits until demand metadata is known', () => {
     expect(decideStartupAction(snapshot(), null)).toBe(STARTUP_ACTION.WAIT)
   })

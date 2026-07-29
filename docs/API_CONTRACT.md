@@ -62,7 +62,7 @@ configuration, driver profiles, demand, scripted vehicles, and events.
 |---|---|---|
 | GET | `/api/vehicles` | Current vehicles |
 | GET | `/api/vehicles/{id}` | One vehicle or `404` |
-| POST | `/api/vehicles` | Create CAR, MOTORCYCLE, BUS, or EMERGENCY |
+| POST | `/api/vehicles` | Create CAR, MOTORCYCLE, BUS, or EMERGENCY from either two intersections or two buildings |
 | DELETE | `/api/vehicles/{id}` | Remove a vehicle |
 | GET | `/api/events` | All scheduled, active, and resolved events |
 | GET | `/api/events/{id}` | One event or `404` |
@@ -105,6 +105,23 @@ Demand-created vehicles additionally include `tripPlanId`, open
 `dwellUntilSeconds`. `DWELLING` vehicles have released their road occupancy and
 are omitted from the physical lane scene.
 
+For a building-to-building manual trip, replace the two intersection fields
+with:
+
+```json
+{
+  "type": "MOTORCYCLE",
+  "startBuildingId": "B...",
+  "destinationBuildingId": "B..."
+}
+```
+
+Both building fields are required together. The response exposes
+`journeyPhase`, resolved origin/destination place/access metadata,
+`accessLinkProgress`, and `accessLinkDistanceMetres`. A building vehicle moves
+authoritatively at 15 km/h through `DEPARTING_ORIGIN` and
+`ARRIVING_DESTINATION`; it does not occupy a road during either access link.
+
 `MOTORCYCLE` uses a 2.1 m × 0.75 m physical profile, compact following gaps,
 and `MOTORCYCLE_FILTERING_MOBIL`. It accepts useful adjacent-lane gaps that do
 not fit a car without bypassing target-follower braking checks. Once a maneuver
@@ -127,6 +144,7 @@ during the lateral movement.
 | POST | `/api/simulation/tick` | One manual logical tick |
 | PUT | `/api/simulation/parameters` | Logical seconds per tick and/or playback interval |
 | GET | `/api/simulation/status` | Status, clock, playback settings, and demand counters |
+| GET | `/api/simulation/demand/schedule` | Exact seeded plans with named places and estimated leg/dwell/return clocks |
 | GET | `/api/simulation/tick/current` | Current integer trace tick |
 | GET | `/api/simulation/snapshot` | Current snapshot |
 | GET | `/api/simulation/diagnostics` | Adaptive navigation, information, wait, U-turn, and deadlock evidence |
@@ -168,6 +186,11 @@ Arrived vehicles stay in snapshots for at least five simulated seconds, then
 move to completed-trip history. Initialize, reset, scenario activation, and map
 replacement clear traces and completed-trip history.
 
+Tick-indexed vehicle traces retain the latest 5,000 ticks. Flow recording
+retains the latest 100,000 per-road samples. Renderer history separately keeps
+900 timestamps. These are bounded in-memory windows rather than unbounded
+full-day exports.
+
 Initialization accepts the complete demand shape documented in
 `DEMAND_AND_SCENARIO_DESIGN.md`: `demandParameters`, clock/duration, seed,
 scale, zones, and `demandSources`. Legacy `vehicles` and `events` remain valid
@@ -181,6 +204,60 @@ not require a Java enum.
 no directed path. Traffic statistics separately report `roadActiveVehicles`,
 `dwellingVehicles`, `activeVehiclesByPurpose`, and
 `completedTripsByPurpose`.
+
+### Exact demand schedule
+
+`GET /api/simulation/demand/schedule` is a read-only projection of the resolved
+`TripPlan` list. It never rolls new destinations. A shortened response shape is:
+
+```jsonc
+{
+  "startTimeOfDaySeconds": 21600.0,
+  "totalPlans": 156,
+  "failedPlans": 0,
+  "failedPlanIds": [],
+  "estimateBasis": "DIRECTED_FREE_FLOW_SHORTEST_TIME_PLUS_BUILDING_DRIVEWAYS_AND_DWELL",
+  "plans": [{
+    "id": "resident-work-internal-...",
+    "purpose": "WORK_INTERNAL",
+    "vehicleType": "MOTORCYCLE",
+    "origin": {
+      "kind": "BUILDING",
+      "id": "B...",
+      "name": "Residential building",
+      "latitude": 10.775123,
+      "longitude": 106.700341,
+      "accessIntersectionId": "N...",
+      "accessName": "..."
+    },
+    "completion": "RETURN_TO_ORIGIN",
+    "departure": {
+      "elapsedSeconds": 123.0,
+      "timeOfDaySeconds": 21723.0,
+      "dayOffset": 0,
+      "clock": "06:02"
+    },
+    "estimatedFinalArrival": { "dayOffset": 0, "clock": "16:25" },
+    "estimatedReturnArrival": { "dayOffset": 0, "clock": "16:25" },
+    "legs": [{
+      "sequence": 1,
+      "destination": { "kind": "BUILDING", "name": "Office building" },
+      "estimatedTravelSeconds": 640.0,
+      "dwellSeconds": 36000.0,
+      "estimatedArrival": { "dayOffset": 0, "clock": "06:13" },
+      "estimatedNextDeparture": { "dayOffset": 0, "clock": "16:13" },
+      "returnsToOrigin": false
+    }]
+  }]
+}
+```
+
+Estimated times use directed Dijkstra free-flow travel, the authoritative
+building-link speed, and declared dwell. They intentionally exclude signals,
+queues, incidents, closures, and runtime rerouting. Every place also carries
+nullable `latitude`/`longitude`; the UI formats them to six decimals when
+needed to distinguish generic or repeated building/junction names. Identifiers
+remain available for traceability but are not the primary reader-facing label.
 
 ### Authoritative renderer-frame replay
 
@@ -200,12 +277,14 @@ The SSE endpoint emits the current `SimulationFrame` whenever one exists. Its
 defensive fallback for a service implementation with no frame is the current
 snapshot DTO; the production simulator creates an initial frame at construction.
 
-The backend captures a post-movement frame after every physical sub-step (at
-most one simulated second) and again after event transitions. When movement and
-an event transition share a timestamp, the post-transition frame replaces the
-earlier value, so a lookup never observes a half-applied boundary. The lookup
-uses floor semantics; the macro UI avoids ambiguity by scrubbing only across
-`recordedSeconds` returned by the timeline endpoint.
+At detail cadence the backend captures each post-movement physical sub-step.
+For a large overview tick it samples at most three intermediate physics frames
+plus the final frame, avoiding dozens of full 730-road copies per scheduler
+callback. Exact state/event transitions are always recorded even when they fall
+between those samples. When movement and a transition share a timestamp, the
+post-transition frame replaces the earlier value, so a lookup never observes a
+half-applied boundary. The lookup uses floor semantics; the macro UI scrubs only
+across `recordedSeconds` returned by the timeline endpoint.
 
 History is in memory and bounded to 900 retained timestamps. A request older
 than the retained window returns `404`. Initialize, reset, scenario/map
@@ -228,18 +307,23 @@ network geometry.
   "timeOfDaySeconds": 21600.0,
   "timeOfDay": "06:00",
   "demand": {
-    "scheduledTrips": 216,
+    "scheduledTrips": 156,
     "spawnedTrips": 0,
     "failedTrips": 0,
-    "pendingTrips": 216,
+    "pendingTrips": 156,
     "failedPlanIds": []
   }
 }
 ```
 
-This is the initial status of the checked-in District 1 scenario. Its four
-scripted warm-start vehicles appear in snapshots but are not counted as
-demand-spawned trips.
+This is the initial status of the checked-in District 1 scenario. It has no
+scripted warm-start vehicles; every vehicle in the run is attributable to a
+scheduled demand plan.
+
+Those playback values are the backend's pre-dashboard defaults. When the
+frontend activates a 24-hour demand scenario it sends
+`simulationSecondsPerTick=30` and `playbackIntervalMs=250` (120× overview);
+opening Physical View sends `0.5` and `250` (2× detail).
 
 `startTimeOfDaySeconds` is published so a client can label **any** recorded
 frame with its clock time from that frame's own `elapsedSeconds`:
@@ -251,6 +335,9 @@ timeOfDay = (startTimeOfDaySeconds + elapsedSeconds) mod 86400
 Frames deliberately do not carry a clock time of their own. A frame already
 records its elapsed seconds, so storing the derived value beside it would be a
 second copy of the same fact, free to disagree. The clock wraps at midnight.
+The checked-in 24-hour horizon therefore runs from 06:00 on day `D` to 06:00
+on `D+1`; schedule DTO times carry `dayOffset` so those two 06:00 values are
+unambiguous.
 
 ## Continuous playback failures
 
@@ -303,7 +390,10 @@ coordinate systems (geographic, local metres, screen pixels) from being mixed.
   "vehicles":   [ { "id", "type", "x", "y", "headingDegrees", "speedMps",
                     "lengthMetres", "widthMetres", "laneIndex", "lateralOffsetMetres",
                     "roadId", "roadProgress", "inJunction",
-                    "junctionFromRoadId", "junctionToRoadId" } ]
+                    "junctionFromRoadId", "junctionToRoadId", "journeyPhase",
+                    "originPlaceKind", "originPlaceId", "originAccessIntersectionId",
+                    "destinationPlaceKind", "destinationPlaceId",
+                    "destinationAccessIntersectionId" } ]
 }
 ```
 
@@ -314,6 +404,19 @@ vehicle's `lateralOffsetMetres` is its real offset, so a filtering motorcycle is
 drawn between the lanes it is riding between rather than snapped to one. Road
 progress and the two junction road ids let the renderer follow lane centrelines
 and connector curves rather than cutting a straight chord across a bend.
+
+The longitudinal conventions are intentionally asymmetric:
+
+- dynamics `roadProgress` is the **front-bumper** fraction used for following,
+  queue spacing, and stop-line control;
+- backend pose resolution subtracts half the vehicle length and emits
+  latitude/longitude and physical-view `x`/`y` at the **body centre**;
+- the frontend centres its sprite directly on `x`/`y` and applies no second
+  setback.
+
+That one-time conversion keeps the complete body behind a red stop line.
+Building-access phases have `roadId=null`, `inJunction=false`, and authoritative
+centre positions along the building-to-access link.
 
 After that first geometry response the renderer polls only the changing state:
 
@@ -328,3 +431,9 @@ playback speed does not alter `simulationSecondsPerTick` or the physical model.
 Static lanes, junctions, land cover and buildings therefore cross the wire and
 enter Pixi once per timeline instead of being rebuilt with every state poll. A
 changed `timelineId` causes the client to reload the complete geometry.
+
+The dashboard consumes the SSE live head directly. It refreshes the timeline
+index no more than once per wall-clock second and aggregate statistics no more
+than once every two seconds (timeline replacement still refreshes
+immediately), preventing secondary REST work from competing with Pixi on every
+4 Hz renderer frame.

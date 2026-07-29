@@ -11,14 +11,15 @@ is embedded in the JAR, but the `data/` directory is a runtime input and must
 remain available from the repository root. OpenStreetMap basemap tiles require
 internet access; routing, demand, physics, and vehicle poses run locally.
 
-The normal launch loads and initializes **Central District 1 - Synthetic
-Weekday**. It starts at 06:00 with seed `20260728`, 216 deterministic demand
-plans, and four scripted warm-start vehicles. The scenario covers resident
-commute, school, shopping, medical, through, inbound-work, and visitor flows
-across the central study window. These are explicit educational assumptions,
-not observed or calibrated District 1 traffic counts. Use the
+The normal launch loads and initializes **Central District 1 - 24-hour Weekday
+Proxy**. It starts at 06:00 with seed `20260728`, 156 deterministic demand
+plans, and no scripted warm-start traffic. The earliest plan departs 68.79
+simulated seconds after start. The scenario covers research-informed historical
+resident internal/outbound proxies plus synthetic through, inbound-work, and
+visitor cordon flows across the central study window. These are not observed or
+calibrated current District 1 traffic counts. Use the
 [scenario evidence note](DISTRICT1_SCENARIO.md) if the audience asks which
-claims are dataset facts, city-level proxies, or synthetic assumptions.
+claims are verified facts, research-informed proxies, or synthetic assumptions.
 
 For a pre-demo check:
 
@@ -30,8 +31,8 @@ GET /api/simulation/snapshot
 ```
 
 Immediately after backend startup, status is `READY`; opening the dashboard
-starts playback when the warm-start fleet is present. If it remains `READY`,
-press **Start**. To restore the exact seeded run, pause playback and press
+starts playback. If it remains `READY`, press **Start**. To restore the exact
+seeded run, pause playback and press
 **Reload scenario**, or call:
 
 ```text
@@ -40,6 +41,13 @@ POST /api/scenarios/district-1/activate
 
 Reloading creates a new timeline and clears the old traces and completed-trip
 history.
+
+The 24-hour scenario initially selects **24 h overview · 120 sim s/s**, so its
+first departure at 68.79 simulated seconds appears in under one wall second and
+the complete demand day takes about 12 wall minutes. Select **Balanced · 10 sim
+s/s** for the normal macro walkthrough. Opening Physical View automatically
+returns to **Lane detail · 2 sim s/s**, because a 30-second logical overview
+tick is suitable for aggregate progression, not close-up turn animation.
 
 ## Recommended walkthrough
 
@@ -51,60 +59,73 @@ history.
 2. Open **Network editor** and inspect a road. Point out `physicalRoadId`, lane
    count, lane width, stored polyline geometry, and the wider rendering of
    multi-lane roads. Two directions of one street are separate directed roads
-   sharing one physical-road id.
+   sharing one physical-road id. The selector shows street names, endpoints,
+   direction, lane count, and length in metres; the ids remain traceability
+   fields, not something the presenter must memorize.
 
-3. Open the physical view near a junction and watch a vehicle turn through
+3. Read the top-bar 24-hour clock, then open **24-hour demand**. Show the
+   departure histogram, filter by hour/purpose, and expand a plan to see its
+   named origin, destination, dwell, and estimated return. Explain that
+   departures are exact seeded plans; arrival/return clocks are directed
+   free-flow estimates and live queues/signals decide actual arrival. Generic
+   or repeated place names include six-decimal coordinates so two households
+   sharing the same label are still distinguishable without exposing raw ids.
+
+4. Select **Lane detail · 2 sim s/s** and open the physical view near a
+   junction. Watch a vehicle turn through
    several frames. The default logical step is 0.5 simulated seconds, and the
    backend frame carries `inJunction`, incoming/outgoing road ids, position, and
    heading. The PixiJS renderer follows the lane connector curve, so a vehicle
    should not spin, cut a straight chord, or choose its own direction at the
    intersection.
 
-4. Pause and press **Step** a few times if the audience wants to inspect that
+5. Pause and press **Step** a few times if the audience wants to inspect that
    junction movement slowly. Manual step returns `409` while playback is
    running, so pause first. Resume afterwards.
 
-5. Drag the footer across recorded frames. Confirm the header changes to
+6. Drag the footer across recorded frames. Confirm the header changes to
    **HISTORY**, road/event metrics stay fixed while live playback continues in
    the background, and **Live** returns to the current frame. This demonstrates
    that replay uses retained immutable `SimulationFrame` values rather than
    reconstructing mutable domain state.
 
-6. Inspect `GET /api/simulation/status` and the Performance panel. Relate
+7. Inspect `GET /api/simulation/status` and the Performance panel. Relate
    `scheduledTrips`, `spawnedTrips`, `pendingTrips`, and `failedPlanIds` to the
-   seeded demand. The four warm-start vehicles are scripted and therefore do
-   not count as spawned demand trips.
+   seeded demand. With no warm-start entries, every vehicle can be matched to
+   one plan in `GET /api/simulation/demand/schedule`.
 
-7. Open **Fleet** and click **Spawn random test vehicle**. The control submits a
-   real `POST /api/vehicles` request for a reachable boundary-to-boundary car or
-   motorcycle. Confirm the returned id and origin → destination, then watch the
-   same backend vehicle appear in both renderers. BUS and EMERGENCY remain
-   available in the manual form.
+8. Open **Fleet** and click **Spawn random test vehicle**. The control submits a
+   real `POST /api/vehicles` request for a reachable building-to-building car or
+   motorcycle, preferring a residential origin. Confirm the returned
+   human-readable building/street labels, then watch the vehicle leave the
+   building, traverse its mapped access link, join a road, and appear in both
+   renderers. The manual form also selects named buildings rather than opaque
+   ids; BUS and EMERGENCY remain available.
 
-8. Schedule an accident or breakdown with duration in seconds, a road position,
+9. Schedule an accident or breakdown with duration in seconds, a road position,
    and an optional zero-based lane. Confirm that unaffected lanes remain usable.
    Create two events on one road if time permits, then resolve them in either
    order: `TrafficEventCoordinator` rebuilds the remaining overlays from the
    baseline.
 
-9. Pause playback, close a road used by a planned route, and resume. Adaptive
+10. Pause playback, close a road used by a planned route, and resume. Adaptive
    rerouting is driven by `AdaptiveNavigationCoordinator`, not by the legacy
    event listener. A vehicle may wait for its information latency, strategic
    cadence, saving threshold, or cooldown instead of rerouting immediately;
    use `GET /api/simulation/diagnostics` to explain the accepted or rejected
    decision.
 
-10. At a degree-three-or-more junction, use
+11. At a degree-three-or-more junction, use
     `GET /api/simulation/signals` to show cyclic phases. A red approach remains
     on its incoming road at the stop line; an emergency vehicle added through
     the manual fleet form can receive preemption. Signals in the physical view
     come from the same authoritative frame the vehicles obey.
 
-11. Add a BUS through the manual fleet form, then inspect it at an intermediate
+12. Add a BUS through the manual fleet form, then inspect it at an intermediate
     route junction. Its capacity-derived dwell occurs at the stop line while it
     remains a lane occupant, so another lane can continue to move.
 
-12. Query replay and diagnostics after several steps:
+13. Query replay and diagnostics after several steps:
 
     ```text
     GET /api/simulation/trace
@@ -117,7 +138,7 @@ history.
     GET /api/simulation/trace/roads/{roadId}/time-space
     ```
 
-13. In the physical view, pan and zoom across the already loaded full-network
+14. In the physical view, pan and zoom across the already loaded full-network
     geometry. Static lanes, junctions, buildings, and land cover load once per
     timeline; only vehicle and signal state is polled afterwards. Client
     interpolation smooths two backend poses for display and never changes
@@ -127,7 +148,8 @@ history.
 
     Add `?physical=<lat>,<lon>` to the URL to open directly at a known junction.
 
-14. Let a vehicle arrive. It remains in frame state briefly, then disappears
+15. Let a vehicle arrive. It follows the authoritative destination access link
+    into the building, remains in frame state briefly, then disappears
     while completed-trip statistics remain available. Finish by comparing
     routing algorithms and opening **Experiments** for deterministic scenarios
     and the large-grid A* search reduction.

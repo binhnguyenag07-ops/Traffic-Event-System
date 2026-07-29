@@ -3,10 +3,13 @@ import TrafficMap from './components/TrafficMap'
 import NetworkEditor from './components/NetworkEditor'
 import ExperimentPanel from './components/ExperimentPanel'
 import TimelineScrubber from './components/TimelineScrubber'
+import DemandSchedulePanel from './components/DemandSchedulePanel'
 import { useTrafficDashboard } from './hooks/useTrafficDashboard'
 import { DEFAULT_PHYSICAL_ZOOM } from './mapViewport'
 import { isVehicleVisibleOnMap } from './vehicleVisibility'
 import { inspectorEntries } from './inspector'
+import { buildingLabel, intersectionLabel, roadLabel } from './displayLabels'
+import { formatTimeOfDay, timeOfDaySeconds } from './simulationTime'
 
 // PixiJS is only needed in the lane-level view. Keeping it out of the initial
 // dashboard bundle makes the normal Leaflet view interactive sooner and avoids
@@ -26,6 +29,13 @@ const EVENT_TYPES = [
   ['BREAKDOWN', 'Vehicle breakdown'],
   ['ROAD_CLOSURE', 'Road closure'],
 ]
+
+const SIMULATION_PACES = [
+  { id: 'DETAIL', label: 'Lane detail · 2 sim s/s', step: 0.5, interval: 250 },
+  { id: 'BALANCED', label: 'Balanced · 10 sim s/s', step: 2.5, interval: 250 },
+  { id: 'DAY', label: '24 h overview · 120 sim s/s', step: 30, interval: 250 },
+]
+const PHYSICAL_DETAIL_PACE = SIMULATION_PACES[0]
 
 function Metric({ label, value, tone = '' }) {
   return (
@@ -147,9 +157,10 @@ export default function App() {
       }
     : null)
   const {
-    intersections, roads, viewRoads, scenarios, activeScenario, snapshot, viewFrame,
+    intersections, roads, networkRoads, viewRoads, buildings, scenarios, activeScenario, snapshot, viewFrame,
     timeline, viewingHistory, historyLoading, statistics, algorithms,
     route, comparison, selected, loading, error, tickDelay, streamConnected, importSummary,
+    simulationClock, demandSchedule, setSimulationPace,
   } = dashboard
   const [routeStart, setRouteStart] = useState('')
   const [routeEnd, setRouteEnd] = useState('')
@@ -171,6 +182,7 @@ export default function App() {
   const [highlightedRoadIds, setHighlightedRoadIds] = useState([])
   const mapFileRef = useRef(null)
   const labStarted = useRef(false)
+  const prePhysicalPaceRef = useRef(null)
 
   const labCases = useMemo(() => scenarios.filter((entry) => entry.lab), [scenarios])
   const labScenario = labId ? scenarios.find((entry) => entry.id === labId) : null
@@ -217,6 +229,29 @@ export default function App() {
     setPhysicalOpen(true)
   }, [labViewport])
 
+  // Large overview ticks are useful for crossing a full simulated day, but one
+  // live frame can span several junctions. The lane-level view switches back to
+  // the sub-second authoritative cadence so its interpolation always has the
+  // road/connector endpoints needed to keep vehicles on the tarmac.
+  useEffect(() => {
+    if (!physicalOpen || simulationClock.simulationSecondsPerTick <= 1) return
+    if (!prePhysicalPaceRef.current) {
+      prePhysicalPaceRef.current = {
+        step: simulationClock.simulationSecondsPerTick,
+        interval: Number(tickDelay),
+      }
+    }
+    setSimulationPace(
+      PHYSICAL_DETAIL_PACE.step,
+      PHYSICAL_DETAIL_PACE.interval,
+    ).catch(() => {})
+  }, [
+    physicalOpen,
+    setSimulationPace,
+    simulationClock.simulationSecondsPerTick,
+    tickDelay,
+  ])
+
   // Every in-session scenario change goes through here, from the picker and
   // from the lab's own Previous/Next.
   //
@@ -258,10 +293,21 @@ export default function App() {
     setLabId(null)
     labStarted.current = true
     window.history.replaceState(null, '', window.location.pathname)
+    prePhysicalPaceRef.current = null
     setPhysicalOpen(false)
     setMapViewport(null)
     if (real) dashboard.activateScenario(real.id).catch(() => {})
   }, [dashboard, scenarios])
+
+  const closePhysical = useCallback((viewport) => {
+    if (viewport) setMapViewport(viewport)
+    setPhysicalOpen(false)
+    const previousPace = prePhysicalPaceRef.current
+    prePhysicalPaceRef.current = null
+    if (previousPace) {
+      setSimulationPace(previousPace.step, previousPace.interval).catch(() => {})
+    }
+  }, [setSimulationPace])
 
   const traffic = statistics.traffic || {}
   const activeEvents = snapshot.trafficEvents?.filter((event) => event.status === 'ACTIVE') || []
@@ -282,6 +328,63 @@ export default function App() {
       / viewRoadStates.length * 100)
     : Math.round(Number(traffic.averageCongestionLevel || 0) * 100)
   const scenarioName = scenarios.find((scenario) => scenario.id === activeScenario)?.name || 'District 1 Live'
+  const intersectionById = useMemo(
+    () => new Map(intersections.map((intersection) => [intersection.id, intersection])),
+    [intersections],
+  )
+  const buildingById = useMemo(
+    () => new Map(buildings.map((building) => [building.id, building])),
+    [buildings],
+  )
+  const intersectionOptions = useMemo(
+    () => [...intersections].sort((left, right) => (
+      intersectionLabel(left).localeCompare(intersectionLabel(right), 'vi')
+    )),
+    [intersections],
+  )
+  const buildingOptions = useMemo(
+    () => [...buildings].sort((left, right) => (
+      buildingLabel(left, intersectionById).localeCompare(
+        buildingLabel(right, intersectionById),
+        'vi',
+      )
+    )),
+    [buildings, intersectionById],
+  )
+  const roadOptions = useMemo(
+    () => [...networkRoads].sort((left, right) => (
+      roadLabel(left, intersectionById).localeCompare(roadLabel(right, intersectionById), 'vi')
+    )),
+    [intersectionById, networkRoads],
+  )
+  const intersectionOptionNodes = useMemo(
+    () => intersectionOptions.map((intersection) => (
+      <option key={intersection.id} value={intersection.id}>{intersectionLabel(intersection)}</option>
+    )),
+    [intersectionOptions],
+  )
+  const buildingOptionNodes = useMemo(
+    () => buildingOptions.map((building) => (
+      <option key={building.id} value={building.id}>
+        {buildingLabel(building, intersectionById)}
+      </option>
+    )),
+    [buildingOptions, intersectionById],
+  )
+  const roadOptionNodes = useMemo(
+    () => roadOptions.map((road) => (
+      <option key={road.id} value={road.id}>{roadLabel(road, intersectionById)}</option>
+    )),
+    [intersectionById, roadOptions],
+  )
+  const clock = formatTimeOfDay(timeOfDaySeconds(
+    viewFrame,
+    simulationClock.startTimeOfDaySeconds,
+  ))
+  const selectedPace = SIMULATION_PACES.find((pace) => (
+    Math.abs(pace.step - simulationClock.simulationSecondsPerTick) < 1e-9
+    && pace.interval === Number(tickDelay)
+  ))?.id || 'CUSTOM'
 
   const algorithmOptions = useMemo(
     () => algorithms.map((item) => item.algorithmName || item.name).filter(Boolean),
@@ -306,7 +409,7 @@ export default function App() {
   const addVehicle = () => {
     if (!vehicleStart || !vehicleEnd) return
     safely(async () => {
-      await dashboard.createVehicle(vehicleType, vehicleStart, vehicleEnd)
+      await dashboard.createVehicleBetweenBuildings(vehicleType, vehicleStart, vehicleEnd)
       setVehicleStart('')
       setVehicleEnd('')
     })
@@ -359,6 +462,7 @@ export default function App() {
           <span className={`connection-dot ${streamConnected ? 'connected' : ''}`} />
           <span>{viewingHistory ? 'Recorded frame' : streamConnected ? 'Live stream' : 'Reconnecting'}</span>
           <strong>{viewingHistory ? 'HISTORY' : snapshot.status}</strong>
+          <b className="simulation-clock" aria-label={`Simulation time ${clock}`}>{clock}</b>
           <b>T+{formatDuration(viewFrame.elapsedSeconds)}</b>
         </div>
         <div className="scenario-switcher">
@@ -460,10 +564,7 @@ export default function App() {
                   // Closing in the lab would leave an empty stage, since the
                   // basemap is not rendered here. Leave the lab instead.
                   ? () => { window.location.search = '' }
-                  : (viewport) => {
-                    if (viewport) setMapViewport(viewport)
-                    setPhysicalOpen(false)
-                  }}
+                  : closePhysical}
               />
             </Suspense>
           )}
@@ -494,21 +595,34 @@ export default function App() {
                 disabled={loading || snapshot.status === 'RUNNING' || activeScenario === 'imported'}>
                 Reload scenario
               </button>
-              <Field label="Speed">
-                <select value={tickDelay} onChange={(event) => safely(() => dashboard.setPlaybackInterval(Number(event.target.value)))}>
-                  <option value="2000">0.5×</option><option value="1000">1×</option>
-                  <option value="500">2×</option><option value="250">4×</option>
+              <Field label="Simulation pace">
+                <select value={selectedPace} onChange={(event) => {
+                  const pace = SIMULATION_PACES.find((item) => item.id === event.target.value)
+                  if (pace) safely(() => setSimulationPace(pace.step, pace.interval))
+                }}>
+                  {selectedPace === 'CUSTOM' ? <option value="CUSTOM">Current custom pace</option> : null}
+                  {SIMULATION_PACES.map((pace) => (
+                    <option key={pace.id} value={pace.id}>{pace.label}</option>
+                  ))}
                 </select>
               </Field>
             </div>
           </section>
 
+          <DemandSchedulePanel
+            schedule={demandSchedule}
+            currentTimeOfDaySeconds={timeOfDaySeconds(
+              viewFrame,
+              simulationClock.startTimeOfDaySeconds,
+            )}
+          />
+
           <details className="rail-section" open>
             <summary><span>Route lab</span><b>{route ? route.algorithm : 'Plan a trip'}</b></summary>
             <div className="section-body">
               <div className="two-fields">
-                <Field label="From"><select value={routeStart} onChange={(e) => setRouteStart(e.target.value)}><option value="">Choose</option>{intersections.map((i) => <option key={i.id} value={i.id}>{i.id} · {i.name}</option>)}</select></Field>
-                <Field label="To"><select value={routeEnd} onChange={(e) => setRouteEnd(e.target.value)}><option value="">Choose</option>{intersections.map((i) => <option key={i.id} value={i.id}>{i.id} · {i.name}</option>)}</select></Field>
+                <Field label="From"><select value={routeStart} onChange={(e) => setRouteStart(e.target.value)}><option value="">Choose junction</option>{intersectionOptionNodes}</select></Field>
+                <Field label="To"><select value={routeEnd} onChange={(e) => setRouteEnd(e.target.value)}><option value="">Choose junction</option>{intersectionOptionNodes}</select></Field>
               </div>
               <div className="two-fields">
                 <Field label="Preference"><select value={preference} onChange={(e) => setPreference(e.target.value)}>{PREFERENCES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
@@ -525,21 +639,28 @@ export default function App() {
             <summary><span>Fleet</span><b>{snapshot.vehicles?.length || 0} vehicles</b></summary>
             <div className="section-body">
               <button className="spawn-random-button wide" onClick={spawnRandomVehicle}
-                disabled={loading || spawningRandomVehicle || intersections.length < 2}>
+                disabled={loading || spawningRandomVehicle || buildings.length < 2}>
                 {spawningRandomVehicle ? 'Spawning…' : 'Spawn random test vehicle'}
               </button>
               {lastRandomSpawn ? <p className="spawn-result" role="status">
                 <strong>{lastRandomSpawn.vehicle.id}</strong>
-                <span>{lastRandomSpawn.type} · {lastRandomSpawn.startIntersectionId} → {lastRandomSpawn.destinationIntersectionId}</span>
+                <span>{lastRandomSpawn.type} · {buildingLabel(
+                  buildingById.get(lastRandomSpawn.startBuildingId),
+                  intersectionById,
+                )} → {buildingLabel(
+                  buildingById.get(lastRandomSpawn.destinationBuildingId),
+                  intersectionById,
+                )}</span>
                 {snapshot.status === 'RUNNING' ? <small>Live: movement begins on simulation ticks.</small>
                   : <small>Press Start or Resume to move this vehicle.</small>}
-              </p> : <p className="spawn-hint">Creates one real car or motorcycle on a reachable cross-map route.</p>}
+              </p> : <p className="spawn-hint">Creates a motorcycle/car at a home using a citywide registered-fleet proxy, then drives it to a reachable building.</p>}
               <div className="three-fields">
                 <Field label="Type"><select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}><option>CAR</option><option>MOTORCYCLE</option><option>BUS</option><option>EMERGENCY</option></select></Field>
-                <Field label="Start"><select value={vehicleStart} onChange={(e) => setVehicleStart(e.target.value)}><option value="">Choose</option>{intersections.map((i) => <option key={i.id}>{i.id}</option>)}</select></Field>
-                <Field label="Destination"><select value={vehicleEnd} onChange={(e) => setVehicleEnd(e.target.value)}><option value="">Choose</option>{intersections.map((i) => <option key={i.id}>{i.id}</option>)}</select></Field>
+                <Field label="From building"><select value={vehicleStart} onChange={(e) => setVehicleStart(e.target.value)}><option value="">Choose place</option>{buildingOptionNodes}</select></Field>
+                <Field label="To building"><select value={vehicleEnd} onChange={(e) => setVehicleEnd(e.target.value)}><option value="">Choose place</option>{buildingOptionNodes}</select></Field>
               </div>
-              <button className="primary wide" onClick={addVehicle} disabled={!vehicleStart || !vehicleEnd}>Add vehicle</button>
+              <button className="primary wide" onClick={addVehicle}
+                disabled={!vehicleStart || !vehicleEnd || vehicleStart === vehicleEnd}>Add vehicle</button>
               <div className="entity-list">{snapshot.vehicles?.map((vehicle) => <button key={vehicle.id} onClick={() => dashboard.setSelected({ kind: 'vehicle', data: vehicle })}><i className={`entity-dot ${vehicle.status.toLowerCase()}`} /><span><strong>{vehicle.id}</strong><small>{vehicle.type} · {vehicle.status}</small></span><b>{Math.round((vehicle.roadProgress || 0) * 100)}%</b></button>)}</div>
             </div>
           </details>
@@ -562,7 +683,7 @@ export default function App() {
             <div className="section-body">
               <div className="three-fields">
                 <Field label="Type"><select value={eventType} onChange={(e) => setEventType(e.target.value)}>{EVENT_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
-                <Field label="Road"><select value={eventRoad} onChange={(e) => setEventRoad(e.target.value)}><option value="">Choose</option>{roads.map((road) => <option key={road.id}>{road.id}</option>)}</select></Field>
+                <Field label="Road"><select value={eventRoad} onChange={(e) => setEventRoad(e.target.value)}><option value="">Choose street and direction</option>{roadOptionNodes}</select></Field>
                 <Field label="Duration (s)"><input type="number" min="1" max="3600" value={eventDuration} onChange={(e) => setEventDuration(e.target.value)} /></Field>
               </div>
               {eventType === 'ACCIDENT' || eventType === 'BREAKDOWN' ? <div className="three-fields">

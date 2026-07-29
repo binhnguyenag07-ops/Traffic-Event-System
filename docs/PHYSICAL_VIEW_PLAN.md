@@ -17,6 +17,13 @@ Both views consume the same `timelineId` and `frameId`. Initialize, reset,
 scenario activation, map replacement and topology edits start a new timeline,
 which prevents state from one network being painted over another.
 
+WebGL means Pixi normally uses the GPU for rasterization, sprite transforms,
+and composition when browser hardware acceleration is available. The Java
+simulation remains CPU-owned; it is a deterministic, branch-heavy graph and
+multi-agent state machine, not a large uniform numeric kernel. Rewriting that
+model for GPU compute would not fix a bad turn path or coordinate contract and
+is not justified for this network size.
+
 ## Data cadence
 
 The Physical View uses two endpoints:
@@ -43,6 +50,12 @@ minimum), then caps the delay at 1000 ms; an updated frame immediately restores
 250–2000 ms speed controls, avoiding aliasing and a dropped road transition at
 a turn.
 
+The dashboard uses the SSE frame as its live head. It refreshes the timeline
+index at most once per wall second and aggregate statistics at most once every
+two seconds, instead of issuing both requests for every 4 Hz frame. Backend
+frame history retains 900 timestamps, tick traces 5,000 ticks, and flow history
+100,000 samples.
+
 Geometry and optional artwork load in parallel. Every asset slot has a bounded
 load time and falls back to a generated shape independently, so a missing or
 stalled texture cannot leave the scene waiting forever.
@@ -51,6 +64,12 @@ The District 1 scene currently contains 389 intersections, 730 directed roads,
 1,318 lane centrelines and 1,162 buildings. This is small enough for a
 single retained static scene. A materially larger map should add spatial
 partitioning or viewport culling instead of continuing to load the whole city.
+
+Playback has three explicit paces: lane detail (0.5 simulated seconds every
+250 ms, about 2×), balanced (2.5/250 ms, about 10×), and 24-hour overview
+(30/250 ms, about 120×). Activating a 24-hour demand scenario selects overview
+pace; opening this view forces lane-detail cadence. Overview mode is for the
+daily aggregate clock, not close-up junction animation.
 
 ## Interpolation contract
 
@@ -72,8 +91,11 @@ partitioning or viewport culling instead of continuing to load the whole city.
    smooth turn between authoritative headings. At the otherwise ambiguous
    180-degree U-turn, the connector's signed curvature chooses left versus
    right so the sprite rotates with its path.
-6. A departed vehicle is removed; a newly appeared vehicle is drawn at its
-   first authoritative pose. The renderer never extrapolates unknown state.
+6. During `DEPARTING_ORIGIN` or `ARRIVING_DESTINATION`, interpolate only the
+   local chord between two authoritative access-link poses. Reconstructing the
+   complete building path at each poll would make a midway vehicle reverse.
+7. A departed vehicle is removed; a newly appeared vehicle is drawn at its
+   first authoritative pose. The renderer never invents a post-arrival ghost.
 
 Lane, connector and polyline indexes are cached for a retained scene. Static
 connector guides are intentionally not painted, and motorcycle trails are
@@ -97,6 +119,41 @@ If the continuation lane has no entry space, a vehicle waits. It is not moved
 instantaneously into a different empty lane inside the junction; a real lateral
 change can happen gradually after entry.
 
+## Position and building-access contracts
+
+Dynamics `roadProgress` is the vehicle's **front-bumper** fraction. The backend
+uses it for leader gaps and caps that front at the painted stop line on red.
+`VehiclePoseResolver` subtracts half the body length once and publishes
+latitude/longitude and physical `x`/`y` at the **body centre**. Pixi centres the
+sprite directly on that point; applying another frontend setback would put the
+sprite half a vehicle behind the authoritative queue.
+
+A building trip is also backend motion, not a cosmetic line:
+
+```text
+DEPARTING_ORIGIN      building centre → selected access node
+ARRIVING_DESTINATION selected access node → building centre
+```
+
+`Vehicle` advances both at 15 km/h, accumulates trip time/distance, and occupies
+no road until/after the access node. `journeyPhase` and resolved place/access
+metadata are carried in every physical state. Return trips depart again from
+the building they actually reached.
+
+## Audited map interpretation
+
+The 730 directed roads represent 560 physical segments. Of those, 390 are
+one-way: 380 have OSM `oneway=yes` and 10 are roundabouts. There are 168
+one-way segments with at least three lanes; 155 carry direct OSM lane tags and
+13 use conservative inference/defaults. All 439 source ways matched current
+direction, lane, and name tags after the committed corrections. Thus a
+three-lane one-way road is usually a tagged multi-lane carriageway, not evidence
+that a reverse edge is missing.
+
+Eleven ways have `oneway:motorcycle=no`, which the current all-vehicle
+direction graph cannot express. Adding a generic reverse edge would wrongly
+legalize it for cars and buses, so this remains an explicit schema limitation.
+
 ## Honest limitations
 
 - The backend currently crosses the junction boundary within a simulation
@@ -108,8 +165,8 @@ change can happen gradually after entry.
   bounded and cannot spin, but it can visually cut a corner. Such a fallback is
   a geometry-data defect to fix, not permission for frontend free movement.
 - District 1 lane counts are a mixture of OSM tags and generator defaults. The
-  generator reports provenance during regeneration, but the current JSON schema
-  does not persist it per road.
+  audit records aggregate provenance, but the current JSON schema does not
+  persist it per road.
 - Signal heads show the simulation's generated signal plan. They are not a
   survey of every real signal controller or phase in District 1.
 - Pedestrians, bicycles, kerbside parking and public-transport dwell operations

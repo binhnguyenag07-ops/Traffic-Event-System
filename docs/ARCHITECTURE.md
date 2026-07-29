@@ -12,7 +12,7 @@ the lane-level physical view. Neither renderer advances the simulation.
 |---|---|
 | Domain | Roads/lane geometry, vehicles, resolved demand plans, signals, routes, positioned events, and statistics records |
 | Routing | Interchangeable BFS, Dijkstra, and A* strategies |
-| Simulation | Seconds-based clock, demand spawning, multi-leg/dwell lifecycle, sub-step dynamics, event overlays, immutable renderer-frame replay, diagnostics, and completed-trip history |
+| Simulation | Seconds-based clock, demand spawning, authoritative building access links, multi-leg/dwell lifecycle, sub-step dynamics, event overlays, immutable renderer-frame replay, diagnostics, and completed-trip history |
 | Services | Use-case boundaries for networks, routing, vehicles, events, simulation, and statistics |
 | API | Javalin controllers, DTOs, static frontend hosting, and the live SSE stream |
 | Persistence | JSON/CSV map loading, complete scenario/demand loading, JSON export, validation, and synthetic grids |
@@ -41,12 +41,14 @@ offset continuously towards the target lane centre instead of teleporting
 sideways. That order preserves the existing vehicle-list order-independence
 invariant.
 
-After each post-movement sub-step, `SimulationFrameHistory` captures an
-immutable renderer frame. `TickProcessor` also reports exact event boundaries,
-so the frame at that timestamp contains the final activated/resolved overlay.
-The bounded history is indexed by simulated milliseconds and exposed by one
-`timelineId`; network edits reset that id because map geometry is not copied
-into every frame.
+At detail cadence `SimulationFrameHistory` captures each post-movement
+sub-step. For large overview ticks the simulator retains at most three
+intermediate physics frames plus the final frame, while `TickProcessor` always
+reports exact state/event boundaries. This avoids copying the complete
+730-road frame dozens of times per scheduler callback without losing a
+transition. The bounded history is indexed by simulated milliseconds and
+exposed by one `timelineId`; network edits reset that id because map geometry
+is not copied into every frame.
 
 `TrafficEventCoordinator` rebuilds road effects from a baseline plus all
 still-active overlays, so events that overlap or resolve out of order do not
@@ -101,6 +103,7 @@ Traffic-Event-System/
 |       |-- api/trafficAPI.js     REST/SSE client
 |       |-- components/
 |       |   |-- TrafficMap.jsx
+|       |   |-- DemandSchedulePanel.jsx
 |       |   |-- NetworkEditor.jsx
 |       |   |-- TimelineScrubber.jsx
 |       |   `-- ExperimentPanel.jsx
@@ -112,7 +115,8 @@ Traffic-Event-System/
 |       |   |-- assetManifest.js       every artwork slot
 |       |   `-- layers/drawScene.js    ground, blocks, road, markings, signals
 |       |-- hooks/useTrafficDashboard.js
-|       |-- demoTraffic.js
+|       |-- displayLabels.js             human-readable road/building labels
+|       |-- simulationTime.js            24-hour clock/day-offset projection
 |       |-- spawnPolicies.js             pluggable vehicle-request planning
 |       |-- App.jsx
 |       `-- styles.css
@@ -137,16 +141,14 @@ Traffic-Event-System/
 `-- run-demo.ps1
 ```
 
-`randomBoundarySpawnPolicy` is a frontend request-planning seam, not a second
-simulation authority. It selects a reachable boundary trip and a CAR/MOTORCYCLE
-type, then `useTrafficDashboard` sends the normal `POST /api/vehicles` command.
-The backend still validates the endpoints, computes the route, owns every tick,
-and publishes the pose rendered by both map modes. A future commuter policy can
-implement the same `plan(...)` result shape while using OSM land-use/POI groups
-such as home → work; the button and vehicle API do not need to change.
-When React reconnects to an already `RUNNING` server, the dashboard restores its
-local boundary-fleet coordinator flag so arrived demo vehicles continue to be
-replaced; playback itself remains server-owned.
+`randomBuildingSpawnPolicy` is a frontend request-planning seam, not a second
+simulation authority. It prefers a residential source, excludes a destination
+on the same access node, checks directed reachability, and selects a
+CAR/MOTORCYCLE type using the documented citywide registered-stock ratio as a
+test proxy. `useTrafficDashboard` sends the normal building-form
+`POST /api/vehicles` command. The backend still resolves the access pair,
+computes the route, advances both driveway links and every road tick, and
+publishes the pose rendered by both map modes.
 
 Generated scenario traffic follows a separate backend-owned path:
 `JsonScenarioLoader` resolves a map and parameter catalog,
@@ -154,6 +156,9 @@ Generated scenario traffic follows a separate backend-owned path:
 `TripPlan`s, and `DemandDrivenSpawner` creates due vehicles. `Vehicle` advances
 the same identity through every resolved leg and dwell, while
 `RETURN_TO_ORIGIN` plans end at the exact concrete origin.
+`TripScheduleEstimator` projects those already-resolved plans onto a directed
+free-flow timetable for `GET /api/simulation/demand/schedule`; it is a
+reader-facing estimate, never a second runtime model.
 
 On a normal launch, `App` loads and initializes the complete file selected by
 `SCENARIO_FILE`, defaulting to `data/scenarios/district1_typical_day.json`,
@@ -166,12 +171,14 @@ the API repeats the complete map/configuration/demand initialization boundary.
 ```mermaid
 flowchart LR
     UI["React controls"] -->|manual commands| API["Javalin controllers"]
-    UI --> SpawnPolicy["Random or future demand/OD policy"]
+    UI --> SpawnPolicy["Reachable building spawn policy"]
     SpawnPolicy -->|POST vehicle request| API
     API --> Services["Service interfaces"]
     Services --> Simulator["TrafficSimulator"]
     Scenario["Scenario + parameter JSON"] --> Demand["TripDemandModel"]
     Demand --> Spawner["DemandDrivenSpawner"]
+    Demand --> Schedule["Free-flow schedule projection"]
+    Schedule --> API
     Spawner --> Simulator
     Simulator --> Graph["RoadNetwork"]
     Simulator --> Tick["TickProcessor"]
@@ -202,6 +209,38 @@ dashboard bundle. PixiJS interpolates only between received poses for display
 smoothness: it samples backend-provided lane/connector topology and blends
 authoritative headings, but it does not run lane changes, collision handling,
 junction arbitration, or a second physics simulation.
+
+Building access is not frontend interpolation. `Vehicle` advances
+`DEPARTING_ORIGIN` and `ARRIVING_DESTINATION` at 15 km/h without road
+occupancy; `VehiclePoseResolver` publishes each authoritative body-centre pose.
+The frontend may smooth only between those successive poses.
+
+## Performance and GPU boundary
+
+PixiJS 8 normally uses WebGL, so rasterization, transforms, and sprite
+composition in the Physical View use the GPU when browser hardware
+acceleration is available. The Java simulator remains deliberately CPU-owned:
+routing, graph mutations, signal/right-of-way arbitration, stateful
+car-following, events, and deterministic ordering do not map cleanly to a GPU
+kernel at this scale. A GPU-compute rewrite would add transfer/synchronization
+cost and a second implementation surface without fixing an interpolation or
+data-contract bug.
+
+The implemented controls target the actual bottlenecks:
+
+- static Pixi geometry is retained once per timeline; the view is lazy-loaded
+  and capped at 60 FPS;
+- physical state is lightweight and polled at 250 ms while changing;
+- SSE supplies the live head directly; the timeline index is refreshed at most
+  once per wall second and statistics at most once every two seconds;
+- renderer history retains 900 timestamps, vehicle traces 5,000 ticks, and
+  flow history 100,000 samples;
+- expired vehicles are removed as a batch before one final frame rather than
+  copying one full scene per removal;
+- **Lane detail**, **Balanced**, and **24 h overview** run at approximately 2×,
+  10×, and 120× simulated time. A 24-hour demand scenario initially selects
+  overview pace; opening Physical View forces detail cadence so a 30-second
+  overview tick is never used for turn inspection.
 
 ## OOP and design patterns
 

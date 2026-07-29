@@ -15,9 +15,13 @@
 // the simulation.
 
 const EPSILON = 1e-6
+const TANGENT_SAMPLE_METRES = 0.15
+const MAX_TANGENT_SAMPLE_FRACTION = 0.05
 const polylineMetricsCache = new WeakMap()
 const laneIndexCache = new WeakMap()
 const connectorIndexCache = new WeakMap()
+const connectorPathCache = new WeakMap()
+const ACCESS_PHASES = new Set(['DEPARTING_ORIGIN', 'ARRIVING_DESTINATION'])
 
 /** Shortest signed turn from one compass bearing to another, in degrees. */
 export function shortestTurn(fromDegrees, toDegrees) {
@@ -121,11 +125,6 @@ function pointAtDistance(metrics, along) {
   return path[path.length - 1]
 }
 
-function pointAtPolyline(points, fraction) {
-  const metrics = polylineMetrics(points)
-  return pointAtDistance(metrics, metrics.total * clamp01(fraction))
-}
-
 /** Arc-length position of the nearest point on a directed lane polyline. */
 function projectOntoPolyline(points, point) {
   const metrics = polylineMetrics(points)
@@ -200,6 +199,28 @@ function bearingBetween(from, to) {
   ) % 360
 }
 
+/**
+ * Bearing of the trajectory actually being drawn at one animation fraction.
+ *
+ * Position and orientation must come from the same curve. Rotating directly
+ * from the two endpoint headings makes a car yaw while it is still on a long
+ * straight approach, even though its position correctly stays on the lane.
+ * A small centred finite difference follows curved lanes, connector arcs and
+ * lateral endpoint corrections alike. The caller supplies the authoritative
+ * interpolation only for a genuinely stationary/degenerate trajectory.
+ */
+function motionBearing(positionAt, fraction, fallback, sampleFraction) {
+  const sample = Math.max(
+    EPSILON,
+    Math.min(MAX_TANGENT_SAMPLE_FRACTION, sampleFraction),
+  )
+  const before = positionAt(clamp01(fraction - sample))
+  const after = positionAt(clamp01(fraction + sample))
+  return before && after && distance(before, after) > EPSILON
+    ? bearingBetween(before, after)
+    : fallback
+}
+
 function accumulatedCurveTurn(curve) {
   let previousBearing = null
   let total = 0
@@ -257,6 +278,35 @@ function canonicalConnectorPath(connector, source, target, fromLane, toLane) {
 }
 
 /**
+ * Reuses the canonical path throughout one rendered source→target interval.
+ *
+ * PhysicalScene calls interpolation at 60 FPS while both authoritative vehicle
+ * objects stay unchanged. Connector validation/projection is substantially
+ * more expensive than sampling a cached polyline, and geometry objects are
+ * immutable for the lifetime of a scene. All three cache levels are weak so an
+ * old timeline can still be collected in full.
+ */
+function cachedConnectorPath(connector, source, target, fromLane, toLane) {
+  let bySource = connectorPathCache.get(connector)
+  if (!bySource) {
+    bySource = new WeakMap()
+    connectorPathCache.set(connector, bySource)
+  }
+  let byTarget = bySource.get(source)
+  if (!byTarget) {
+    byTarget = new WeakMap()
+    bySource.set(source, byTarget)
+  }
+  if (!byTarget.has(target)) {
+    byTarget.set(
+      target,
+      canonicalConnectorPath(connector, source, target, fromLane, toLane),
+    )
+  }
+  return byTarget.get(target)
+}
+
+/**
  * The connector joining two roads, preferring the one built for these lanes.
  *
  * Only an exact lane pairing is valid. Pulling a vehicle onto another lane's
@@ -294,14 +344,20 @@ function findLane(lanes, roadId, preferredIndex, fallbackIndex) {
 }
 
 function followPath(source, target, path, fraction, turnHintDegrees = 0) {
-  const point = pointAtPolyline(path, fraction)
+  const metrics = polylineMetrics(path)
+  const positionAt = (at) => pointAtDistance(metrics, metrics.total * clamp01(at))
+  const point = positionAt(fraction)
   if (!point) return target
   return {
     ...target,
     x: point[0],
     y: point[1],
-    headingDegrees: authoritativeHeading(
-      source, target, fraction, turnHintDegrees),
+    headingDegrees: motionBearing(
+      positionAt,
+      fraction,
+      authoritativeHeading(source, target, fraction, turnHintDegrees),
+      TANGENT_SAMPLE_METRES / Math.max(metrics.total, EPSILON),
+    ),
   }
 }
 
@@ -316,21 +372,38 @@ function followPath(source, target, path, fraction, turnHintDegrees = 0) {
 function lanePose(source, target, lane, sourceProgress, targetProgress, fraction) {
   const from = clamp01(sourceProgress)
   const to = clamp01(targetProgress)
-  const progress = from + (to - from) * fraction
-  const sourceBase = pointAtPolyline(lane.centreline, from)
-  const targetBase = pointAtPolyline(lane.centreline, to)
-  const point = pointAtPolyline(lane.centreline, progress)
-  if (!sourceBase || !targetBase || !point) return null
+  const metrics = polylineMetrics(lane.centreline)
+  const sourceBase = pointAtDistance(metrics, metrics.total * from)
+  const targetBase = pointAtDistance(metrics, metrics.total * to)
+  if (!sourceBase || !targetBase) return null
 
   const offsetX = (source.x - sourceBase[0])
   const offsetY = (source.y - sourceBase[1])
-  const correctionX = offsetX + ((target.x - targetBase[0]) - offsetX) * fraction
-  const correctionY = offsetY + ((target.y - targetBase[1]) - offsetY) * fraction
+  const targetOffsetX = target.x - targetBase[0]
+  const targetOffsetY = target.y - targetBase[1]
+  const positionAt = (at) => {
+    const progress = from + (to - from) * at
+    const point = pointAtDistance(metrics, metrics.total * progress)
+    if (!point) return null
+    return [
+      point[0] + offsetX + (targetOffsetX - offsetX) * at,
+      point[1] + offsetY + (targetOffsetY - offsetY) * at,
+    ]
+  }
+  const point = positionAt(fraction)
+  if (!point) return null
+  const travelDistance = Math.abs(to - from) * metrics.total
+    + Math.hypot(targetOffsetX - offsetX, targetOffsetY - offsetY)
   return {
     ...target,
-    x: point[0] + correctionX,
-    y: point[1] + correctionY,
-    headingDegrees: authoritativeHeading(source, target, fraction),
+    x: point[0],
+    y: point[1],
+    headingDegrees: motionBearing(
+      positionAt,
+      fraction,
+      authoritativeHeading(source, target, fraction),
+      TANGENT_SAMPLE_METRES / Math.max(travelDistance, EPSILON),
+    ),
   }
 }
 
@@ -345,7 +418,7 @@ export function interpolateVehicles(previous, next, t, geometry = {}) {
   const connectors = geometry?.connectors || []
   const lanes = geometry?.lanes || []
 
-  return (next || []).map((target) => {
+  const drawn = (next || []).map((target) => {
     const source = before.get(target.id)
     // Nothing to interpolate from. The authoritative pose is the only truth
     // there is, and a vehicle drawn anywhere else on its first frame arrives
@@ -359,6 +432,21 @@ export function interpolateVehicles(previous, next, t, geometry = {}) {
 
     const fromRoadId = roadOf(source)
     const toRoadId = roadOf(target)
+
+    // Building access is now an authoritative backend phase sampled at every
+    // physics sub-step. Its x/y endpoints already lie on the building↔access
+    // segment, so the safe interpolation is the local chord between those two
+    // samples. Reconstructing a whole building/access path here would send a
+    // midway vehicle backwards to the building on every poll.
+    if (ACCESS_PHASES.has(source.journeyPhase)
+        && ACCESS_PHASES.has(target.journeyPhase)) {
+      return {
+        ...target,
+        x: source.x + (target.x - source.x) * fraction,
+        y: source.y + (target.y - source.y) * fraction,
+        headingDegrees: authoritativeHeading(source, target, fraction),
+      }
+    }
 
     // Still on the same road — including a vehicle that has merely rolled up to
     // its stop line, which has not turned and must not be drawn turning.
@@ -383,7 +471,7 @@ export function interpolateVehicles(previous, next, t, geometry = {}) {
           lanes, fromRoadId, source.laneIndex, source.laneIndex)
         const toLane = findLane(
           lanes, toRoadId, target.laneIndex, target.laneIndex)
-        const connectorPath = canonicalConnectorPath(
+        const connectorPath = cachedConnectorPath(
           connector, source, target, fromLane, toLane)
         if (connectorPath) {
           return followPath(
@@ -404,4 +492,9 @@ export function interpolateVehicles(previous, next, t, geometry = {}) {
       headingDegrees: authoritativeHeading(source, target, fraction),
     }
   })
+
+  // The backend keeps a vehicle in ARRIVING_DESTINATION until its authoritative
+  // pose reaches the building centre. Once it leaves the next scene it is
+  // dwelling/complete, so there is no valid extra "ghost" trajectory to invent.
+  return drawn
 }

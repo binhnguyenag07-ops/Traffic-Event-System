@@ -13,7 +13,20 @@ import team.traffic.domain.vehicle.Vehicle;
 
 /** Stores immutable vehicle states for the current simulation run. */
 public class VehicleTraceStore {
+    public static final int DEFAULT_RETENTION_LIMIT = 5_000;
     private final NavigableMap<Long, Map<String, VehicleTracePoint>> statesByTick = new TreeMap<>();
+    private final int retentionLimit;
+
+    public VehicleTraceStore() {
+        this(DEFAULT_RETENTION_LIMIT);
+    }
+
+    public VehicleTraceStore(int retentionLimit) {
+        if (retentionLimit < 2) {
+            throw new IllegalArgumentException("Trace retention limit must be at least 2.");
+        }
+        this.retentionLimit = retentionLimit;
+    }
 
     public void reset(long tick, List<Vehicle> vehicles) {
         statesByTick.clear();
@@ -33,6 +46,7 @@ public class VehicleTraceStore {
             }
         }
         statesByTick.put(tick, Collections.unmodifiableMap(states));
+        while (statesByTick.size() > retentionLimit) statesByTick.pollFirstEntry();
     }
 
     public VehicleTraceSummary getSummary() {

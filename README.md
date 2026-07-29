@@ -23,22 +23,28 @@ The repository currently includes:
 - event service, event API, and overlap-safe event overlay composition;
 - simulation clock, tick processing, pause/resume/reset, and snapshots;
 - server-owned live playback with configurable tick timing and SSE renderer frames;
-- bounded authoritative frame history captured after every microscopic sub-step
-  and event boundary, with a LIVE/HISTORY scrubber on the macro map;
+- bounded authoritative frame history captured at exact state transitions and
+  sampled microscopic boundaries, with a LIVE/HISTORY scrubber on the macro
+  map;
 - lane-offset vehicle pose (latitude, longitude, heading), collision detection,
   emergency priority, real stop-line control, and bus dwell stops;
 - seeded building/boundary demand with open purpose ids, data-defined hourly
   curves and vehicle mixes, exact return-to-origin conservation, multi-stop
   plans, planned dwell, and explicit unroutable-plan reporting;
+- a reader-facing 24-hour demand schedule with named origins/destinations,
+  departure, estimated arrival/dwell/return clocks, hourly and purpose filters,
+  plus an always-visible simulation clock;
 - open-boundary demo traffic where completed vehicles exit and different
   same-type vehicles enter from reachable boundary roads;
 - traffic and algorithm statistics services;
 - React operations console with a React-Leaflet/OpenStreetMap macro map for road
   pressure, incidents, routes, network editing, and statistics, plus a PixiJS
   lane-level physical view; both render backend-resolved vehicle poses;
-- a Fleet **Spawn random test vehicle** control that creates a real backend car
-  or motorcycle on a reachable boundary-to-boundary route, with the request
-  policy isolated for later land-use/demand-based origin-destination models;
+- Fleet controls that select human-readable building/street names and create a
+  real backend car or motorcycle on a reachable building-to-building route;
+  random test vehicles prefer residential origins and use a documented
+  citywide registered-fleet ratio only as a test-spawn proxy; coordinates,
+  directed endpoints, lane count, and road length disambiguate repeated names;
 - session-scoped network editing for junctions, directed/two-way roads, road
   conditions, connected-road searches, and JSON export;
 - atomic browser JSON import for geographic HCMC networks, with stored/OSRM/
@@ -92,6 +98,16 @@ The map uses OpenStreetMap tiles, so the basemap requires an internet
 connection. The traffic simulation, routing, events, and vehicle positions run
 locally.
 
+PixiJS normally draws the Physical View through WebGL, so vehicle sprites and
+lane geometry are already GPU-rendered when the browser exposes hardware
+acceleration. The authoritative simulation itself is Java code on the CPU:
+graph routing, vehicle interactions, signal arbitration, events, and demand are
+branch-heavy, stateful operations. Moving that model to GPU compute would be a
+large redesign and would weaken deterministic replay for this map size; the
+implemented performance controls instead cap rendering at 60 FPS, reuse static
+geometry, bound history, throttle secondary requests, and offer explicit
+playback paces.
+
 The compiled frontend is embedded in the JAR, but `data/maps`,
 `data/scenarios`, and `data/demand` remain external runtime inputs. Keep the
 repository `data/` directory beside the launch scripts. If starting the JAR
@@ -100,8 +116,20 @@ scenario path. `MAP_FILE` is a topology-only override for map-development runs.
 
 By default the backend initializes the complete
 `district1_typical_day.json` scenario before serving requests. Opening the
-dashboard starts playback from its warm-start fleet; pause and use
+dashboard starts playback from its seeded demand schedule; pause and use
 **Reload scenario** whenever a clean seeded rerun is needed.
+
+The checked-in run starts at 06:00 and schedules departures for a complete
+24-hour horizon, ending at 06:00 on simulation day `D+1`; the simulator may
+continue beyond the departure horizon while vehicles finish dwell or return
+legs. The header clock is derived from the authoritative frame. Use **Lane
+detail** (2 simulated seconds per wall second) while inspecting the Physical
+View, **Balanced** (10×) for normal operation, or **24 h overview** (120×,
+about 12 wall minutes for one simulated day). Activating the 24-hour demand
+scenario selects overview pace, so the first scheduled departure at 68.79
+simulated seconds appears in under one wall second. Opening the Physical View
+automatically returns an overview run to the detail cadence so large logical
+ticks do not compromise turn animation.
 
 ## Backend Setup
 
@@ -182,6 +210,7 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `POST /api/simulation/tick` | advance one tick |
 | `PUT /api/simulation/parameters` | set logical seconds per tick and playback interval |
 | `GET /api/simulation/status` | run status, clock, playback settings, and demand counters |
+| `GET /api/simulation/demand/schedule` | exact seeded plans with named places and estimated leg/return clocks |
 | `GET /api/simulation/tick/current` | current integer trace tick |
 | `GET /api/simulation/snapshot` | current simulation snapshot |
 | `GET /api/simulation/diagnostics` | adaptive navigation, information, wait, U-turn, and deadlock evidence |
@@ -212,13 +241,29 @@ Available map files:
 |---|---|
 | `data/maps/district1_network.json` | default full-viewport District 1 network and buildings |
 | `data/demand/default_assumptions.json` | replaceable occupancy, attraction, decay, and hourly curves |
-| `data/scenarios/district1_typical_day.json` | seeded synthetic weekday run: 216 deterministic demand plans and four warm-start vehicles |
+| `data/scenarios/district1_typical_day.json` | seeded 24-hour weekday proxy: 156 deterministic demand plans and no scripted warm-start traffic |
 | `data/results/experiment_results.json` | reproducible experiment baseline |
 
-The District 1 scenario is an educational, research-informed synthetic demand
-case. Its volumes, dwell times, hourly curves, and mode shares are explicit
-assumptions, not observed or calibrated traffic counts. See the
+The District 1 scenario is an educational, research-informed proxy rather than
+a calibrated traffic forecast. Verified map/run facts, city-level transport
+proxies, and authored assumptions are kept separate; exact cordon volumes,
+gateway allocation, dwell, and purpose-specific curves remain assumptions,
+while historical ratios and the named HOUTRANS curve are labeled as proxies. See the
 [scenario evidence and reproducibility note](docs/DISTRICT1_SCENARIO.md).
+For the committed seed the 156 plans contain 142 motorcycles and 14 cars, with
+zero structural generation failures; the regression-pinned purpose breakdown
+is listed in that evidence note and in [`data/README.md`](data/README.md).
+
+The committed map has 730 directed roads representing 560 physical segments.
+An audit against a fresh OpenStreetMap/Overpass extract covered all 439 source
+ways: 390 physical segments are one-way (380 tagged `oneway=yes`, 10
+roundabouts), while 170 are represented in both directions. Of the 168
+one-way segments with at least three lanes, 155 have direct OSM lane tags and
+13 use generator inference/defaults. Direction, lane, and name mismatches found
+during the audit were corrected. Eleven OSM ways allow a motorcycle-specific
+reverse exception (`oneway:motorcycle=no`); the current all-vehicle road schema
+cannot express that exception, so it deliberately preserves the general
+one-way rule.
 
 ### Units
 
@@ -252,8 +297,11 @@ and routing do not depend on an external routing service at runtime. Map data
 © OpenStreetMap contributors, available under the ODbL.
 
 The current centreline dataset can be regenerated with
-`python3 tools/generate_osm_map.py`. This legacy generator still uses public
-Overpass mirrors. See the [macro and physical map plan](docs/PHYSICAL_VIEW_PLAN.md)
+`python3 tools/generate_osm_map.py`. It accepts only freshness-verifiable OSM
+base snapshots no older than 24 hours during normal regeneration, writes cache
+files atomically, and permits stale/legacy cache input only with the explicit
+`--offline-cache` flag. It uses public Overpass mirrors. See the
+[macro and physical map plan](docs/PHYSICAL_VIEW_PLAN.md)
 for the local-PBF ingestion roadmap and physical-view design background.
 
 ### Network Editor

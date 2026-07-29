@@ -68,7 +68,15 @@ public record PhysicalViewStateDto(
                 vehicle.roadProgress(),
                 vehicle.inJunction(),
                 vehicle.junctionFromRoadId(),
-                vehicle.junctionToRoadId());
+                vehicle.junctionToRoadId(),
+                vehicle.journeyPhase().name(),
+                vehicle.originPlaceKind() == null ? null : vehicle.originPlaceKind().name(),
+                vehicle.originPlaceId(),
+                vehicle.originAccessIntersectionId(),
+                vehicle.destinationPlaceKind() == null
+                        ? null : vehicle.destinationPlaceKind().name(),
+                vehicle.destinationPlaceId(),
+                vehicle.destinationAccessIntersectionId());
     }
 
     private static double[] project(GeoPoint point, GeoPoint origin) {
@@ -103,6 +111,13 @@ public record PhysicalViewStateDto(
             double roadProgress,
             boolean inJunction,
             String junctionFromRoadId,
-            String junctionToRoadId) {
+            String junctionToRoadId,
+            String journeyPhase,
+            String originPlaceKind,
+            String originPlaceId,
+            String originAccessIntersectionId,
+            String destinationPlaceKind,
+            String destinationPlaceId,
+            String destinationAccessIntersectionId) {
     }
 }

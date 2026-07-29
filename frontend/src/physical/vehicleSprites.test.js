@@ -9,22 +9,18 @@ describe('vehicleTransform', () => {
   it('flips north so it is up on the canvas', () => {
     const placed = vehicleTransform({ ...base, lengthMetres: 0 })
     expect(placed.x).toBe(12)
-    // A minimum length still applies, so the setback is half of that.
-    expect(placed.y).toBe(-(34 - 0.75))
+    expect(placed.y).toBe(-34)
   })
 
-  it('sets the body back from the bumper the simulation reports', () => {
-    // Facing north at y = 34: the nose stays at 34 and a 4.5 m body reaches
-    // back to 29.5, so its centre is at 31.75. Drawn centred on the bumper it
-    // would have hung half a car over the stop line.
+  it('uses the body centre resolved by the Physical View boundary', () => {
     const placed = vehicleTransform(base)
-    expect(placed.y).toBe(-31.75)
+    expect(placed.x).toBe(12)
+    expect(placed.y).toBe(-34)
   })
 
-  it('sets back along the heading, not along the axes', () => {
-    // Facing east, the setback comes off x and leaves y alone.
+  it('does not apply a second half-length offset at any heading', () => {
     const placed = vehicleTransform({ ...base, headingDegrees: 90 })
-    expect(placed.x).toBeCloseTo(12 - 2.25, 9)
+    expect(placed.x).toBeCloseTo(12, 9)
     expect(placed.y).toBeCloseTo(-34, 9)
   })
 

@@ -42,6 +42,7 @@ public final class BuildingRoutePlanner {
         return origin.getAccessPoints().stream()
                 .flatMap(start -> destination.getAccessPoints().stream()
                         .flatMap(end -> candidate(network, start.intersectionId(), start, end, preference)))
+                .filter(plan -> !plan.routeResult().getRoute().isEmpty())
                 .min(planComparator())
                 .orElseThrow(() -> new NoSuchElementException(
                         "No route between buildings " + originBuildingId + " and " + destinationBuildingId));
