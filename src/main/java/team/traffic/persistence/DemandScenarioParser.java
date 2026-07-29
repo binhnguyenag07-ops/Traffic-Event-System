@@ -68,6 +68,8 @@ public final class DemandScenarioParser {
                 parseDurationSeconds(root),
                 parseSeed(root),
                 number(root, "scale", 1.0),
+                number(root, "warmUpSeconds", 0.0),
+                bool(root, "automaticCollisionEvents", true),
                 sources,
                 zones,
                 catalog.parameters());
@@ -311,6 +313,15 @@ public final class DemandScenarioParser {
     private static double number(JsonNode node, String field, double fallback) {
         JsonNode value = node.get(field);
         return value == null || value.isNull() ? fallback : value.asDouble(Double.NaN);
+    }
+
+    private static boolean bool(JsonNode node, String field, boolean fallback) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) return fallback;
+        if (!value.isBoolean()) {
+            throw new IllegalArgumentException(field + " must be a boolean");
+        }
+        return value.asBoolean();
     }
 
     private static String text(JsonNode node, String field, String fallback) {

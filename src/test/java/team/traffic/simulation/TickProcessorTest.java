@@ -5,9 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Intersection;
+import team.traffic.domain.network.JunctionMovement;
 import team.traffic.domain.network.LocationType;
+import team.traffic.domain.network.MovementPermission;
+import team.traffic.domain.network.MovementProvenance;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -17,8 +22,10 @@ import team.traffic.domain.routing.RouteStep;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleStatus;
+import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.domain.vehicle.dynamics.MovementPlan;
 import team.traffic.domain.vehicle.dynamics.TrafficState;
+import team.traffic.domain.vehicle.dynamics.TurnDirection;
 import team.traffic.domain.event.AccidentEvent;
 import team.traffic.domain.event.BreakdownEvent;
 import team.traffic.domain.event.RoadClosureEvent;
@@ -32,6 +39,78 @@ import team.traffic.service.impl.RoutingServiceImpl;
  * density from the space traffic physically takes up.
  */
 class TickProcessorTest {
+
+    @Test
+    void anOnRoadVehicleReroutesAroundAForbiddenUpcomingMovement() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("C", "C", 2, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("D", "D", 1, 1, LocationType.NORMAL));
+        network.addRoad(openRoad("AB", "A", "B"));
+        network.addRoad(openRoad("BC", "B", "C"));
+        network.addRoad(openRoad("BD", "B", "D"));
+        network.addRoad(openRoad("DC", "D", "C"));
+        network.getMovementGraph().register(new JunctionMovement(
+                "B",
+                Optional.of("AB"),
+                "BC",
+                TurnDirection.STRAIGHT,
+                MovementPermission.ALLOWED,
+                Set.of(VehicleType.MOTORCYCLE),
+                0,
+                MovementProvenance.EXPLICIT));
+        Car vehicle = new Car("car-on-road-restricted", "A", "C");
+        vehicle.setCurrentRoute(new Route(
+                List.of(
+                        new RouteStep("A", "B", "AB", 1.0),
+                        new RouteStep("B", "C", "BC", 1.0)),
+                2.0, 2.0, 2.0));
+        placeOnRoad(network, List.of(vehicle), vehicle, "AB", 960.0, 0.0);
+        TickProcessor processor = new TickProcessor(dijkstra());
+
+        processor.process(0, network, List.of(vehicle), List.of());
+
+        assertThat(vehicle.getCurrentRoute().getSteps())
+                .extracting(RouteStep::getRoadId)
+                .containsExactly("AB", "BD", "DC");
+        assertThat(vehicle.getOccupiedRoadId()).isEqualTo("AB");
+        assertThat(vehicle.getStatus()).isEqualTo(VehicleStatus.WAITING);
+    }
+
+    @Test
+    void aVehicleBlockedByAnIllegalMovementForItsTypeIsRerouted() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection("B", "B", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("C", "C", 2, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("D", "D", 1, 1, LocationType.NORMAL));
+        network.addRoad(openRoad("BC", "B", "C"));
+        network.addRoad(openRoad("BD", "B", "D"));
+        network.addRoad(openRoad("DC", "D", "C"));
+        network.getMovementGraph().register(new JunctionMovement(
+                "B",
+                Optional.empty(),
+                "BC",
+                TurnDirection.STRAIGHT,
+                MovementPermission.ALLOWED,
+                Set.of(VehicleType.MOTORCYCLE),
+                0,
+                MovementProvenance.EXPLICIT));
+        Car vehicle = new Car("car-restricted", "B", "C");
+        vehicle.setCurrentRoute(new Route(
+                List.of(new RouteStep("B", "C", "BC", 1.0)),
+                1.0, 1.0, 1.0));
+        TickProcessor processor = new TickProcessor(dijkstra());
+
+        processor.process(0, network, List.of(vehicle), List.of());
+        processor.process(1, network, List.of(vehicle), List.of());
+
+        assertThat(vehicle.getCurrentRoute().getSteps())
+                .extracting(RouteStep::getRoadId)
+                .containsExactly("BD", "DC");
+        assertThat(vehicle.getOccupiedRoadId()).isEqualTo("BD");
+        assertThat(vehicle.getStatus()).isIn(VehicleStatus.MOVING, VehicleStatus.WAITING);
+    }
 
     @Test
     void aVehicleBlockedByAClosedRoadIsReroutedAndMovesOnTheAlternative() {
@@ -115,6 +194,34 @@ class TickProcessorTest {
     }
 
     @Test
+    void disabledAutomaticCollisionPolicyDoesNotInventAnAccidentEvent() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addRoad(new Road("R", "A", "B", 0.1, 50, 100, 0,
+                new RoadCondition(0, 0, RoadStatus.OPEN)));
+        Car leader = carOnRoute("leader");
+        Car follower = carOnRoute("follower");
+        List<Vehicle> vehicles = new ArrayList<>(List.of(leader, follower));
+        placeOnRoad(network, vehicles, leader, 46.0, 0.0);
+        placeOnRoad(network, vehicles, follower, 40.0, 20.0);
+        List<team.traffic.domain.event.TrafficEvent> events = new ArrayList<>();
+        TickProcessor processor = new TickProcessor(
+                dijkstra(),
+                null,
+                new VehicleDynamicsEngine(),
+                AdaptiveTrafficConfig.disabled(),
+                0,
+                false);
+
+        processor.process(0, 0, network, vehicles, events, 1.0);
+
+        assertThat(events).isEmpty();
+        assertThat(leader.getStatus()).isNotEqualTo(VehicleStatus.STOPPED);
+        assertThat(follower.getStatus()).isNotEqualTo(VehicleStatus.STOPPED);
+    }
+
+    @Test
     void vehicleRemainsStoppedUntilEveryOverlappingFailureIsResolved() {
         RoadNetwork network = new RoadNetwork();
         network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
@@ -191,11 +298,24 @@ class TickProcessorTest {
             Vehicle vehicle,
             double progressMetres,
             double speedMps) {
+        placeOnRoad(network, vehicles, vehicle, "R", progressMetres, speedMps);
+    }
+
+    private static void placeOnRoad(
+            RoadNetwork network,
+            List<Vehicle> vehicles,
+            Vehicle vehicle,
+            String roadId,
+            double progressMetres,
+            double speedMps) {
         TrafficState state = TrafficState.capture(0, network, vehicles);
         vehicle.planJunctionApproach(network, state).ifPresent(state::requestCrossing);
         state.resolveJunctions();
         vehicle.planMovement(network, state, 1.0).orElseThrow();
-        vehicle.commitMovement(new MovementPlan("R", speedMps, progressMetres, false), network, state);
+        vehicle.commitMovement(
+                new MovementPlan(roadId, speedMps, progressMetres, false),
+                network,
+                state);
     }
 
     /** A to C the direct way through B, or the long way round through D. */

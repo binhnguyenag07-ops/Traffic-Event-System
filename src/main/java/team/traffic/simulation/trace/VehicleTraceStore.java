@@ -10,6 +10,7 @@ import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
 import team.traffic.domain.vehicle.Vehicle;
+import team.traffic.domain.vehicle.VehicleStatus;
 
 /** Stores immutable vehicle states for the current simulation run. */
 public class VehicleTraceStore {
@@ -41,6 +42,7 @@ public class VehicleTraceStore {
         Map<String, VehicleTracePoint> states = new LinkedHashMap<>();
         if (vehicles != null) {
             for (Vehicle vehicle : vehicles) {
+                if (vehicle.getStatus() == VehicleStatus.DWELLING) continue;
                 VehicleTracePoint point = VehicleTracePoint.from(tick, vehicle);
                 states.put(point.vehicleId(), point);
             }

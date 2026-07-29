@@ -60,6 +60,7 @@ startTimeOfDaySeconds
 durationSeconds
 seed
 scale
+warmUpSeconds
 sources: [DemandSource, …]
 zones: { id → ZoneDefinition }
 parameters: DemandParameters
@@ -88,8 +89,23 @@ not scale:
 - speed or simulation time;
 - dwell duration.
 
-In the bundled case `scale = 0.015` is a **SYNTHETIC ASSUMPTION** selected for a
-manageable demonstration load. It is not a fitted calibration coefficient.
+In the bundled case `scale = 1.0`; the configured productions therefore map
+directly to simulated plan starts. The two 18,000-vehicle/day cordon
+productions are still **SYNTHETIC ASSUMPTIONS**, not fitted observations.
+
+`warmUpSeconds` is an initialization pre-roll, not a playback pace. The bundled
+value is 300 seconds. `TrafficSimulator` advances the normal demand spawner,
+signals, junction arbitration and microscopic vehicle model in one-second
+batches, then discards the pre-roll trace/frame history and publishes only the
+resulting 06:05 state. It does not alter the later tick size, seek the frontend,
+or repeat demand.
+
+`automaticCollisionEvents` defaults to `true` for backwards compatibility and
+for focused physics labs. The bundled typical-day scenario explicitly sets it
+to `false`: no observed crash-rate/exposure model has been calibrated for this
+synthetic demand sample, so its braking-risk detector is not used as a crash
+generator. This does not disable car following, gap acceptance, collision-safe
+motion, or explicit accident/breakdown events.
 
 ### `DemandSource`, `FlowSpec` and production
 
@@ -165,9 +181,18 @@ The HOUTRANS 2002 trip-rate table is reproduced in Appendix 1 of
 [JICA, Data Collection Survey on Traffic Conditions of Southern Roads and Bridges](https://openjicareport.jica.go.jp/pdf/12305017_02.pdf).
 The former-District-1 split table and hourly figures are in
 [JICA, HOUTRANS Volume 2, Main Text](https://openjicareport.jica.go.jp/pdf/11764636_02.pdf).
-The cordon base of 3,600 vehicles/day per side, scenario scale `0.015`, cordon
+The cordon base of 18,000 vehicles/day per side, scenario scale `1.0`, cordon
 20/50/30 allocation, dwell ranges, and
 `COMMUTE_AM`/`SCHOOL_AM`/`VISITOR_DAYTIME` curves remain synthetic assumptions.
+
+The chosen runtime size is an explicit microscopic sample. HOUTRANS reported
+2.323 million daily non-walking trip ends for the former District 1 in 2002;
+after area allocation, internal-trip de-duplication, modal shares and observed
+occupancy conversion, the evidence note derives a broad 0.4–0.7 million
+vehicle-leg/day historical proxy for this 3.05 km² window. The bundled 69,837
+simulated legs are about 1:9 against the 0.6-million midpoint. Runtime
+statistics remain unweighted simulated-agent counts; no result is silently
+expanded.
 
 ### `PlaceSpec` and `ResolvedPlace`
 
@@ -318,17 +343,20 @@ Source handling is explicit:
 - An unexpected invalid resolved plan is retained in demand failure statistics
   by plan id instead of being spawned.
 
-The bundled former District 1 study-window scenario resolves 156 generated
-plans with 0 structural generation failures. That does not promise that no
-vehicle will be blocked by a live closure, full downstream road or later
-routing condition.
+The bundled former District 1 study-window scenario resolves 38,518 generated
+plans / 69,837 legs with 0 structural generation failures. That does not
+promise immediate road admission: a structurally valid plan that is due while
+its entry is full or temporarily closed becomes a normal `BLOCKED` runtime
+vehicle and retries through the ordinary routing logic. It is not reclassified
+as malformed demand and discarded.
 
 ## Runtime hand-off and statistics
 
 `DemandDrivenSpawner` queries the model over
-`(lastScannedSeconds, currentElapsedSeconds]`. A due plan is converted into one
-vehicle, assigned its first destination and routed through the ordinary routing
-service.
+`(lastScannedSeconds, currentElapsedSeconds]`. `GravityDemandModel` stores plans
+in departure order and uses an upper-bound binary search, so each poll does not
+scan all 38,518 future plans. A due plan is converted into one vehicle, assigned
+its first destination and routed through the ordinary routing service.
 
 Demand statistics report:
 
@@ -345,8 +373,12 @@ mean leg or person trip.
 
 ### Reader-facing schedule
 
-`GET /api/simulation/demand/schedule` exposes the exact already-resolved plan
-list; it does not regenerate or resample demand. Each entry carries:
+`GET /api/simulation/demand/schedule?offset={n}&limit={n}` exposes a bounded
+page of the exact already-resolved plan list; it does not regenerate or
+resample demand. The default page is 250 and the maximum is 1,000. Top-level
+`totalPlans`, `hourlyPlanCounts`, `purposeCounts`, and `vehicleTypeCounts`
+summarize the complete schedule, while `offset`, `limit`, and `returnedPlans`
+describe the page. Each paged entry carries:
 
 - plan id, purpose, vehicle type, and completion policy;
 - human-readable origin and destination names, nullable coordinates for
@@ -358,8 +390,10 @@ list; it does not regenerate or resample demand. Each entry carries:
 The estimator uses directed Dijkstra free-flow road time plus the 15 km/h
 building access links and declared dwell. It deliberately ignores live queues,
 signals, closures, and incidents; the UI labels every arrival/return value as
-an estimate. The **24-hour demand** panel groups exact departures by clock hour,
-filters by purpose/hour, and paginates plan details.
+an estimate. Route estimation runs only for the requested page rather than all
+38,518 plans. The **24-hour demand** panel renders the complete hourly
+aggregate as a read-only profile and requests 12 ordered plan estimates per UI
+page. It has no hour/purpose control that could be mistaken for a spawn rule.
 
 Scenario initialization also normalizes legacy road state before routing any
 vehicle:
@@ -386,7 +420,9 @@ The file/HTTP demand shape is `demandSources`, not a nested
   "startTimeOfDay": "06:00",
   "durationHours": 24,
   "seed": 20260728,
-  "scale": 0.015,
+  "scale": 1.0,
+  "warmUpSeconds": 300,
+  "automaticCollisionEvents": false,
 
   "zones": [
     {
@@ -405,7 +441,7 @@ The file/HTTP demand shape is `demandSources`, not a nested
       "from": {"kind": "ZONE", "zoneIds": ["north-east-entries"]},
       "production": {
         "kind": "ABSOLUTE",
-        "vehiclesPerDay": 3600
+        "vehiclesPerDay": 18000
       },
       "flows": [
         {
@@ -442,6 +478,11 @@ The snippet abbreviates the other resident and cordon flows but uses their
 current field shape. The bundled case intentionally has no scripted warm-start
 traffic.
 
+The shipped JSON also includes a reader-facing `demandMagnitude` object with
+the deterministic plan/leg counts, cordon total and sampling warning. It is
+audit metadata, not an input consumed by `DemandScenarioParser`, not a hidden
+expansion factor, and not permission to multiply runtime statistics.
+
 The parameter catalog supplies all building-type parameters and named
 normalized curves. Its top-level `status` is `ASSUMPTION`.
 
@@ -450,7 +491,8 @@ normalized curves. Its top-level `status` is `ASSUMPTION`.
 - Exactly one production kind and its matching positive value are required.
 - Population-derived production requires a building or zone source containing
   buildings.
-- Source ids are unique; flow ids are unique across the whole scenario.
+- Source ids are unique. Flow ids are unique inside each source; separate
+  sources may deliberately reuse the same flow id.
 - Flow shares are in `(0, 1]` and total at most 1 per source.
 - Vehicle-mix entries are positive and total 1.
 - Curves contain exactly 24 finite non-negative weights totaling 1.
@@ -491,5 +533,6 @@ omits:
 - a calibrated travel-time impedance or OD matrix;
 - automatic simulation stop at the demand horizon.
 
-Therefore `scale`, output counts and modal shares are demonstration controls.
-Do not call them measured demand, validation results or forecasts.
+Therefore production, output counts and modal shares are modeling controls.
+The shipped output is a documented microscopic sample, not a measured demand,
+validation result or forecast.

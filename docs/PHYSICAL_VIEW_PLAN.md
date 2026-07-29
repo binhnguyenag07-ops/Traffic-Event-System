@@ -29,13 +29,15 @@ is not justified for this network size.
 The Physical View uses two endpoints:
 
 ```text
-GET /api/simulation/physical-view?lat=&lon=&radiusMetres=&fullMap=true
+GET /api/simulation/physical-view?lat=&lon=&radiusMetres=&fullMap=true&includeState=false
 GET /api/simulation/physical-view/state?lat=&lon=&radiusMetres=
 ```
 
 The first request loads the current network's static lanes, stop lines,
-junctions, buildings, land cover and connectors once. The second carries only
-vehicles, signals and frame metadata.
+junctions, buildings, land cover and connectors once. `includeState=false`
+prevents that full-map response from serializing the district-wide live fleet.
+An immediate second request, and every later poll, carries only vehicles,
+signals and frame metadata within the current camera radius.
 
 `PhysicalScene.jsx` keeps every layer in one world-metre `Container`; pan and
 zoom change only that container's transform. Static geometry is rebuilt only
@@ -56,20 +58,34 @@ two seconds, instead of issuing both requests for every 4 Hz frame. Backend
 frame history retains 900 timestamps, tick traces 5,000 ticks, and flow history
 100,000 samples.
 
+While Physical View is open, the hidden macro map, command rail, Fleet and
+timeline are unmounted, and the full-frame SSE plus snapshot fallback are
+closed. Physical state supplies its own authoritative elapsed time. A
+one-second `GET /api/simulation/status` poll carries only status/clock/pace
+metadata so PAUSED, READY, scheduler failure and custom pace remain visible
+without parsing the full fleet behind the camera.
+
 Geometry and optional artwork load in parallel. Every asset slot has a bounded
 load time and falls back to a generated shape independently, so a missing or
 stalled texture cannot leave the scene waiting forever.
 
+Each state request covers the visible camera diagonal plus 20% overscan, with a
+120 m minimum. Returned local coordinates are rebased onto the retained static
+origin. A second screen-bounds pass omits vehicle sprites and trails outside the
+actual viewport, so panning remains smooth without reducing backend demand or
+inventing a separate client simulation.
+
 The District 1 scene currently contains 389 intersections, 730 directed roads,
 1,318 lane centrelines and 1,162 buildings. This is small enough for a
-single retained static scene. A materially larger map should add spatial
-partitioning or viewport culling instead of continuing to load the whole city.
+single retained static scene. A materially larger map should tile its static
+geometry rather than continuing to load the whole city.
 
-Playback has three explicit paces: lane detail (0.5 simulated seconds every
-250 ms, about 2×), balanced (2.5/250 ms, about 10×), and 24-hour overview
-(30/250 ms, about 120×). Activating a 24-hour demand scenario selects overview
-pace; opening this view forces lane-detail cadence. Overview mode is for the
-daily aggregate clock, not close-up junction animation.
+Playback has three macro paces: real time (0.25 simulated seconds every 250 ms,
+1×), balanced (2.5/250 ms, about 10×), and 24-hour overview (30/250 ms, about
+120×). Physical View is always a live camera at the first cadence. Opening it
+does not seek, reset or replay the day; it changes only the reversible tick
+cadence and returns any history inspection to the live head. Closing it restores
+the previous macro pace.
 
 ## Interpolation contract
 
@@ -171,6 +187,9 @@ legalize it for cars and buses, so this remains an explicit schema limitation.
   survey of every real signal controller or phase in District 1.
 - Pedestrians, bicycles, kerbside parking and public-transport dwell operations
   are outside the current model.
+- Static geometry is still retained district-wide. Moving state and sprite
+  submission are viewport-bounded; a city-scale map would also need tiled
+  static geometry.
 
 Adding timed junction occupancy would be a legitimate future model upgrade, but
 it must be designed together with reservation release, deadlock detection and

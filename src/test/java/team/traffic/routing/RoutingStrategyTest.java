@@ -199,6 +199,31 @@ class RoutingStrategyTest {
             assertThat(result.getRoute().getTotalCost()).isLessThan(
                     result.getRoute().getSteps().size() * 10.0); // rough sanity
         }
+
+        @Test
+        @DisplayName("uses a saturated legal road when it is the only path")
+        void saturatedOnlyPathBecomesAQueueInsteadOfNoRoute() {
+            RoadNetwork network = new RoadNetwork();
+            network.addIntersection(new team.traffic.domain.network.Intersection(
+                    "A", "A", 0, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addIntersection(new team.traffic.domain.network.Intersection(
+                    "B", "B", 1, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addRoad(new team.traffic.domain.network.Road(
+                    "AB", "A", "B", 1, 40, 5, 5,
+                    new team.traffic.domain.network.RoadCondition(
+                            1, 1, team.traffic.domain.network.RoadStatus.CONGESTED)));
+
+            RouteResult result = dijkstra.findRoute(
+                    network,
+                    new RouteRequest("A", "B", RoutePreference.SHORTEST_TIME));
+
+            assertThat(result.getRoute().getSteps())
+                    .extracting(step -> step.getRoadId())
+                    .containsExactly("AB");
+            assertThat(result.getVisitedNodes())
+                    .as("both the avoided-road search and its legal fallback are measured")
+                    .isEqualTo(3);
+        }
     }
 
     // ── A* ───────────────────────────────────────────────

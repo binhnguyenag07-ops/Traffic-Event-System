@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { fitScale, offsetToLatLon, vehicleCorners, worldPoint } from './sceneTransform'
+import {
+  fitScale,
+  latLonToOffset,
+  offsetToLatLon,
+  vehicleCorners,
+  worldPoint,
+} from './sceneTransform'
 
 describe('worldPoint', () => {
   it('leaves east alone and flips north so it is up on the canvas', () => {
@@ -77,5 +83,13 @@ describe('offsetToLatLon', () => {
       * 111320 * Math.cos((origin.latitude * Math.PI) / 180)
     expect(backNorth).toBeCloseTo(120, 6)
     expect(backEast).toBeCloseTo(250, 6)
+  })
+
+  it('round-trips through the exported inverse projection', () => {
+    const moved = offsetToLatLon(origin, 250, 120)
+    expect(latLonToOffset(origin, moved)).toEqual({
+      eastMetres: expect.closeTo(250, 6),
+      northMetres: expect.closeTo(120, 6),
+    })
   })
 })

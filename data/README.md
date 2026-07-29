@@ -92,28 +92,32 @@ and optional scripted vehicles. The same shape is accepted by
 map reference.
 
 `district1_typical_day.json` is the bundled default:
-**Central District 1 - 24-hour Weekday Proxy**. It starts at 06:00, schedules a
-full 24 hours of departures through 06:00 on day `D+1`. It contains no scripted
-warm-start vehicles: every simulated vehicle is attributable to an exact
-scheduled plan.
+**Central District 1 - 24-hour Weekday Proxy**. Its demand day starts at 06:00
+and schedules a full 24 hours of departures through 06:00 on day `D+1`.
+Initialization then runs five minutes of the same microscopic physics, signals,
+routing and demand spawner used by playback. The first interactive frame is
+therefore 06:05 with due traffic already moving, while replay history contains
+only that resulting state. There are no separately scripted vehicles: every
+simulated vehicle is attributable to an exact scheduled plan.
 
 Its fixed acceptance snapshot is:
 
 | Measure | Seeded result |
 |---|---:|
-| Generated plans | 156 |
+| Generated plans | 38,518 |
+| Generated vehicle legs | 69,837 |
 | Structural generation failures | 0 |
-| Generated motorcycles | 142 |
-| Generated cars | 14 |
-| First generated departure | 68.79 s after 06:00 |
-| Scripted vehicles present at `t = 0` | 0 |
+| Generated motorcycles | 34,506 |
+| Generated cars | 4,012 |
+| First generated departure | less than 1 s after 06:00 |
+| Due plans spawned by first 06:05 frame | 300 |
+| Scripted vehicles | 0 |
 
-Purpose counts are `BUSINESS_OUTBOUND_PROXY` 1, `INBOUND_WORK` 56,
-`PRIVATE_INTERNAL` 13, `PRIVATE_OUTBOUND_PROXY` 12,
-`SCHOOL_OUTBOUND_ESCORT_PROXY` 6, `THROUGH` 21, `VISITOR` 31,
-`WORK_INTERNAL` 6, and `WORK_OUTBOUND_PROXY` 10. Configured flows that do not
-appear in this table seeded-stochastically round to zero at the checked-in
-scale.
+Purpose counts are `BUSINESS_INTERNAL` 25, `BUSINESS_OUTBOUND_PROXY` 67,
+`INBOUND_WORK` 18,000, `PRIVATE_INTERNAL` 489,
+`PRIVATE_OUTBOUND_PROXY` 781, `SCHOOL_INTERNAL_ESCORT` 117,
+`SCHOOL_OUTBOUND_ESCORT_PROXY` 161, `THROUGH` 7,199, `VISITOR` 10,800,
+`WORK_INTERNAL` 246, and `WORK_OUTBOUND_PROXY` 633.
 
 These are **VERIFIED FACTS about deterministic model output**, not observed
 traffic counts. They
@@ -146,8 +150,12 @@ The words are intentional:
   production, modal mix, dwell time, hourly curve, gravity decay or `scale`.
 
 No bundled demand parameter is a **current calibrated estimate** for this study
-window. Some ratios and one curve are historical HOUTRANS-derived proxies; the
-scenario remains neither a calibrated model nor a traffic forecast.
+window. The 38,518 agents / 69,837 legs are an explicit computational sample,
+about 1:9 against the documented historical 0.4–0.7 million
+vehicle-leg/day proxy. Statistics report simulated agents and are not silently
+multiplied by that ratio. Some ratios and one curve are historical
+HOUTRANS-derived proxies; the scenario remains neither a calibrated model nor a
+traffic forecast.
 
 ## results/
 

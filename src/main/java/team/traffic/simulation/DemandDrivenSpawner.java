@@ -8,7 +8,6 @@ import team.traffic.domain.demand.TripPlanReachability;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.VehicleFactory;
-import team.traffic.domain.vehicle.VehicleStatus;
 import team.traffic.service.RoutingService;
 
 /** Turns due resolved plans into routed vehicles without knowing how demand was generated. */
@@ -59,10 +58,11 @@ public final class DemandDrivenSpawner {
         for (TripPlan plan : due) {
             try {
                 Vehicle vehicle = createVehicleForPlan(plan);
-                if (vehicle.getStatus() == VehicleStatus.BLOCKED) {
-                    failedPlanIds.add(plan.id());
-                    continue;
-                }
+                // A structurally valid plan can still have no route at this
+                // instant because its entry road is full or a live event has
+                // closed the preferred path. That is a traffic queue, not bad
+                // demand. Keep the BLOCKED vehicle in the runtime; the normal
+                // tick retry logic will admit/reroute it when capacity returns.
                 spawned.add(vehicle);
                 spawnedTrips++;
             } catch (RuntimeException exception) {

@@ -63,3 +63,13 @@ export function offsetToLatLon(origin, eastMetres, northMetres) {
   const longitude = origin.longitude + (eastScale === 0 ? 0 : eastMetres / eastScale)
   return { latitude, longitude }
 }
+
+/** Projects a geographic point into metres relative to a retained scene origin. */
+export function latLonToOffset(origin, point) {
+  const northMetres = (point.latitude - origin.latitude) * METRES_PER_DEGREE_LATITUDE
+  const eastScale = METRES_PER_DEGREE_LATITUDE * Math.cos((origin.latitude * Math.PI) / 180)
+  return {
+    eastMetres: (point.longitude - origin.longitude) * eastScale,
+    northMetres,
+  }
+}

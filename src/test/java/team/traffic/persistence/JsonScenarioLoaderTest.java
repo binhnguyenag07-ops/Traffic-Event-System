@@ -37,6 +37,9 @@ class JsonScenarioLoaderTest {
         assertThat(loaded.name()).isEqualTo("Central District 1 - 24-hour Weekday Proxy");
         assertThat(demand.startTimeOfDaySeconds()).isEqualTo(6 * 3_600);
         assertThat(demand.durationSeconds()).isEqualTo(24 * 3_600);
+        assertThat(demand.scale()).isEqualTo(1);
+        assertThat(demand.warmUpSeconds()).isEqualTo(300);
+        assertThat(demand.automaticCollisionEvents()).isFalse();
         assertThat(loaded.network().getIntersectionCount()).isGreaterThan(100);
         assertThat(loaded.network().getBuildingCount()).isEqualTo(1162);
         assertThat(demand.seed()).isEqualTo(20260728);
@@ -56,9 +59,18 @@ class JsonScenarioLoaderTest {
         GravityDemandModel replay =
                 new GravityDemandModel(loaded.network(), demand);
 
-        assertThat(first.allPlans()).isEqualTo(replay.allPlans()).hasSize(156);
-        assertThat(first.scheduledTripCount()).isEqualTo(156);
+        assertThat(first.allPlans()).isEqualTo(replay.allPlans()).hasSize(38_518);
+        assertThat(first.scheduledTripCount()).isEqualTo(38_518);
         assertThat(first.generationFailedPlanIds()).isEmpty();
+        assertThat(first.allPlans().stream()
+                        .mapToInt(plan -> plan.legs().size())
+                        .sum())
+                .isEqualTo(69_837);
+        assertThat(first.allPlans().stream()
+                        .filter(plan -> Set.of("INBOUND_WORK", "THROUGH", "VISITOR")
+                                .contains(plan.purpose().value()))
+                        .count())
+                .isEqualTo(35_999);
         assertThat(first.allPlans())
                 .allSatisfy(plan -> assertThat(
                         TripPlanReachability.isReachable(loaded.network(), plan))
@@ -72,22 +84,24 @@ class JsonScenarioLoaderTest {
                         plan -> plan.purpose().value(),
                         Collectors.counting())))
                 .containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
-                        Map.entry("BUSINESS_OUTBOUND_PROXY", 1L),
-                        Map.entry("INBOUND_WORK", 56L),
-                        Map.entry("PRIVATE_INTERNAL", 13L),
-                        Map.entry("PRIVATE_OUTBOUND_PROXY", 12L),
-                        Map.entry("SCHOOL_OUTBOUND_ESCORT_PROXY", 6L),
-                        Map.entry("THROUGH", 21L),
-                        Map.entry("VISITOR", 31L),
-                        Map.entry("WORK_INTERNAL", 6L),
-                        Map.entry("WORK_OUTBOUND_PROXY", 10L)));
+                        Map.entry("BUSINESS_INTERNAL", 25L),
+                        Map.entry("BUSINESS_OUTBOUND_PROXY", 67L),
+                        Map.entry("INBOUND_WORK", 18_000L),
+                        Map.entry("PRIVATE_INTERNAL", 489L),
+                        Map.entry("PRIVATE_OUTBOUND_PROXY", 781L),
+                        Map.entry("SCHOOL_INTERNAL_ESCORT", 117L),
+                        Map.entry("SCHOOL_OUTBOUND_ESCORT_PROXY", 161L),
+                        Map.entry("THROUGH", 7_199L),
+                        Map.entry("VISITOR", 10_800L),
+                        Map.entry("WORK_INTERNAL", 246L),
+                        Map.entry("WORK_OUTBOUND_PROXY", 633L)));
         assertThat(first.allPlans().stream().collect(Collectors.groupingBy(
                         TripPlan::vehicleType,
                         Collectors.counting())))
                 .containsExactlyInAnyOrderEntriesOf(Map.of(
-                        VehicleType.MOTORCYCLE, 142L,
-                        VehicleType.CAR, 14L));
-        assertThat(first.allPlans().get(0).departAtSeconds()).isLessThan(5 * 60);
+                        VehicleType.MOTORCYCLE, 34_506L,
+                        VehicleType.CAR, 4_012L));
+        assertThat(first.allPlans().get(0).departAtSeconds()).isLessThan(1);
         assertThat(first.allPlans())
                 .anySatisfy(plan -> assertThat(plan.departAtSeconds())
                         .isGreaterThan(18 * 3_600));
@@ -151,7 +165,8 @@ class JsonScenarioLoaderTest {
     }
 
     @Test
-    void scenarioInitializationRemovesLegacyPhantomTraffic() throws Exception {
+    void scenarioInitializationWarmsToSixOhFiveWithoutRecordingPreRollHistory()
+            throws Exception {
         JsonScenarioLoader.LoadedScenario loaded =
                 new JsonScenarioLoader().load(SHIPPED_SCENARIO);
         RoutingStrategyRegistry registry = new RoutingStrategyRegistry();
@@ -165,14 +180,26 @@ class JsonScenarioLoaderTest {
                 loaded.vehicles(),
                 loaded.events());
 
-        assertThat(loaded.network().getRoads().values()).allSatisfy(road -> {
-            assertThat(road.getCurrentVehicleCount()).isZero();
-            assertThat(road.getCondition().getVehicleDensity()).isZero();
-            assertThat(road.getCondition().getCongestionLevel()).isZero();
-            assertThat(road.getCondition().getRoadStatus()).isEqualTo(RoadStatus.OPEN);
-        });
-        assertThat(simulator.getVehicles())
+        assertThat(simulator.getElapsedSeconds()).isEqualTo(300);
+        assertThat(simulator.getClock().formatTimeOfDay()).isEqualTo("06:05");
+        assertThat(simulator.getDemandRunStatistics().scheduledTrips())
+                .isEqualTo(38_518);
+        assertThat(simulator.getDemandRunStatistics().spawnedTrips())
+                .isEqualTo(300);
+        assertThat(simulator.getVehicles()).isNotEmpty();
+        assertThat(simulator.getVehicles().stream()
+                        .filter(vehicle -> vehicle.getOccupiedRoadId() != null))
+                .isNotEmpty();
+        assertThat(simulator.getEvents())
+                .as("the typical-day scenario has no calibrated spontaneous-crash model")
                 .isEmpty();
+        assertThat(simulator.getFrameTimeline().retainedFrameCount()).isOne();
+        assertThat(simulator.getFrameTimeline().recordedSeconds())
+                .containsExactly(300.0);
+        assertThat(loaded.network().getRoads().values())
+                .allSatisfy(road -> assertThat(
+                        road.getCondition().getRoadStatus())
+                        .isNotEqualTo(RoadStatus.CLOSED));
     }
 
     private static List<String> concat(Set<String> first, Set<String> second) {

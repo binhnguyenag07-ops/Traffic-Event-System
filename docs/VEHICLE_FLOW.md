@@ -201,6 +201,12 @@ is one plan and two legs. On each leg arrival:
 `REMOVE_AT_LAST_STOP` completes at the last declared place. Demand statistics
 count plans, not legs or survey person trips.
 
+A `DWELLING` vehicle stays in the simulator and in dwelling statistics so its
+next leg remains authoritative, but it is not a road user at that time.
+Renderer snapshots and per-tick traces omit it until it departs the building
+again; otherwise long work/visitor dwells would serialize thousands of parked
+sprites at identical building points.
+
 ### Directed reachability
 
 `GravityDemandModel` does not independently roll destinations and discard the
@@ -215,8 +221,8 @@ Boundary roles are directional:
 The check is structural topology. A closure or capacity constraint that occurs
 during simulation remains a normal routing, retry and rerouting concern.
 
-The bundled scenario has 156 generated plans and 0 structural generation
-failures for its committed seed and map.
+The bundled scenario has 38,518 generated plans / 69,837 vehicle legs and 0
+structural generation failures for its committed seed and map.
 
 ### Initialization and phantom occupancy
 
@@ -243,7 +249,9 @@ Generated demand is declared with top-level `demandSources`; there is no nested
   "startTimeOfDay": "06:00",
   "durationHours": 24,
   "seed": 20260728,
-  "scale": 0.015,
+  "scale": 1.0,
+  "warmUpSeconds": 300,
+  "automaticCollisionEvents": false,
   "zones": [ /* named building/intersection groups */ ],
   "demandSources": [ /* source production and flows */ ],
   "events": [],
@@ -254,27 +262,37 @@ Generated demand is declared with top-level `demandSources`; there is no nested
 `scale` multiplies generated plan volume only. It does not multiply scripted
 vehicles, durations, road capacity or speed.
 
+`automaticCollisionEvents` defaults to `true`. The checked-in typical-day run
+sets it to `false` because its synthetic traffic demand has no calibrated crash
+rate; manual incidents and collision labs are unaffected.
+
 For `district1_typical_day.json`, the deterministic snapshot is:
 
 | Output | Count |
 |---|---:|
-| Generated plans | 156 |
+| Generated plans | 38,518 |
+| Generated vehicle legs | 69,837 |
 | Structural generation failures | 0 |
-| Generated motorcycles | 142 |
-| Generated cars | 14 |
-| Scripted vehicles at `t = 0` | 0 |
+| Generated motorcycles | 34,506 |
+| Generated cars | 4,012 |
+| Plans spawned during the 06:00–06:05 pre-roll | 300 |
+| Scripted vehicles | 0 |
 
-Purpose counts are `BUSINESS_OUTBOUND_PROXY` 1, `INBOUND_WORK` 56,
-`PRIVATE_INTERNAL` 13, `PRIVATE_OUTBOUND_PROXY` 12,
-`SCHOOL_OUTBOUND_ESCORT_PROXY` 6, `THROUGH` 21, `VISITOR` 31,
-`WORK_INTERNAL` 6, and `WORK_OUTBOUND_PROXY` 10. Configured flows absent from
-this table round to zero plans for this seed/scale.
+Purpose counts are `BUSINESS_INTERNAL` 25, `BUSINESS_OUTBOUND_PROXY` 67,
+`INBOUND_WORK` 18,000, `PRIVATE_INTERNAL` 489,
+`PRIVATE_OUTBOUND_PROXY` 781, `SCHOOL_INTERNAL_ESCORT` 117,
+`SCHOOL_OUTBOUND_ESCORT_PROXY` 161, `THROUGH` 7,199, `VISITOR` 10,800,
+`WORK_INTERNAL` 246, and `WORK_OUTBOUND_PROXY` 633.
 
-The first generated plan departs 68.79 seconds after the 06:00 start. There is no
-scripted warm-start traffic, so every vehicle is traceable to the schedule.
+The first generated plan departs less than one second after 06:00. Initialization
+runs the same one-second-bounded physics for five simulated minutes, discards
+intermediate replay history, and exposes the populated 06:05 result. There is
+no scripted warm-start traffic, so every vehicle is traceable to the schedule.
 
 Those values are deterministic model output, not observed traffic in the former
-District 1 study window.
+District 1 study window. The 69,837 legs are an explicit microscopic sample,
+roughly 1:9 against the evidence note's 0.6-million-leg/day historical proxy
+midpoint; runtime statistics are not automatically expanded.
 The complete scenario, evidence labels and limitations are documented in
 [`DISTRICT1_SCENARIO.md`](DISTRICT1_SCENARIO.md). The schema and algorithms are
 documented in

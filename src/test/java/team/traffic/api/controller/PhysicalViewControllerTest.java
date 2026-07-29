@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.GeoPoint;
@@ -74,6 +75,33 @@ class PhysicalViewControllerTest {
         assertThat(response.body())
                 .contains("\"roadId\":\"AB\"")
                 .contains("\"radiusMetres\":");
+    }
+
+    @Test
+    void fullMapGeometryCanOmitDenseDynamicState() throws Exception {
+        RoadNetwork network = network();
+        PhysicalViewController controller = new PhysicalViewController(
+                new StubNetworkService(network),
+                new EmptySimulationService() {
+                    @Override
+                    public Optional<team.traffic.simulation.history.SimulationFrame>
+                            getCurrentFrame() {
+                        throw new AssertionError(
+                                "geometry-only request must not read a dynamic frame");
+                    }
+                });
+        app = Javalin.create();
+        controller.registerRoutes(app);
+        app.start(0);
+
+        HttpResponse<String> response = get("/api/simulation/physical-view"
+                + "?lat=10.0&lon=106.000&fullMap=true&includeState=false");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("\"roadId\":\"AB\"")
+                .contains("\"signals\":[]")
+                .contains("\"vehicles\":[]");
     }
 
     @Test
@@ -150,7 +178,7 @@ class PhysicalViewControllerTest {
     }
 
     /** Just enough of the interface to answer with no current frame. */
-    private static final class EmptySimulationService implements SimulationService {
+    private static class EmptySimulationService implements SimulationService {
         @Override public void initialize(List<VehicleConfig> vehicles, List<EventConfig> events) {}
         @Override public void start() {}
         @Override public void pause() {}

@@ -157,8 +157,16 @@ Generated scenario traffic follows a separate backend-owned path:
 the same identity through every resolved leg and dwell, while
 `RETURN_TO_ORIGIN` plans end at the exact concrete origin.
 `TripScheduleEstimator` projects those already-resolved plans onto a directed
-free-flow timetable for `GET /api/simulation/demand/schedule`; it is a
-reader-facing estimate, never a second runtime model.
+free-flow timetable for a requested page of
+`GET /api/simulation/demand/schedule`; it is a reader-facing estimate, never a
+second runtime model. Full-day hourly/purpose/vehicle aggregates are computed
+without routing every plan for each request.
+
+The shipped scenario performs a five-minute initialization pre-roll through
+the same demand spawner, signals, arbitration and microscopic dynamics as live
+playback. Its intermediate frames and traces are intentionally discarded; the
+resulting populated 06:05 state becomes the first frame of the interactive
+session. This is scenario initialization, not frontend fast-forward.
 
 On a normal launch, `App` loads and initializes the complete file selected by
 `SCENARIO_FILE`, defaulting to `data/scenarios/district1_typical_day.json`,
@@ -203,7 +211,10 @@ flowchart LR
 
 The macro map consumes current or retained `SimulationFrame` data. The physical
 view loads network-derived static geometry once per timeline, then polls a
-lighter state response whose vehicles and signals come from the current frame.
+lighter state response whose vehicles and signals come from the current frame
+within the camera radius plus overscan. State coordinates are rebased onto the
+retained static origin, and off-viewport vehicle sprites/trails are culled
+before Pixi submission.
 The Physical View is lazy-loaded, keeping PixiJS out of the initial Leaflet
 dashboard bundle. PixiJS interpolates only between received poses for display
 smoothness: it samples backend-provided lane/connector topology and blends
@@ -231,16 +242,28 @@ The implemented controls target the actual bottlenecks:
 - static Pixi geometry is retained once per timeline; the view is lazy-loaded
   and capped at 60 FPS;
 - physical state is lightweight and polled at 250 ms while changing;
+- physical state requests follow the camera viewport instead of serializing the
+  district-wide fleet;
+- while Physical View is mounted, the full `SimulationFrame` SSE and snapshot
+  fallback are closed rather than parsed behind the overlay; a one-second
+  lightweight status poll keeps backend RUNNING/PAUSED/READY, clock and pace
+  truthful without carrying fleet/road arrays;
 - SSE supplies the live head directly; the timeline index is refreshed at most
   once per wall second and statistics at most once every two seconds;
 - renderer history retains 900 timestamps, vehicle traces 5,000 ticks, and
   flow history 100,000 samples;
+- long-dwell agents remain in the simulator/statistics for their return leg but
+  are omitted from renderer frames and traces until they re-depart;
 - expired vehicles are removed as a batch before one final frame rather than
   copying one full scene per removal;
-- **Lane detail**, **Balanced**, and **24 h overview** run at approximately 2×,
-  10×, and 120× simulated time. A 24-hour demand scenario initially selects
-  overview pace; opening Physical View forces detail cadence so a 30-second
-  overview tick is never used for turn inspection.
+- generated plans are ordered once, due-plan intervals use binary bounds, and
+  reusable origin/leg destination candidates and gravity weights are cached;
+- the demand schedule endpoint routes only a bounded page (default 250, maximum
+  1,000) instead of all 38,518 plans;
+- **Real time**, **Balanced**, and **24 h overview** run at approximately 1×,
+  10×, and 120× simulated time. A 24-hour demand scenario may use overview
+  pace on the macro map; opening Physical View forces 0.25 s / 250 ms live
+  cadence, so a 30-second overview tick is never used for turn inspection.
 
 ## OOP and design patterns
 

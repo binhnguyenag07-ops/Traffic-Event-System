@@ -45,6 +45,13 @@ class DemandScheduleDtoTest {
                 DemandScheduleDto.of(List.of(plan), statistics, network, 6 * 3_600);
 
         assertThat(dto.totalPlans()).isOne();
+        assertThat(dto.offset()).isZero();
+        assertThat(dto.returnedPlans()).isOne();
+        assertThat(dto.hourlyPlanCounts()).hasSize(24);
+        assertThat(dto.hourlyPlanCounts().stream().mapToInt(Integer::intValue).sum())
+                .isOne();
+        assertThat(dto.purposeCounts()).containsEntry("COMMUTE", 1);
+        assertThat(dto.vehicleTypeCounts()).containsEntry("CAR", 1);
         assertThat(dto.failedPlans()).isOne();
         assertThat(dto.failedPlanIds()).containsExactly("rejected-plan");
         assertThat(dto.estimateBasis()).isEqualTo(
@@ -65,6 +72,44 @@ class DemandScheduleDtoTest {
         assertThat(published.estimatedReturnArrival()).isNotNull();
         assertThat(published.estimatedReturnArrival().dayOffset()).isEqualTo(1);
         assertThat(published.estimatedReturnArrival().clock()).startsWith("01:");
+    }
+
+    @Test
+    void estimatesOnlyTheRequestedPageWhileKeepingFullScheduleAggregates() {
+        RoadNetwork network = network();
+        ResolvedPlace home = ResolvedPlace.building("HOME", "A");
+        ResolvedPlace office = ResolvedPlace.building("OFFICE", "B");
+        List<TripPlan> plans = java.util.stream.IntStream.range(0, 5)
+                .mapToObj(index -> new TripPlan(
+                        "plan-" + index,
+                        new PurposeId(index % 2 == 0 ? "WORK" : "PRIVATE"),
+                        index == 4 ? VehicleType.MOTORCYCLE : VehicleType.CAR,
+                        home,
+                        List.of(new TripLeg(office, 0)),
+                        CompletionPolicy.REMOVE_AT_LAST_STOP,
+                        index * 60))
+                .toList();
+
+        DemandScheduleDto dto = DemandScheduleDto.of(
+                plans,
+                DemandRunStatistics.empty(),
+                network,
+                6 * 3_600,
+                2,
+                2);
+
+        assertThat(dto.totalPlans()).isEqualTo(5);
+        assertThat(dto.offset()).isEqualTo(2);
+        assertThat(dto.limit()).isEqualTo(2);
+        assertThat(dto.returnedPlans()).isEqualTo(2);
+        assertThat(dto.plans()).extracting(DemandScheduleDto.DemandPlanDto::id)
+                .containsExactly("plan-2", "plan-3");
+        assertThat(dto.hourlyPlanCounts()).hasSize(24);
+        assertThat(dto.hourlyPlanCounts().get(6)).isEqualTo(5);
+        assertThat(dto.purposeCounts()).containsExactlyInAnyOrderEntriesOf(
+                java.util.Map.of("WORK", 3, "PRIVATE", 2));
+        assertThat(dto.vehicleTypeCounts()).containsExactlyInAnyOrderEntriesOf(
+                java.util.Map.of("CAR", 4, "MOTORCYCLE", 1));
     }
 
     private static RoadNetwork network() {
