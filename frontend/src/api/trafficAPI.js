@@ -68,7 +68,10 @@ export const simulationApi = {
   tick: () => post('/simulation/tick'),
   snapshot: () => get('/simulation/snapshot'),
   status: () => get('/simulation/status'),
-  demandSchedule: () => get('/simulation/demand/schedule'),
+  demandSchedule: (offset = 0, limit = 12) => get(
+    `/simulation/demand/schedule?offset=${encodeURIComponent(offset)}`
+    + `&limit=${encodeURIComponent(limit)}`,
+  ),
   signals: () => get('/simulation/signals'),
   flowTrace: () => get('/simulation/trace/flow'),
   frameTimeline: () => get('/simulation/trace/frames'),
@@ -82,10 +85,16 @@ export const simulationApi = {
   setPlaybackInterval: (playbackIntervalMs) =>
     put('/simulation/parameters', { playbackIntervalMs }),
   streamUrl: () => `${API_BASE}/simulation/stream`,
-  physicalView: (lat, lon, radiusMetres, { fullMap = false } = {}) => get(
+  physicalView: (
+    lat,
+    lon,
+    radiusMetres,
+    { fullMap = false, includeState = true } = {},
+  ) => get(
     `/simulation/physical-view?lat=${encodeURIComponent(lat)}`
     + `&lon=${encodeURIComponent(lon)}&radiusMetres=${encodeURIComponent(radiusMetres)}`
-    + (fullMap ? '&fullMap=true' : ''),
+    + (fullMap ? '&fullMap=true' : '')
+    + (!includeState ? '&includeState=false' : ''),
   ),
   physicalViewState: (lat, lon, radiusMetres) => get(
     `/simulation/physical-view/state?lat=${encodeURIComponent(lat)}`

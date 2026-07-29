@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import DemandSchedulePanel from './DemandSchedulePanel'
-import { formatScheduledTime, hourlyDemandCounts } from './demandScheduleUtils'
+import {
+  formatScheduledTime,
+  hourlyDemandCounts,
+  shouldShowDemandSchedule,
+} from './demandScheduleUtils'
 
 describe('demand schedule presentation', () => {
   it('groups exact departures into all 24 clock hours', () => {
@@ -24,7 +28,13 @@ describe('demand schedule presentation', () => {
     expect(formatScheduledTime({ dayOffset: 1, clock: '01:15:00' })).toBe('D+1 01:15:00')
   })
 
-  it('renders all 24 hours and filters the concrete schedule without losing day context', () => {
+  it('hides the schedule in rendering labs and scenarios without demand', () => {
+    expect(shouldShowDemandSchedule(12000, true)).toBe(false)
+    expect(shouldShowDemandSchedule(0, false)).toBe(false)
+    expect(shouldShowDemandSchedule(12000, false)).toBe(true)
+  })
+
+  it('renders a read-only 24-hour profile without a misleading hour control', () => {
     const plan = (id, purpose, hour) => ({
       id,
       purpose,
@@ -51,26 +61,36 @@ describe('demand schedule presentation', () => {
       }],
     })
     const schedule = {
-      totalPlans: 2,
+      totalPlans: 1000,
       failedPlans: 0,
+      offset: 0,
+      limit: 2,
+      returnedPlans: 2,
+      hourlyPlanCounts: Array.from(
+        { length: 24 },
+        (_, hour) => (hour === 7 ? 500 : hour === 1 ? 300 : 0),
+      ),
+      vehicleTypeCounts: { MOTORCYCLE: 895, CAR: 105 },
+      purposeCounts: { COMMUTE: 620, VISITOR: 380 },
       plans: [plan('morning', 'COMMUTE', 7), plan('night', 'VISITOR', 1)],
     }
 
     render(<DemandSchedulePanel schedule={schedule} currentTimeOfDaySeconds={7 * 3600} />)
 
-    expect(screen.getAllByRole('button', { name: /departures$/ })).toHaveLength(24)
-    expect(screen.getByRole('button', { name: '07:00: 1 departures' }).className)
+    expect(screen.getAllByLabelText(/departures$/)).toHaveLength(24)
+    expect(screen.getByLabelText('07:00: 500 departures').className)
       .toContain('current')
+    expect(screen.queryByLabelText('Hour')).toBeNull()
+    expect(screen.queryByRole('button', { name: /departures$/ })).toBeNull()
+    expect(screen.getByText(/Vehicles depart automatically/)).toBeTruthy()
+    expect(screen.getByText(/Inspecting plans 1–2 of 1000/)).toBeTruthy()
+    expect(screen.getByText('Motorcycle 895 · Car 105')).toBeTruthy()
+    expect(screen.getByText('Commute 620 · Visitor 380')).toBeTruthy()
     expect(screen.getByText('Home morning · near Home Street · 10.770070, 106.700000')).toBeTruthy()
-    expect(screen.getByText('Home night · near Home Street · 10.770010, 106.700000')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: '01:00: 1 departures' }))
-
-    expect(screen.queryByText('Home morning · near Home Street · 10.770070, 106.700000')).toBeNull()
     expect(screen.getByText('Home night · near Home Street · 10.770010, 106.700000')).toBeTruthy()
   })
 
-  it('resets stale purpose and hour filters when the scenario schedule changes', () => {
+  it('requests bounded server pages without changing simulation demand', () => {
     const plan = (id, purpose, hour) => ({
       id,
       purpose,
@@ -90,32 +110,29 @@ describe('demand schedule presentation', () => {
         dwellSeconds: 0,
       }],
     })
-    const firstSchedule = {
-      totalPlans: 2,
+    const schedule = {
+      totalPlans: 25,
       failedPlans: 0,
+      offset: 12,
+      limit: 12,
+      returnedPlans: 12,
       plans: [plan('work', 'WORK', 7), plan('private', 'PRIVATE', 12)],
     }
-    const { container, rerender } = render(
-      <DemandSchedulePanel schedule={firstSchedule} currentTimeOfDaySeconds={7 * 3600} />,
+    const onPageChange = vi.fn()
+    const { container } = render(
+      <DemandSchedulePanel
+        schedule={schedule}
+        currentTimeOfDaySeconds={7 * 3600}
+        onPageChange={onPageChange}
+      />,
     )
     const panel = within(container)
 
-    fireEvent.change(panel.getByLabelText('Purpose'), { target: { value: 'WORK' } })
-    fireEvent.change(panel.getByLabelText('Hour'), { target: { value: '7' } })
-    expect(panel.getByLabelText('Purpose').value).toBe('WORK')
-    expect(panel.getByLabelText('Hour').value).toBe('7')
-
-    const nextSchedule = {
-      totalPlans: 1,
-      failedPlans: 0,
-      plans: [plan('visitor', 'VISITOR', 18)],
-    }
-    rerender(
-      <DemandSchedulePanel schedule={nextSchedule} currentTimeOfDaySeconds={18 * 3600} />,
-    )
-
-    expect(panel.getByLabelText('Purpose').value).toBe('ALL')
-    expect(panel.getByLabelText('Hour').value).toBe('ALL')
-    expect(panel.getByText('Origin visitor')).toBeTruthy()
+    expect(panel.getByText('2 / 3')).toBeTruthy()
+    fireEvent.click(panel.getByRole('button', { name: 'Previous' }))
+    expect(onPageChange).toHaveBeenCalledWith(0, 12)
+    fireEvent.click(panel.getByRole('button', { name: 'Next' }))
+    expect(onPageChange).toHaveBeenCalledWith(24, 12)
+    expect(panel.getByText(/all departures still spawn automatically/)).toBeTruthy()
   })
 })

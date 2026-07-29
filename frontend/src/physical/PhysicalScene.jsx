@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Application, Container, Graphics } from 'pixi.js'
 import { simulationApi } from '../api/trafficAPI'
+import { formatTimeOfDay, timeOfDaySeconds } from '../simulationTime'
+import { physicalCameraPresentation } from './runtimeStatus'
 import {
   cameraAfterZoom,
   clampMapZoom,
@@ -11,6 +13,13 @@ import { interpolateVehicles } from './interpolate'
 import { drawSignals, drawStatic, drawTrails } from './layers/drawScene'
 import { VehicleLayer, buildVehicleTextures } from './vehicleSprites'
 import { assetCount, loadSceneAssets } from './assetLoader'
+import {
+  physicalTimelineChanged,
+  rebasePhysicalState,
+  shouldApplyViewportState,
+  viewportStreamRadius,
+  visibleViewportVehicles,
+} from './viewportStream'
 import {
   nextPollCadence,
   PHYSICAL_POLL_INTERVAL_MS,
@@ -24,9 +33,10 @@ import {
 // defect that made zooming feel like the road and the traffic were racing each
 // other — and zooming costs no redraw.
 //
-// The complete static map is loaded once. Polls carry only the current vehicles
-// and signals, so panning never crosses a region boundary and buildings cannot
-// pop in and out as a radius-based LOD request catches up.
+// The complete static map is loaded once. Polls carry only vehicles and signals
+// in the current camera plus a small prefetch ring; their metre coordinates are
+// rebased onto the retained origin. Panning therefore cannot make buildings pop
+// in and out, while a dense district-wide fleet is never sent to Pixi at once.
 
 const MAX_RENDER_FPS = 60
 const BACKGROUND = 0xe7e3da
@@ -55,7 +65,7 @@ function createStore(viewport) {
       latitude: Number(viewport.latitude),
       longitude: Number(viewport.longitude),
     },
-    radius: Number(viewport.radiusMetres) || 220,
+    viewRadius: Number(viewport.radiusMetres) || 220,
     camera: { x: 0, y: 0, zoom: clampMapZoom(viewport.zoom) },
     fetching: false,
     needsGeometry: true,
@@ -64,6 +74,8 @@ function createStore(viewport) {
     drag: null,
     inertia: { x: 0, y: 0 },
     lastTickAt: 0,
+    lastStateQuery: null,
+    onLiveFrame: null,
     onViewportChange: null,
   }
 }
@@ -74,7 +86,7 @@ function currentViewport(store) {
   return {
     ...centre,
     zoom: store.camera.zoom,
-    radiusMetres: store.radius,
+    radiusMetres: store.viewRadius,
   }
 }
 
@@ -104,17 +116,46 @@ function panByPixels(store, screenX, screenY) {
   reportViewport(store)
 }
 
-export default function PhysicalScene({ viewport, onViewportChange, onClose }) {
+export default function PhysicalScene({
+  viewport,
+  clockLabel,
+  startTimeOfDaySeconds = 0,
+  simulationStatus = 'READY',
+  simulationSecondsPerTick = 0,
+  playbackIntervalMs = 1000,
+  statusConnected = true,
+  onViewportChange,
+  onClose,
+}) {
   const mountRef = useRef(null)
   const storeRef = useRef(null)
   const initialViewportRef = useRef(viewport)
   const onViewportChangeRef = useRef(onViewportChange)
+  const startTimeOfDayRef = useRef(startTimeOfDaySeconds)
   const [status, setStatus] = useState('Loading scene…')
+  const [liveClockLabel, setLiveClockLabel] = useState(clockLabel || 'current time')
   const [counts, setCounts] = useState({ vehicles: 0, buildings: 0, assets: 0 })
+  const camera = physicalCameraPresentation(
+    simulationStatus,
+    simulationSecondsPerTick,
+    playbackIntervalMs,
+    statusConnected,
+  )
 
   useEffect(() => {
     onViewportChangeRef.current = onViewportChange
   }, [onViewportChange])
+
+  useEffect(() => {
+    startTimeOfDayRef.current = startTimeOfDaySeconds
+    const frame = storeRef.current?.current
+    if (!frame) {
+      if (clockLabel) setLiveClockLabel(clockLabel)
+      return
+    }
+    const nextClock = formatTimeOfDay(timeOfDaySeconds(frame, startTimeOfDaySeconds))
+    setLiveClockLabel((current) => current === nextClock ? current : nextClock)
+  }, [clockLabel, startTimeOfDaySeconds])
 
   useEffect(() => {
     let cancelled = false
@@ -122,6 +163,10 @@ export default function PhysicalScene({ viewport, onViewportChange, onClose }) {
     const mount = mountRef.current
     const store = createStore(initialViewportRef.current)
     store.onViewportChange = (next) => onViewportChangeRef.current?.(next)
+    store.onLiveFrame = (frame) => {
+      const nextClock = formatTimeOfDay(timeOfDaySeconds(frame, startTimeOfDayRef.current))
+      setLiveClockLabel((current) => current === nextClock ? current : nextClock)
+    }
     storeRef.current = store
 
     async function boot() {
@@ -169,6 +214,12 @@ export default function PhysicalScene({ viewport, onViewportChange, onClose }) {
       })
 
       await geometry
+      // The full-map request is geometry-only. Fetch the camera's live subset
+      // immediately instead of showing an empty/static frame until the first
+      // scheduled poll.
+      if (!cancelled && !store.needsGeometry) {
+        await loadState(store, setStatus, () => cancelled)
+      }
 
       let cadence = { delayMs: PHYSICAL_POLL_INTERVAL_MS, unchangedForMs: 0 }
       const pollOnce = async () => {
@@ -322,7 +373,7 @@ export default function PhysicalScene({ viewport, onViewportChange, onClose }) {
         <div>
           <strong>Physical view</strong>
           <span className="physical-note">
-            {status} · {counts.vehicles} vehicles · {counts.buildings} buildings · {counts.assets} assets · drag · wheel or double-click to zoom
+            {camera.cameraLabel} · {liveClockLabel} · {camera.paceLabel} · {status} · {counts.vehicles} visible vehicles · {counts.buildings} buildings · {counts.assets} assets · drag · wheel or double-click to zoom
           </span>
         </div>
         <button type="button" onClick={close} className="physical-close">Close</button>
@@ -391,17 +442,6 @@ function tick(store, setCounts) {
     store.signalsDirty = false
   }
 
-  // Reported every tick from whatever scene is current, rather than only when
-  // the geometry is redrawn, so the figures cannot silently stick at zero if a
-  // redraw is skipped.
-  const vehicles = store.current?.vehicles?.length ?? 0
-  const buildings = store.current?.buildings?.length ?? 0
-  if (vehicles !== store.shownVehicles || buildings !== store.shownBuildings) {
-    store.shownVehicles = vehicles
-    store.shownBuildings = buildings
-    setCounts({ vehicles, buildings, assets: assetCount(store.assets) })
-  }
-
   const elapsed = store.current
     ? (performance.now() - store.fetchedAt) / store.animationDurationMs
     : 0
@@ -411,8 +451,23 @@ function tick(store, setCounts) {
     elapsed,
     store.current,
   )
-  drawTrails(layers.trails, drawn)
-  layers.vehicles.update(drawn)
+  const visible = visibleViewportVehicles(
+    drawn,
+    store.camera,
+    app.screen.width,
+    app.screen.height,
+    scale,
+  )
+  // Counts describe what Pixi is actually submitting, not the district-wide
+  // fleet retained by the backend.
+  const buildings = store.current?.buildings?.length ?? 0
+  if (visible.length !== store.shownVehicles || buildings !== store.shownBuildings) {
+    store.shownVehicles = visible.length
+    store.shownBuildings = buildings
+    setCounts({ vehicles: visible.length, buildings, assets: assetCount(store.assets) })
+  }
+  drawTrails(layers.trails, visible)
+  layers.vehicles.update(visible)
 }
 
 /** Loads the complete static network once for the current simulation timeline. */
@@ -422,24 +477,38 @@ async function loadGeometry(store, setStatus, isCancelled) {
   try {
     const request = store.origin ?? store.viewport
     const scene = await simulationApi.physicalView(
-      request.latitude, request.longitude, store.radius, { fullMap: true },
+      request.latitude,
+      request.longitude,
+      store.viewRadius,
+      { fullMap: true, includeState: false },
     )
     if (isCancelled()) return
+    const scale = screenScale(store)
+    const localScene = {
+      ...scene,
+      vehicles: visibleViewportVehicles(
+        scene.vehicles,
+        store.camera,
+        store.app?.screen.width || 0,
+        store.app?.screen.height || 0,
+        scale,
+      ),
+    }
     store.previous = store.current
-    store.current = scene
+    store.current = localScene
     store.origin = scene.origin
     store.viewport = {
       latitude: scene.origin.latitude,
       longitude: scene.origin.longitude,
     }
-    store.radius = scene.radiusMetres
     store.fetchedAt = performance.now()
     store.staticDirty = true
     store.signalsDirty = true
     store.needsGeometry = false
+    store.lastStateQuery = null
     setStatus(scene.frameId >= 0
-      ? `Live · full map · frame ${scene.frameId}`
-      : 'Live · full map geometry')
+      ? `Full map · frame ${scene.frameId}`
+      : 'Full map geometry')
     return 'updated'
   } catch (error) {
     if (!isCancelled()) setStatus(`Could not load scene: ${error.message}`)
@@ -454,11 +523,22 @@ async function loadState(store, setStatus, isCancelled) {
   if (store.fetching || !store.origin || !store.current) return 'skipped'
   store.fetching = true
   try {
+    const centre = currentViewport(store)
+    const radius = viewportStreamRadius(
+      store.app?.screen.width || 0,
+      store.app?.screen.height || 0,
+      screenScale(store),
+    )
+    const query = {
+      latitude: centre.latitude,
+      longitude: centre.longitude,
+      radiusMetres: radius,
+    }
     const state = await simulationApi.physicalViewState(
-      store.origin.latitude, store.origin.longitude, store.radius,
+      centre.latitude, centre.longitude, radius,
     )
     if (isCancelled()) return
-    if (state.timelineId !== store.current.timelineId) {
+    if (physicalTimelineChanged(store.current.timelineId, state.timelineId)) {
       store.needsGeometry = true
       setStatus('Refreshing full map…')
       return 'timeline-changed'
@@ -467,19 +547,32 @@ async function loadState(store, setStatus, isCancelled) {
       PHYSICAL_POLL_INTERVAL_MS,
       Number(state.playbackIntervalMs) || store.animationDurationMs,
     )
-    if (state.frameId === store.current.frameId) return 'unchanged'
+    if (!shouldApplyViewportState(
+      store.current.frameId,
+      state.frameId,
+      store.lastStateQuery,
+      query,
+    )) {
+      return 'unchanged'
+    }
+    const rebased = rebasePhysicalState(state, store.origin)
     store.previous = store.current
     store.current = {
       ...store.current,
-      ...state,
-      signals: state.signals || [],
-      vehicles: state.vehicles || [],
+      timelineId: rebased.timelineId,
+      frameId: rebased.frameId,
+      elapsedSeconds: rebased.elapsedSeconds,
+      playbackIntervalMs: rebased.playbackIntervalMs,
+      signals: rebased.signals || [],
+      vehicles: rebased.vehicles || [],
     }
     store.fetchedAt = performance.now()
     store.signalsDirty = true
+    store.lastStateQuery = query
+    store.onLiveFrame?.(store.current)
     setStatus(state.frameId >= 0
-      ? `Live · full map · frame ${state.frameId}`
-      : 'Live · full map geometry')
+      ? `Viewport frame ${state.frameId}`
+      : 'Viewport geometry')
     return 'updated'
   } catch (error) {
     if (!isCancelled()) setStatus(`Could not update scene: ${error.message}`)

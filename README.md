@@ -32,8 +32,8 @@ The repository currently includes:
   curves and vehicle mixes, exact return-to-origin conservation, multi-stop
   plans, planned dwell, and explicit unroutable-plan reporting;
 - a reader-facing 24-hour demand schedule with named origins/destinations,
-  departure, estimated arrival/dwell/return clocks, hourly and purpose filters,
-  plus an always-visible simulation clock;
+  departure, estimated arrival/dwell/return clocks, a read-only hourly profile
+  and purpose summary, plus an always-visible simulation clock;
 - open-boundary demo traffic where completed vehicles exit and different
   same-type vehicles enter from reachable boundary roads;
 - traffic and algorithm statistics services;
@@ -105,8 +105,9 @@ graph routing, vehicle interactions, signal arbitration, events, and demand are
 branch-heavy, stateful operations. Moving that model to GPU compute would be a
 large redesign and would weaken deterministic replay for this map size; the
 implemented performance controls instead cap rendering at 60 FPS, reuse static
-geometry, bound history, throttle secondary requests, and offer explicit
-playback paces.
+geometry, stream moving state by camera, suspend the hidden full-fleet macro
+stream while Physical View is open, bound history, throttle secondary requests,
+and offer explicit playback paces.
 
 The compiled frontend is embedded in the JAR, but `data/maps`,
 `data/scenarios`, and `data/demand` remain external runtime inputs. Keep the
@@ -119,17 +120,26 @@ By default the backend initializes the complete
 dashboard starts playback from its seeded demand schedule; pause and use
 **Reload scenario** whenever a clean seeded rerun is needed.
 
-The checked-in run starts at 06:00 and schedules departures for a complete
-24-hour horizon, ending at 06:00 on simulation day `D+1`; the simulator may
-continue beyond the departure horizon while vehicles finish dwell or return
-legs. The header clock is derived from the authoritative frame. Use **Lane
-detail** (2 simulated seconds per wall second) while inspecting the Physical
-View, **Balanced** (10×) for normal operation, or **24 h overview** (120×,
-about 12 wall minutes for one simulated day). Activating the 24-hour demand
-scenario selects overview pace, so the first scheduled departure at 68.79
-simulated seconds appears in under one wall second. Opening the Physical View
-automatically returns an overview run to the detail cadence so large logical
-ticks do not compromise turn animation.
+The checked-in run's demand horizon starts at 06:00 and covers every departure
+hour through 06:00 on simulation day `D+1`. Initialization advances the ordinary
+microscopic model for five simulated minutes without recording replay history,
+so the first interactive frame is a populated 06:05 state rather than an empty
+road. The simulator may continue beyond the departure horizon while vehicles
+finish dwell or return legs.
+
+The typical-day scenario sets `automaticCollisionEvents: false`. Its demand is
+not paired with a calibrated crash-occurrence model, so a braking-risk heuristic
+must not turn routine dense queues into dozens of invented accidents. Explicit
+accident/breakdown controls and the dedicated collision lab remain available;
+other scenarios retain automatic detection by default.
+
+The header clock is derived from the authoritative frame. Use **Real time**
+(1 simulated second per wall second), **Balanced** (10×), or **24 h overview**
+(120×, about 12 wall minutes for one simulated day) on the macro dashboard.
+Physical View is a live camera: opening it switches to four authoritative
+0.25-second ticks per wall second (1×), never seeks the clock and never uses a
+30-second overview tick for close-up motion. Closing it restores the previous
+macro pace.
 
 ## Backend Setup
 
@@ -210,7 +220,7 @@ Requests under `/api` are proxied to `http://localhost:7070` during development.
 | `POST /api/simulation/tick` | advance one tick |
 | `PUT /api/simulation/parameters` | set logical seconds per tick and playback interval |
 | `GET /api/simulation/status` | run status, clock, playback settings, and demand counters |
-| `GET /api/simulation/demand/schedule` | exact seeded plans with named places and estimated leg/return clocks |
+| `GET /api/simulation/demand/schedule?offset={n}&limit={n}` | paged exact seeded plans plus full-day hourly/purpose/vehicle aggregates |
 | `GET /api/simulation/tick/current` | current integer trace tick |
 | `GET /api/simulation/snapshot` | current simulation snapshot |
 | `GET /api/simulation/diagnostics` | adaptive navigation, information, wait, U-turn, and deadlock evidence |
@@ -241,18 +251,26 @@ Available map files:
 |---|---|
 | `data/maps/district1_network.json` | default full-viewport District 1 network and buildings |
 | `data/demand/default_assumptions.json` | replaceable occupancy, attraction, decay, and hourly curves |
-| `data/scenarios/district1_typical_day.json` | seeded 24-hour weekday proxy: 156 deterministic demand plans and no scripted warm-start traffic |
+| `data/scenarios/district1_typical_day.json` | seeded 24-hour weekday proxy: 38,518 deterministic vehicle plans, a five-minute physical pre-roll, and no scripted vehicles |
 | `data/results/experiment_results.json` | reproducible experiment baseline |
 
-The District 1 scenario is an educational, research-informed proxy rather than
-a calibrated traffic forecast. Verified map/run facts, city-level transport
-proxies, and authored assumptions are kept separate; exact cordon volumes,
-gateway allocation, dwell, and purpose-specific curves remain assumptions,
-while historical ratios and the named HOUTRANS curve are labeled as proxies. See the
-[scenario evidence and reproducibility note](docs/DISTRICT1_SCENARIO.md).
-For the committed seed the 156 plans contain 142 motorcycles and 14 cars, with
-zero structural generation failures; the regression-pinned purpose breakdown
-is listed in that evidence note and in [`data/README.md`](data/README.md).
+The District 1 scenario is an educational, research-informed microscopic
+sample rather than a calibrated traffic forecast. Verified map/run facts,
+historical measurements, research proxies, and authored assumptions are kept
+separate. JICA reported 2.323 million daily non-walking trip ends for the former
+District 1 in 2002, while a 2019 TCIP/World Bank count measured 35,613 vehicles
+in one peak hour at the Thủ Thiêm tunnel. Those anchors prove that the old
+156-plan workload was only a smoke test; they do not supply a current OD matrix
+for this exact map rectangle.
+
+For the committed seed, 38,518 simulated plans contain 69,837 vehicle legs:
+34,506 motorcycles and 4,012 cars, with zero structural generation failures.
+This is roughly a 1:9 agent sample of the documented 0.4–0.7 million
+vehicle-leg/day historical proxy for the 3.05 km² study window. Counts are not
+automatically expanded in statistics, and the exact cordon allocation, dwell
+and purpose-specific curves remain assumptions. See the
+[scenario evidence and reproducibility note](docs/DISTRICT1_SCENARIO.md) and
+[`data/README.md`](data/README.md).
 
 The committed map has 730 directed roads representing 560 physical segments.
 An audit against a fresh OpenStreetMap/Overpass extract covered all 439 source

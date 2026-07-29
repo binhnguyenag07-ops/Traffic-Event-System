@@ -166,10 +166,13 @@ public abstract class Vehicle implements TrafficParticipant {
         try {
             RouteResult result;
             if (destinationBuildingId == null || tripPlan != null) {
+                RouteStep previousStep = routePlan.stepAt(-1);
                 RouteRequest request = new RouteRequest(
                         currentIntersectionId,
                         destinationIntersectionId,
-                        preference);
+                        preference,
+                        previousStep == null ? null : previousStep.getRoadId(),
+                        getType());
                 result = routingService.findRoute(roadNetwork, request);
             } else {
                 var buildingPlan = routingService.findRouteToBuilding(
@@ -442,7 +445,18 @@ public abstract class Vehicle implements TrafficParticipant {
         if (outcome == null) {
             return;
         }
+        boolean routeNeedsRecovery = status == VehicleStatus.BLOCKED
+                && !hasRoutableRemainingRoute(roadNetwork);
         outcome.movement().ifPresent(plan -> commitMovement(plan, roadNetwork, trafficState));
+        if (routeNeedsRecovery
+                && status != VehicleStatus.ARRIVED
+                && status != VehicleStatus.STOPPED
+                && status != VehicleStatus.DWELLING) {
+            // commitMovement normally reports MOVING/WAITING from speed. Keep
+            // an illegal static transition marked for the tick-end rerouter;
+            // transient capacity waits remain routable and are not preserved.
+            status = VehicleStatus.BLOCKED;
+        }
         stallTracker.update(
                 outcome,
                 localPerception == null
@@ -758,6 +772,17 @@ public abstract class Vehicle implements TrafficParticipant {
             status = VehicleStatus.BLOCKED;
             return false;
         }
+        RouteStep previousStep = routePlan.stepAt(-1);
+        if (!roadNetwork.getMovementGraph().isAllowed(
+                roadNetwork,
+                currentIntersectionId,
+                previousStep == null ? null : previousStep.getRoadId(),
+                step.getRoadId(),
+                getType())) {
+            instantaneousSpeedMps = 0;
+            status = VehicleStatus.BLOCKED;
+            return false;
+        }
         if (!trafficState.isCleared(id)) {
             instantaneousSpeedMps = 0;
             trip.recordWaitingTick();
@@ -780,7 +805,6 @@ public abstract class Vehicle implements TrafficParticipant {
         double entryLaneCentreMetres = targetOccupancy == null
                 ? 0.0
                 : targetOccupancy.laneCentreOffsetMetres(entryLane);
-        RouteStep previousStep = routePlan.stepAt(-1);
         boolean completesUTurn = previousStep != null
                 && roadNetwork.getMovementGraph().find(
                         currentIntersectionId,
@@ -896,7 +920,9 @@ public abstract class Vehicle implements TrafficParticipant {
                     new RouteRequest(
                             onRoad.exitJunctionId(),
                             destinationIntersectionId,
-                            preference));
+                            preference,
+                            onRoad.roadId(),
+                            getType()));
             if (result == null || result.getRoute() == null) {
                 status = VehicleStatus.BLOCKED;
                 return;
@@ -1641,6 +1667,48 @@ public abstract class Vehicle implements TrafficParticipant {
         List<RouteStep> steps = route.getSteps();
         return steps.get(0).getFromIntersectionId().equals(currentIntersectionId)
                 && steps.get(steps.size() - 1).getToIntersectionId().equals(destinationIntersectionId);
+    }
+
+    /**
+     * Whether the assigned remainder is still legally traversable.
+     * Momentary lane/road capacity is deliberately ignored: a vehicle queued
+     * behind a full entry road should retry admission, not run a full graph
+     * search every simulated second. Static road state, direction, and every
+     * junction movement for this vehicle type remain authoritative.
+     */
+    public boolean hasRoutableRemainingRoute(RoadNetwork roadNetwork) {
+        Objects.requireNonNull(roadNetwork, "Road network must not be null.");
+        Route route = routePlan.getRoute();
+        if (route == null || routePlan.isExhausted()) return false;
+        List<RouteStep> steps = route.getSteps();
+        int nextStepIndex = routePlan.getNextStepIndex();
+        RouteStep previousStep = routePlan.stepAt(-1);
+        String incomingRoadId = previousStep == null ? null : previousStep.getRoadId();
+        for (int index = routePlan.getNextStepIndex(); index < steps.size(); index++) {
+            RouteStep step = steps.get(index);
+            Road road = roadNetwork.getRoad(step.getRoadId());
+            if (road == null
+                    || !road.isRoutable()
+                    || !road.getStartIntersectionId().equals(step.getFromIntersectionId())
+                    || !road.getEndIntersectionId().equals(step.getToIntersectionId())) {
+                return false;
+            }
+            boolean alreadyOnThisRoad = placement.isOnRoad() && index == nextStepIndex;
+            if (alreadyOnThisRoad) {
+                if (!road.getId().equals(placement.getOccupiedRoadId())) {
+                    return false;
+                }
+            } else if (!roadNetwork.getMovementGraph().isAllowed(
+                    roadNetwork,
+                    step.getFromIntersectionId(),
+                    incomingRoadId,
+                    road.getId(),
+                    getType())) {
+                return false;
+            }
+            incomingRoadId = road.getId();
+        }
+        return true;
     }
 
     private boolean isStepAvailable(RoadNetwork roadNetwork, RouteStep step) {

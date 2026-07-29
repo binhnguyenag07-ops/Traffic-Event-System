@@ -1,7 +1,9 @@
 package team.traffic.domain.vehicle.dynamics;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
 
@@ -38,11 +40,18 @@ public final class CollisionDetector {
         if (network == null) throw new IllegalArgumentException("Road network is required.");
         List<TrafficParticipant> all = participants == null ? List.of() : List.copyOf(participants);
         List<Collision> collisions = new ArrayList<>();
+        Map<String, List<TrafficParticipant>> participantsByRoad = new HashMap<>();
+        for (TrafficParticipant participant : all) {
+            String roadId = participant.getOccupiedRoadId();
+            if (roadId != null) {
+                participantsByRoad
+                        .computeIfAbsent(roadId, ignored -> new ArrayList<>())
+                        .add(participant);
+            }
+        }
         for (Road road : network.getRoads().values()) {
-            List<TrafficParticipant> onRoad = all.stream()
-                    .filter(vehicle -> road.getId().equals(vehicle.getOccupiedRoadId()))
-                    .toList();
-            if (onRoad.size() < 2) continue;
+            List<TrafficParticipant> onRoad = participantsByRoad.get(road.getId());
+            if (onRoad == null || onRoad.size() < 2) continue;
             RoadOccupancy occupancy = RoadOccupancy.of(road, onRoad, roadLayout, List.of());
             double roadLengthMetres = occupancy.roadLengthMetres();
             for (TrafficParticipant follower : onRoad) {

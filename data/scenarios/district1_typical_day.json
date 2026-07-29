@@ -1,13 +1,21 @@
 {
   "id": "district-1",
   "name": "Central District 1 - 24-hour Weekday Proxy",
-  "description": "Deterministic 24-hour educational scenario for the former District 1 study window. Its topology comes from audited OpenStreetMap data; demand magnitudes, OD allocation, dwell and vehicle mixes are documented research-informed proxies, not observed District 1 counts.",
+  "description": "Deterministic 24-hour educational scenario for the former District 1 study window. Its topology comes from audited OpenStreetMap data; demand magnitudes, OD allocation, dwell and vehicle mixes are documented research-informed proxies, not observed District 1 counts. A five-minute microscopic warm-up creates the current 06:05 road state before interactive playback begins.",
   "map": "../maps/district1_network.json",
   "demandParameters": "../demand/default_assumptions.json",
   "startTimeOfDay": "06:00",
   "durationHours": 24,
   "seed": 20260728,
-  "scale": 0.015,
+  "scale": 1.0,
+  "warmUpSeconds": 300,
+  "automaticCollisionEvents": false,
+  "demandMagnitude": {
+    "status": "MICROSCOPIC_SAMPLE_ASSUMPTION",
+    "note": "38,518 deterministic vehicle plans (69,837 legs) are generated for this map and seed. This is a computationally tractable microscopic sample (roughly 1:6 to 1:10 of the research-derived area-scaled motorized-leg range), not a claim that former District 1 has only this many daily trips. Scale stays at 1; renderer performance never changes demand.",
+    "cordonVehiclesPerDay": 36000,
+    "configuredEntryIntersections": 4
+  },
   "zones": [
     {
       "id": "north-east-entries",
@@ -265,7 +273,7 @@
       },
       "production": {
         "kind": "ABSOLUTE",
-        "vehiclesPerDay": 3600
+        "vehiclesPerDay": 18000
       },
       "flows": [
         {
@@ -357,7 +365,7 @@
       },
       "production": {
         "kind": "ABSOLUTE",
-        "vehiclesPerDay": 3600
+        "vehiclesPerDay": 18000
       },
       "flows": [
         {

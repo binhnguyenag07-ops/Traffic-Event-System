@@ -52,6 +52,8 @@ public class PhysicalViewController {
         Double longitude = parse(ctx, "lon");
         Double radius = parse(ctx, "radiusMetres");
         boolean fullMap = Boolean.parseBoolean(ctx.queryParam("fullMap"));
+        boolean includeState = ctx.queryParam("includeState") == null
+                || Boolean.parseBoolean(ctx.queryParam("includeState"));
         if (latitude == null || longitude == null || (!fullMap && radius == null)) {
             ctx.status(400).json(error(
                     fullMap
@@ -65,7 +67,9 @@ public class PhysicalViewController {
         }
 
         RoadNetwork network = networkService.getNetwork();
-        Optional<SimulationFrame> frame = simulationService.getCurrentFrame();
+        Optional<SimulationFrame> frame = includeState
+                ? simulationService.getCurrentFrame()
+                : Optional.empty();
         List<SceneVehicle> vehicles = frame
                 .map(currentFrame -> sceneVehicles(currentFrame))
                 .orElse(List.of());

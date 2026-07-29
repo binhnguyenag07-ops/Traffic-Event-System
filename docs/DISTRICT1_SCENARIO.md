@@ -168,9 +168,54 @@ result must not be described as a current District 1 classified count.
 
 ### Volumes and time profiles
 
-No current official open hourly cordon count or current local household-trip
-table for this former District 1 study window is included in this repository.
-The HOUTRANS tables below are historical evidence, not current calibration.
+No current OD matrix or count programme matching this exact 3.05 km² rectangle
+is available in the repository. There are, however, strong official historical
+anchors showing the correct order of magnitude:
+
+- **VERIFIED FACT (historical former District 1, person trips).** HOUTRANS
+  Table 2.1.24 reports 1.160 million generated and 1.163 million attracted
+  non-walking person trips/day in 2002, or 2.323 million trip ends. Table
+  2.1.25 reports purpose-specific intra-District-1 shares from 26% to 42%.
+- **VERIFIED FACT (one adjacent gateway, vehicle flow).** A TCIP/World Bank
+  environmental and social assessment reports a November 2019 classified count
+  at the Thủ Thiêm tunnel of 35,613 vehicles/hour in the peak period, including
+  32,722 motorcycles and 2,482 cars. This is one bidirectional gateway, not a
+  count of vehicles staying in the map rectangle.
+- **VERIFIED FACT (one adjacent gateway, daily motorcycles).** Ho Chi Minh City
+  reported roughly 230,000 motorcycle crossings/day through the Sài Gòn River
+  tunnel over the first eleven months of 2017, with managed peaks at 06:00–09:00
+  and 16:00–19:00.
+
+These measurements prove that 156 agents/day was a software smoke workload,
+not plausible central traffic. They still do not identify this model's exact
+gateways, OD allocation, vehicle dwell or current-day demand.
+
+### Microscopic sampling envelope
+
+The following calculation is a **RESEARCH-INFORMED PROXY with explicit
+synthetic steps**, not a measured count:
+
+```text
+map area share = 3.05 / 7.7211 = 0.395
+area-allocated 2002 trip ends = 2,323,000 × 0.395 = 917,635/day
+unique journeys touching window = trip ends × (1 - intra-share / 2)
+                                = 724,931–798,342/day
+```
+
+Applying the HOUTRANS modal shares and observed urban vehicle occupancies gives
+approximately 411,000–453,000 motorized vehicle legs/day for 2002. Applying the
+citywide 2002→2013 non-walking inter-zonal growth and 2013 mode shares gives
+approximately 623,000–686,000 legs/day. Area-proportional allocation is the
+largest assumption: a central business area need not have the former district's
+average density.
+
+The defensible historical order-of-magnitude envelope used here is therefore
+0.4–0.7 million vehicle legs/day, with 0.6 million as a presentation midpoint.
+The bundled run creates 69,837 explicit legs, or about one simulated agent leg
+per 8.6 midpoint legs. This keeps roughly 300 due vehicles in the first
+five-minute pre-roll and thousands of resolvable agents through the day without
+claiming a one-to-one reconstruction. Runtime metrics are **not** multiplied by
+8.6; they report only simulated agents.
 
 TCVN 13592:2022 permits a peak-hour volume of 10–15% of daily traffic only as a
 fallback when no study is available. This is useful as a broad
@@ -203,9 +248,12 @@ modeling, not calibration.
 
 The following remain **SYNTHETIC ASSUMPTIONS**:
 
-- 3600 `vehiclesPerDay` at each of two cordons;
+- 18,000 `vehiclesPerDay` at each of two modeled cordons;
 - cordon 20/50/30 flow shares;
-- `scale = 0.015`;
+- `scale = 1.0`;
+- the 300-second pre-roll length;
+- `automaticCollisionEvents = false` because no crash-frequency model is
+  calibrated for the synthetic agent sample;
 - purpose-specific `COMMUTE_AM`, `SCHOOL_AM`, and `VISITOR_DAYTIME` curves;
 - building occupancy and attraction parameters;
 - gravity decay `β = 0.35`;
@@ -223,18 +271,28 @@ The top-level `status: "ASSUMPTION"` in
 | `startTimeOfDay` | 06:00 | SYNTHETIC ASSUMPTION |
 | `durationHours` | 24 | SYNTHETIC ASSUMPTION |
 | `seed` | 20260728 | reproducibility control |
-| `scale` | 0.015 | SYNTHETIC ASSUMPTION |
+| `scale` | 1.0 | direct simulated-volume multiplier |
+| `warmUpSeconds` | 300 | SYNTHETIC ASSUMPTION |
+| `automaticCollisionEvents` | false | modelling-scope control |
 
 `durationHours` is the **departure horizon**, from 06:00 on day `D` through
 06:00 on day `D+1`. This covers every clock hour exactly once. It does not
 auto-stop the simulator; vehicles may still be travelling, dwelling, or
 returning after the horizon.
 
-The header displays the authoritative simulation clock and day offset. The
-24-hour demand panel shows all exact seeded plan departures by clock hour and
-purpose, with named origin/destination buildings or boundary streets. Its
+Initialization advances the normal one-second-bounded microscopic model from
+06:00 through 06:05, then discards intermediate replay history. The header
+therefore first displays the authoritative 06:05 state; this pre-roll is not a
+frontend playback pace. The 24-hour demand panel shows a read-only full-schedule
+hourly profile and pages named origin/destination plans from the server. Its
 arrival, next-departure, and return times are deterministic free-flow estimates;
 signals, queues, closures, and incidents determine actual runtime arrival.
+
+Automatic braking-risk-to-accident conversion is disabled only for this
+typical-day scenario. At this authored cordon volume it otherwise mistakes
+routine dense approaches for a calibrated crash process and creates cascading
+lane obstructions. Manual incidents and dedicated collision test scenarios
+still exercise the accident model.
 
 `scale` multiplies generated source-flow plan volume. It does not scale road
 capacity, simulation speed, dwell, or travel time.
@@ -319,15 +377,14 @@ All resident flows use the citywide registered-stock motorcycle/car ratio
 | `resident-business-internal` | 0.010556 | HOUTRANS digitized proxy | office/commercial, 0.5–2 h, return | HOUTRANS purpose × internal split and historical curve |
 | `resident-business-outbound` | 0.025844 | HOUTRANS digitized proxy | perimeter gateway, 0.5–2 h, return | HOUTRANS purpose × outbound split; gateway/dwell synthetic |
 
-The shares total 1.0. At `scale = 0.015`, seeded stochastic rounding can still
-yield zero plans for a small configured flow; that is why the deterministic
-output table below, rather than the configuration table, is the actual plan
-count.
+The shares total 1.0. Seeded stochastic rounding still applies to each
+origin/flow/hour cell; the deterministic output table below, rather than a
+hand-summed expectation, is the acceptance count.
 
 ### North-east and south-west cordons
 
-Each cordon declares the same synthetic base production of 3600 vehicles/day
-before `scale`.
+Each cordon declares the same synthetic production of 18,000 vehicles/day at
+`scale = 1.0`.
 
 | Flow per cordon | Share | Motorcycle / car | Curve | Chain |
 |---|---:|---:|---|---|
@@ -338,7 +395,9 @@ before `scale`.
 The common vehicle ratio is a **RESEARCH-INFORMED PROXY**. Cordon production,
 20/50/30 shares, `COMMUTE_AM`/`VISITOR_DAYTIME`, dwell, and exact gateway/POI
 allocation are **SYNTHETIC ASSUMPTIONS**. The HOUTRANS digitized curve supplies
-only the through-flow time shape; its 0.20 volume share is not observed.
+only the through-flow time shape; its 0.20 volume share is not observed. The
+combined 36,000 modeled cordon plan starts are a computational sample, not the
+2017/2019 Thủ Thiêm count copied into two invented gates.
 
 ## Reachability and failure semantics
 
@@ -381,34 +440,38 @@ For the committed map, parameter catalog, scenario, algorithm and seed:
 
 | Measure | VERIFIED FACT |
 |---|---:|
-| Generated plans scheduled | 156 |
+| Generated plans scheduled | 38,518 |
+| Generated vehicle legs | 69,837 |
 | Structural generation failures | 0 |
-| Generated motorcycles | 142 |
-| Generated cars | 14 |
-| First generated departure | 68.79 s after 06:00 |
-| Scripted warm-start vehicles at `t = 0` | 0 |
+| Generated motorcycles | 34,506 |
+| Generated cars | 4,012 |
+| First generated departure | less than 1 s after 06:00 |
+| Plans spawned by the first interactive frame | 300 |
+| First interactive clock | 06:05 |
+| Scripted vehicles | 0 |
 
 Purpose counts:
 
 | Purpose | Plans |
 |---|---:|
-| `BUSINESS_OUTBOUND_PROXY` | 1 |
-| `INBOUND_WORK` | 56 |
-| `PRIVATE_INTERNAL` | 13 |
-| `PRIVATE_OUTBOUND_PROXY` | 12 |
-| `SCHOOL_OUTBOUND_ESCORT_PROXY` | 6 |
-| `THROUGH` | 21 |
-| `VISITOR` | 31 |
-| `WORK_INTERNAL` | 6 |
-| `WORK_OUTBOUND_PROXY` | 10 |
+| `BUSINESS_INTERNAL` | 25 |
+| `BUSINESS_OUTBOUND_PROXY` | 67 |
+| `INBOUND_WORK` | 18,000 |
+| `PRIVATE_INTERNAL` | 489 |
+| `PRIVATE_OUTBOUND_PROXY` | 781 |
+| `SCHOOL_INTERNAL_ESCORT` | 117 |
+| `SCHOOL_OUTBOUND_ESCORT_PROXY` | 161 |
+| `THROUGH` | 7,199 |
+| `VISITOR` | 10,800 |
+| `WORK_INTERNAL` | 246 |
+| `WORK_OUTBOUND_PROXY` | 633 |
 
-Configured flows absent from the table seeded-stochastically round to zero at
-`scale = 0.015`.
-
-The generated vehicle-instance result is 91.0% motorcycles (`142 / 156`). It is
+The generated vehicle-instance result is 89.6% motorcycles
+(`34,506 / 38,518`). It is
 a seeded output of the citywide registered-stock proxy, not an observed traffic
-mode share. There is no scripted traffic: every vehicle in the run maps to one
-listed demand plan.
+mode share. There is no scripted traffic: the populated 06:05 state is produced
+by the first 300 scheduled plans running through normal physics, and every
+vehicle maps to one listed demand plan.
 
 Regression tests intentionally pin these values. A map, parameter, curve,
 selector, random-call-order, reachability or seed change may legitimately
@@ -452,8 +515,14 @@ suitable for policy, capacity or travel-demand forecasting.
   1.1.2):
   [JICA, Data Collection Survey on Traffic Conditions of Southern Roads and Bridges, Appendix 1](https://openjicareport.jica.go.jp/pdf/12305017_02.pdf).
 - Historical former-District-1 internal/outbound table and digitized
-  all-non-walking hourly figures:
+  all-non-walking hourly figures, including Tables 2.1.24–2.1.25 for
+  1.160/1.163 million generated/attracted daily person trips:
   [JICA, HOUTRANS Volume 2, Main Text](https://openjicareport.jica.go.jp/pdf/11764636_02.pdf).
+- November 2019 classified Thủ Thiêm tunnel count, Table 2.11:
+  [TCIP/World Bank, Ho Chi Minh City Green Transport Development Project ESIA](https://documents1.worldbank.org/curated/en/464371603972487255/pdf/%C4%90%C3%A1nh-Gi%C3%A1-T%C3%A1c-%C4%90%E1%BB%99ng-M%C3%B4i-Tr%C6%B0%E1%BB%9Dng-v%C3%A0-X%C3%A3-H%E1%BB%99i.pdf).
+- Official 2017 Sài Gòn River tunnel daily motorcycle volume and managed peak
+  windows:
+  [Ho Chi Minh City Party Committee](https://hcmcpv.org.vn/tin-tuc/xu-ly-tinh-trang-un-tac-giao-thong-ham-song-sai-gon-1491840860).
 - Peak-hour fallback of 10–15% of daily volume only when no study is available:
   [TCVN 13592:2022, Urban Roads — Design Requirements](https://sgtvt.hochiminhcity.gov.vn/Files/1032/01-TCVN%2013592_2022_%C4%90%C6%B0%E1%BB%9Dng%20%C4%91%C3%B4%20th%E1%BB%8B_Y%C3%AAu%20c%E1%BA%A7u%20thi%E1%BA%BFt%20k%E1%BA%BF%20%281%29.pdf).
 - Named central corridors and event-specific alternatives, published

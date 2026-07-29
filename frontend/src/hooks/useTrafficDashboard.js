@@ -16,6 +16,12 @@ import {
   hasScheduledDemand,
   STARTUP_ACTION,
 } from '../startupPolicy'
+import { demandStartupPace } from '../physical/livePace'
+import { PHYSICAL_STATUS_POLL_INTERVAL_MS } from '../physical/runtimeStatus'
+import {
+  shouldConnectMacroStream,
+  shouldPollMacroFallback,
+} from '../macroStreamPolicy'
 
 const EMPTY_SNAPSHOT = {
   timelineId: null, frameId: null, tick: 0, elapsedSeconds: 0, status: 'READY',
@@ -26,6 +32,7 @@ const EMPTY_TIMELINE = {
   retainedFrameCount: 0, retentionLimit: 0, recordedSeconds: [],
 }
 const DEMO_VEHICLE_IDS_KEY = 'traffic-demo-vehicle-ids-v1'
+const DEMAND_SCHEDULE_PAGE_SIZE = 12
 
 function readDemoVehicleIds() {
   try {
@@ -44,7 +51,7 @@ function persistDemoVehicleIds(ids) {
   }
 }
 
-export function useTrafficDashboard() {
+export function useTrafficDashboard({ physicalLiveMode = false } = {}) {
   const [intersections, setIntersections] = useState([])
   const [roads, setRoads] = useState([])
   const [buildings, setBuildings] = useState([])
@@ -64,14 +71,20 @@ export function useTrafficDashboard() {
   const [autoRun, setAutoRun] = useState(false)
   const [tickDelay, setTickDelay] = useState(1000)
   const [streamConnected, setStreamConnected] = useState(false)
+  const [physicalRuntimeStatus, setPhysicalRuntimeStatus] = useState(null)
   const [importSummary, setImportSummary] = useState(null)
   const [demandStatistics, setDemandStatistics] = useState(null)
   const [demandSchedule, setDemandSchedule] = useState({
     totalPlans: 0,
     failedPlans: 0,
     estimateBasis: '',
+    offset: 0,
+    limit: DEMAND_SCHEDULE_PAGE_SIZE,
+    returnedPlans: 0,
+    hourlyPlanCounts: Array.from({ length: 24 }, () => 0),
     plans: [],
   })
+  const [demandScheduleLoading, setDemandScheduleLoading] = useState(false)
   const [simulationClock, setSimulationClock] = useState({
     startTimeOfDaySeconds: 0,
     timeOfDaySeconds: 0,
@@ -89,6 +102,7 @@ export function useTrafficDashboard() {
   const demoGenerationRef = useRef(0)
   const timelineIdRef = useRef(null)
   const timelineRequestRef = useRef(0)
+  const demandScheduleRequestRef = useRef(0)
   const lastStreamTimelineRefreshAtRef = useRef(0)
   const lastStreamStatisticsRefreshAtRef = useRef(0)
   const historicalFrameRef = useRef(null)
@@ -148,10 +162,23 @@ export function useTrafficDashboard() {
     return nextTimeline
   }, [applyTimeline])
 
-  const refreshDemandSchedule = useCallback(async () => {
-    const schedule = await simulationApi.demandSchedule()
-    setDemandSchedule(schedule)
-    return schedule
+  const refreshDemandSchedule = useCallback(async (
+    offset = 0,
+    limit = DEMAND_SCHEDULE_PAGE_SIZE,
+  ) => {
+    const requestId = demandScheduleRequestRef.current + 1
+    demandScheduleRequestRef.current = requestId
+    setDemandScheduleLoading(true)
+    try {
+      const schedule = await simulationApi.demandSchedule(offset, limit)
+      if (requestId === demandScheduleRequestRef.current) setDemandSchedule(schedule)
+      return schedule
+    } catch (nextError) {
+      if (requestId === demandScheduleRequestRef.current) setError(nextError.message)
+      throw nextError
+    } finally {
+      if (requestId === demandScheduleRequestRef.current) setDemandScheduleLoading(false)
+    }
   }, [])
 
   const refreshLiveData = useCallback(async () => {
@@ -198,6 +225,7 @@ export function useTrafficDashboard() {
   }, [refreshAll])
 
   useEffect(() => {
+    if (!shouldConnectMacroStream(physicalLiveMode)) return undefined
     const stream = new EventSource(simulationApi.streamUrl())
     const handleSnapshot = (event) => {
       const nextSnapshot = JSON.parse(event.data)
@@ -229,17 +257,49 @@ export function useTrafficDashboard() {
     stream.onerror = () => setStreamConnected(false)
     return () => {
       stream.removeEventListener('snapshot', handleSnapshot)
+      stream.onopen = null
+      stream.onerror = null
       stream.close()
     }
-  }, [refreshTimeline])
+  }, [physicalLiveMode, refreshTimeline])
 
   useEffect(() => {
-    if (streamConnected) return undefined
+    if (!shouldPollMacroFallback(physicalLiveMode, streamConnected)) return undefined
     const timer = window.setInterval(() => {
       refreshLiveData().catch(() => {})
     }, 2000)
     return () => window.clearInterval(timer)
-  }, [refreshLiveData, streamConnected])
+  }, [physicalLiveMode, refreshLiveData, streamConnected])
+
+  useEffect(() => {
+    if (!physicalLiveMode) return undefined
+    let cancelled = false
+    let timer = null
+    const poll = async () => {
+      try {
+        const status = await simulationApi.status()
+        if (cancelled) return
+        applySimulationStatus(status)
+        setPhysicalRuntimeStatus({ ...status, connected: true, error: '' })
+      } catch (nextError) {
+        if (cancelled) return
+        setPhysicalRuntimeStatus((current) => ({
+          ...current,
+          connected: false,
+          error: nextError.message,
+        }))
+      } finally {
+        if (!cancelled) {
+          timer = window.setTimeout(poll, PHYSICAL_STATUS_POLL_INTERVAL_MS)
+        }
+      }
+    }
+    poll()
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [applySimulationStatus, physicalLiveMode])
 
   const runAction = useCallback(async (action, { refresh = true } = {}) => {
     setError('')
@@ -456,14 +516,14 @@ export function useTrafficDashboard() {
     } else if (action === STARTUP_ACTION.START) {
       setAutoRun(true)
       const startScenario = async () => {
-        // A 24-hour demand run should open as a day overview: at the microscopic
-        // default the first seeded departure would leave a seemingly empty map
-        // on screen for more than two wall-clock minutes. Opening the physical
-        // lane view still switches back to the authoritative 0.5 s cadence.
+        // A normal dashboard may traverse the day quickly. A direct Physical
+        // View link is already a live camera before startup runs, so it must
+        // start at one-to-one time and never receive even one 30-second tick.
         if (hasScheduledDemand(demandStatistics)) {
+          const pace = demandStartupPace(physicalLiveMode, DEMAND_OVERVIEW_PACE)
           await updateStatus(() => simulationApi.setParameters(
-            DEMAND_OVERVIEW_PACE.simulationSecondsPerTick,
-            DEMAND_OVERVIEW_PACE.playbackIntervalMs,
+            pace.simulationSecondsPerTick,
+            pace.playbackIntervalMs,
           ))
         }
         await updateStatus(simulationApi.start)
@@ -479,6 +539,7 @@ export function useTrafficDashboard() {
     demandStatistics,
     intersections.length,
     loading,
+    physicalLiveMode,
     roads.length,
     snapshot,
     startLiveDemo,
@@ -674,13 +735,16 @@ export function useTrafficDashboard() {
     autoRun,
     tickDelay,
     streamConnected,
+    physicalRuntimeStatus,
     importSummary,
     simulationClock,
     demandSchedule,
+    demandScheduleLoading,
     setSelected,
     setRoute,
     setAutoRun,
     setTickDelay,
+    loadDemandSchedulePage: refreshDemandSchedule,
     activateScenario,
     importMap,
     start: async () => { setAutoRun(true); return updateStatus(simulationApi.start) },
