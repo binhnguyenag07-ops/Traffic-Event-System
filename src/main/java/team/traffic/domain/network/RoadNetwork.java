@@ -16,6 +16,10 @@ public class RoadNetwork {
     private final Map<String, List<Road>> incomingRoads;
     private final Map<String, Building> buildings;
     private final List<LandCover> landCovers;
+    // Indexed by road rather than held as a flat list: the only question ever
+    // asked of these is "what stops are on the road I am driving down", and a
+    // bus asks it every sub-step.
+    private final Map<String, List<BusStop>> busStopsByRoad;
     private final JunctionMovementGraph movementGraph;
 
     public RoadNetwork() {
@@ -25,6 +29,7 @@ public class RoadNetwork {
         this.incomingRoads = new LinkedHashMap<>();
         this.buildings = new LinkedHashMap<>();
         this.landCovers = new ArrayList<>();
+        this.busStopsByRoad = new LinkedHashMap<>();
         this.movementGraph = new JunctionMovementGraph(this);
     }
 
@@ -295,6 +300,40 @@ public class RoadNetwork {
 
     public Map<String, Building> getBuildings() {
         return Collections.unmodifiableMap(buildings);
+    }
+
+    /**
+     * Registers a kerb-side stop on an existing road.
+     *
+     * <p>Stops arrive from the map in no particular order but are kept sorted
+     * by position, because a bus serves them in the order it drives past them
+     * and sorting once here is cheaper than sorting on every sub-step.</p>
+     */
+    public void addBusStop(BusStop busStop) {
+        if (busStop == null) throw new IllegalArgumentException("Bus stop is required");
+        if (!roads.containsKey(busStop.roadId())) {
+            throw new IllegalArgumentException("Bus-stop road does not exist: " + busStop.roadId());
+        }
+        List<BusStop> onRoad = busStopsByRoad.computeIfAbsent(
+                busStop.roadId(), roadId -> new ArrayList<>());
+        if (onRoad.stream().anyMatch(existing -> existing.id().equals(busStop.id()))) {
+            throw new IllegalArgumentException("Duplicate bus-stop id: " + busStop.id());
+        }
+        onRoad.add(busStop);
+        onRoad.sort(java.util.Comparator.comparingDouble(BusStop::positionAlongRoad));
+    }
+
+    /** Stops on one directed road, ordered by position, never null. */
+    public List<BusStop> getBusStopsOnRoad(String roadId) {
+        return Collections.unmodifiableList(busStopsByRoad.getOrDefault(roadId, List.of()));
+    }
+
+    public int getBusStopCount() {
+        return busStopsByRoad.values().stream().mapToInt(List::size).sum();
+    }
+
+    public List<BusStop> getBusStops() {
+        return busStopsByRoad.values().stream().flatMap(List::stream).toList();
     }
 
     /**

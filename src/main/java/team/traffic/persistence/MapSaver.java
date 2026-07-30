@@ -20,6 +20,7 @@ import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.network.Building;
+import team.traffic.domain.network.BusStop;
 import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.vehicle.VehicleType;
 import team.traffic.domain.vehicle.dynamics.TurnDirection;
@@ -60,6 +61,7 @@ public class MapSaver {
         public List<RoadData> roads = new ArrayList<>();
         public List<JunctionMovementData> junctionMovements = new ArrayList<>();
         public List<BuildingData> buildings = new ArrayList<>();
+        public List<BusStopData> busStops = new ArrayList<>();
 
         // Copies domain objects into simple JSON-friendly data objects.
         static MapData from(RoadNetwork roadNetwork) {
@@ -93,7 +95,31 @@ public class MapSaver {
                 mapData.buildings.add(BuildingData.from(building));
             }
 
+            List<BusStop> busStops = new ArrayList<>(roadNetwork.getBusStops());
+            busStops.sort(Comparator.comparing(BusStop::id));
+            for (BusStop busStop : busStops) {
+                mapData.busStops.add(BusStopData.from(busStop));
+            }
+
             return mapData;
+        }
+    }
+
+    static class BusStopData {
+        public String id;
+        public String name;
+        public String roadId;
+        public double positionAlongRoad;
+        public double dwellSeconds;
+
+        static BusStopData from(BusStop busStop) {
+            BusStopData data = new BusStopData();
+            data.id = busStop.id();
+            data.name = busStop.name();
+            data.roadId = busStop.roadId();
+            data.positionAlongRoad = busStop.positionAlongRoad();
+            data.dwellSeconds = busStop.dwellSeconds();
+            return data;
         }
     }
 

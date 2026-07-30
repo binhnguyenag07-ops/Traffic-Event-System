@@ -865,7 +865,7 @@ public class TrafficSimulator {
     }
 
     private void configureDefaultBusStops(Bus bus) {
-        bus.configureDefaultStopsFromRoute();
+        bus.configureStopsFromNetwork(network);
     }
 
     private List<TrafficEvent> buildEvents(List<EventConfig> configs) {
