@@ -7,6 +7,7 @@ import java.util.Set;
 import team.traffic.domain.network.BusStop;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.routing.Route;
 import team.traffic.service.RoutingService;
 
 public class Bus extends Vehicle {
@@ -23,6 +24,8 @@ public class Bus extends Vehicle {
     private static final double ARRIVAL_TOLERANCE_METRES = 2.0;
 
     private final int passengerCapacity;
+    private RoadNetwork network;
+    private Route stopsBuiltForRoute;
     private List<BusStop> stops = List.of();
     private final Set<String> servedStopIds = new LinkedHashSet<>();
     private String dwellingAtStopId;
@@ -80,13 +83,32 @@ public class Bus extends Vehicle {
      * the wait belongs to the vehicle and not to the concrete.</p>
      */
     public void configureStopsFromNetwork(RoadNetwork roadNetwork) {
-        if (roadNetwork == null || getCurrentRoute() == null) {
+        this.network = roadNetwork;
+        refreshStopsIfRouteChanged();
+    }
+
+    /**
+     * Rebuilds the stop list when the route it was derived from is no longer
+     * the current one.
+     *
+     * <p>Callers configure a bus at whatever moment suits them, and for a
+     * demand-spawned bus that moment is before the trip lifecycle has assigned
+     * it a route at all -- the stop list would be permanently empty and the bus
+     * would sail past every kerb. Rechecking here rather than trusting call
+     * order also covers a multi-leg plan, where each leg brings a new route and
+     * therefore a new set of stops.</p>
+     */
+    private void refreshStopsIfRouteChanged() {
+        Route route = getCurrentRoute();
+        if (route == stopsBuiltForRoute) return;
+        stopsBuiltForRoute = route;
+        if (network == null || route == null) {
             setStops(List.of());
             return;
         }
         List<BusStop> onRoute = new ArrayList<>();
-        for (var step : getCurrentRoute().getSteps()) {
-            for (BusStop stop : roadNetwork.getBusStopsOnRoad(step.getRoadId())) {
+        for (var step : route.getSteps()) {
+            for (BusStop stop : network.getBusStopsOnRoad(step.getRoadId())) {
                 onRoute.add(new BusStop(
                         stop.id(),
                         stop.name(),
@@ -115,6 +137,7 @@ public class Bus extends Vehicle {
      */
     @Override
     protected double holdDistanceAheadMetres(Road road, double progressAlongRoad, double elapsedSeconds) {
+        refreshStopsIfRouteChanged();
         if (road == null || stops.isEmpty()) return Double.POSITIVE_INFINITY;
 
         BusStop next = null;
