@@ -8,15 +8,15 @@ Seed: `42`; route requests per scenario: `30`.
 
 | Scenario | Algorithm | Objective | Success | Avg ms | Avg visited | Optimality |
 |---|---|---|---:|---:|---:|---:|
-|Normal traffic|BFS|MINIMUM_HOPS|87%|0.9398|144.5|100.0%|
-|Normal traffic|Dijkstra|SHORTEST_TIME|87%|0.8201|154.8|100.0%|
-|Normal traffic|A*|SHORTEST_TIME|87%|0.8663|58.9|100.0%|
-|Heavy congestion|BFS|MINIMUM_HOPS|77%|0.3130|150.3|100.0%|
-|Heavy congestion|Dijkstra|SHORTEST_TIME|77%|0.4965|190.3|100.0%|
-|Heavy congestion|A*|SHORTEST_TIME|77%|0.3829|71.5|100.0%|
-|Seeded random events|BFS|MINIMUM_HOPS|53%|0.3031|135.6|100.0%|
-|Seeded random events|Dijkstra|SHORTEST_TIME|53%|0.2522|150.9|100.0%|
-|Seeded random events|A*|SHORTEST_TIME|53%|0.5662|89.5|100.0%|
-|20×20 synthetic grid|BFS|MINIMUM_HOPS|100%|0.3966|148.7|100.0%|
-|20×20 synthetic grid|Dijkstra|SHORTEST_TIME|100%|0.3349|164.7|100.0%|
-|20×20 synthetic grid|A*|SHORTEST_TIME|100%|0.4287|45.0|100.0%|
+|Normal traffic|BFS|MINIMUM_HOPS|87%|1.9330|270.7|100.0%|
+|Normal traffic|Dijkstra|SHORTEST_TIME|87%|0.8703|238.8|100.0%|
+|Normal traffic|A*|SHORTEST_TIME|87%|0.4831|80.5|100.0%|
+|Heavy congestion|BFS|MINIMUM_HOPS|77%|0.5795|288.9|100.0%|
+|Heavy congestion|Dijkstra|SHORTEST_TIME|77%|0.6701|293.7|100.0%|
+|Heavy congestion|A*|SHORTEST_TIME|77%|0.3509|103.7|100.0%|
+|Seeded random events|BFS|MINIMUM_HOPS|70%|0.6337|281.9|100.0%|
+|Seeded random events|Dijkstra|SHORTEST_TIME|70%|0.3725|280.0|100.0%|
+|Seeded random events|A*|SHORTEST_TIME|70%|0.2790|172.4|100.0%|
+|20×20 synthetic grid|BFS|MINIMUM_HOPS|100%|0.8123|566.2|100.0%|
+|20×20 synthetic grid|Dijkstra|SHORTEST_TIME|100%|0.6335|566.2|100.0%|
+|20×20 synthetic grid|A*|SHORTEST_TIME|100%|0.1266|98.5|100.0%|

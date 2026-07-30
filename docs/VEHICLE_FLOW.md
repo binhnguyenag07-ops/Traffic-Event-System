@@ -221,7 +221,7 @@ Boundary roles are directional:
 The check is structural topology. A closure or capacity constraint that occurs
 during simulation remains a normal routing, retry and rerouting concern.
 
-The bundled scenario has 38,518 generated plans / 69,837 vehicle legs and 0
+The bundled scenario has 39,434 generated plans / 71,267 vehicle legs and 0
 structural generation failures for its committed seed and map.
 
 ### Initialization and phantom occupancy
@@ -270,11 +270,11 @@ For `district1_typical_day.json`, the deterministic snapshot is:
 
 | Output | Count |
 |---|---:|
-| Generated plans | 38,518 |
-| Generated vehicle legs | 69,837 |
+| Generated plans | 39,434 |
+| Generated vehicle legs | 71,267 |
 | Structural generation failures | 0 |
-| Generated motorcycles | 34,506 |
-| Generated cars | 4,012 |
+| Generated motorcycles | 34,219 |
+| Generated cars | 4,161 |
 | Plans spawned during the 06:00–06:05 pre-roll | 300 |
 | Scripted vehicles | 0 |
 
@@ -290,7 +290,7 @@ intermediate replay history, and exposes the populated 06:05 result. There is
 no scripted warm-start traffic, so every vehicle is traceable to the schedule.
 
 Those values are deterministic model output, not observed traffic in the former
-District 1 study window. The 69,837 legs are an explicit microscopic sample,
+District 1 study window. The 71,267 legs are an explicit microscopic sample,
 roughly 1:9 against the evidence note's 0.6-million-leg/day historical proxy
 midpoint; runtime statistics are not automatically expanded.
 The complete scenario, evidence labels and limitations are documented in

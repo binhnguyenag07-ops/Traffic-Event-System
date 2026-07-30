@@ -12,8 +12,8 @@ remain available from the repository root. OpenStreetMap basemap tiles require
 internet access; routing, demand, physics, and vehicle poses run locally.
 
 The normal launch loads and initializes **Central District 1 - 24-hour Weekday
-Proxy**. Its demand horizon starts at 06:00 with seed `20260728` and 38,518
-deterministic demand plans / 69,837 vehicle legs. Initialization executes five
+Proxy**. Its demand horizon starts at 06:00 with seed `20260728` and 39,434
+deterministic demand plans / 71,267 vehicle legs. Initialization executes five
 minutes of ordinary microscopic dynamics, so the first interactive frame is
 06:05 with 300 due plans already spawned. It has no separately scripted
 warm-start traffic. The scenario covers research-informed historical resident
@@ -78,7 +78,7 @@ the previous macro pace.
 3. Read the top-bar 24-hour clock, then open **24-hour demand**. Show the
    read-only departure histogram and expand one of the 12 server-paged plans to
    see its named origin, destination, dwell, and estimated return. Explain that
-   the histogram aggregates all 38,518 departures and is not a time selector;
+   the histogram aggregates all 39,434 departures and is not a time selector;
    every plan spawns automatically when the backend clock reaches it.
    Arrival/return clocks are directed free-flow estimates and live
    queues/signals decide actual arrival. Generic or repeated place names include

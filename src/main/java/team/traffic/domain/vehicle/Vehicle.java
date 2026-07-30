@@ -324,7 +324,13 @@ public abstract class Vehicle implements TrafficParticipant {
                 step.getToIntersectionId(), distanceToExitMetres, trafficState.getElapsedSeconds());
         boolean mayLeaveRoad = !heldAtRoadExit
                 && canLeaveRoadAhead(roadNetwork, trafficState, distanceToExitMetres);
-        double stopDistanceMetres = mayLeaveRoad ? Double.POSITIVE_INFINITY : distanceToExitMetres;
+        // A kerb-side hold competes with the road-exit hold rather than
+        // replacing it: a bus approaching a stop that sits just before a red
+        // light must obey whichever comes first.
+        double stopDistanceMetres = Math.min(
+                mayLeaveRoad ? Double.POSITIVE_INFINITY : distanceToExitMetres,
+                holdDistanceAheadMetres(
+                        road, placement.getProgress(), trafficState.getElapsedSeconds()));
 
         double plannedSpeedMps = getCarFollowingModel().nextSpeedMps(new FollowContext(
                 instantaneousSpeedMps,
@@ -732,10 +738,24 @@ public abstract class Vehicle implements TrafficParticipant {
         return false;
     }
 
-    /** Extension point for a bus stop or another curb-side hold at the stop line. */
+    /** Extension point for a hold at the stop line at the end of the road. */
     protected boolean shouldHoldAtRoadExit(
             String junctionId, double distanceToExitMetres, double elapsedSeconds) {
         return false;
+    }
+
+    /**
+     * Distance ahead on this road at which this vehicle must come to rest, or
+     * infinity when nothing holds it.
+     *
+     * <p>Separate from {@link #shouldHoldAtRoadExit} because a kerb-side stop
+     * is somewhere along the road rather than at the end of it. Expressing it
+     * as a distance lets the ordinary car-following model brake for it, so no
+     * caller needs to know that buses stop for passengers.</p>
+     */
+    protected double holdDistanceAheadMetres(
+            Road road, double progressAlongRoad, double elapsedSeconds) {
+        return Double.POSITIVE_INFINITY;
     }
 
     /**

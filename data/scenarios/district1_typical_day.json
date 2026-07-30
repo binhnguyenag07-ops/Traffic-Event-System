@@ -7,7 +7,7 @@
   "startTimeOfDay": "06:00",
   "durationHours": 24,
   "seed": 20260728,
-  "scale": 1.0,
+  "scale": 1,
   "warmUpSeconds": 300,
   "automaticCollisionEvents": false,
   "demandMagnitude": {
@@ -19,19 +19,31 @@
   "zones": [
     {
       "id": "north-east-entries",
-      "intersectionIds": ["N5742669208", "N9646671003"]
+      "intersectionIds": [
+        "N5742669208",
+        "N9646671003"
+      ]
     },
     {
       "id": "south-west-entries",
-      "intersectionIds": ["N1987339833", "N6786738899"]
+      "intersectionIds": [
+        "N1987339833",
+        "N6786738899"
+      ]
     },
     {
       "id": "north-east-exits",
-      "intersectionIds": ["N9727223522", "N11283907795"]
+      "intersectionIds": [
+        "N9727223522",
+        "N11283907795"
+      ]
     },
     {
       "id": "south-west-exits",
-      "intersectionIds": ["N370821213", "N6786738898"]
+      "intersectionIds": [
+        "N370821213",
+        "N6786738898"
+      ]
     },
     {
       "id": "tourism-core",
@@ -64,7 +76,9 @@
       "id": "resident-mixed-use",
       "from": {
         "kind": "BUILDING",
-        "types": ["RESIDENTIAL"]
+        "types": [
+          "RESIDENTIAL"
+        ]
       },
       "production": {
         "kind": "POPULATION_DERIVED",
@@ -76,8 +90,14 @@
           "purpose": "WORK_INTERNAL",
           "share": 0.090298,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "COMMUTE_AM",
           "completion": "RETURN_TO_ORIGIN",
@@ -85,7 +105,10 @@
             {
               "to": {
                 "kind": "BUILDING",
-                "types": ["OFFICE", "COMMERCIAL"]
+                "types": [
+                  "OFFICE",
+                  "COMMERCIAL"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -100,8 +123,14 @@
           "purpose": "WORK_OUTBOUND_PROXY",
           "share": 0.257002,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "COMMUTE_AM",
           "completion": "RETURN_TO_ORIGIN",
@@ -109,7 +138,9 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["perimeter-gateways"]
+                "zoneIds": [
+                  "perimeter-gateways"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -124,8 +155,14 @@
           "purpose": "SCHOOL_INTERNAL_ESCORT",
           "share": 0.04746,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "SCHOOL_AM",
           "completion": "RETURN_TO_ORIGIN",
@@ -133,7 +170,9 @@
             {
               "to": {
                 "kind": "BUILDING",
-                "types": ["SCHOOL"]
+                "types": [
+                  "SCHOOL"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -148,8 +187,14 @@
           "purpose": "SCHOOL_OUTBOUND_ESCORT_PROXY",
           "share": 0.06554,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "SCHOOL_AM",
           "completion": "RETURN_TO_ORIGIN",
@@ -157,7 +202,9 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["perimeter-gateways"]
+                "zoneIds": [
+                  "perimeter-gateways"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -170,10 +217,16 @@
         {
           "id": "resident-private-internal",
           "purpose": "PRIVATE_INTERNAL",
-          "share": 0.20132,
+          "share": 0.17132,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY",
           "completion": "RETURN_TO_ORIGIN",
@@ -181,7 +234,10 @@
             {
               "to": {
                 "kind": "BUILDING",
-                "types": ["COMMERCIAL", "HOSPITAL", "OTHER"]
+                "types": [
+                  "COMMERCIAL",
+                  "OTHER"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -196,8 +252,14 @@
           "purpose": "PRIVATE_OUTBOUND_PROXY",
           "share": 0.30198,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY",
           "completion": "RETURN_TO_ORIGIN",
@@ -205,7 +267,9 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["perimeter-gateways"]
+                "zoneIds": [
+                  "perimeter-gateways"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -220,8 +284,14 @@
           "purpose": "BUSINESS_INTERNAL",
           "share": 0.010556,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY",
           "completion": "RETURN_TO_ORIGIN",
@@ -229,7 +299,10 @@
             {
               "to": {
                 "kind": "BUILDING",
-                "types": ["OFFICE", "COMMERCIAL"]
+                "types": [
+                  "OFFICE",
+                  "COMMERCIAL"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -244,8 +317,14 @@
           "purpose": "BUSINESS_OUTBOUND_PROXY",
           "share": 0.025844,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY",
           "completion": "RETURN_TO_ORIGIN",
@@ -253,7 +332,41 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["perimeter-gateways"]
+                "zoneIds": [
+                  "perimeter-gateways"
+                ]
+              },
+              "dwell": {
+                "kind": "RANGE",
+                "minSeconds": 1800,
+                "maxSeconds": 7200
+              }
+            }
+          ]
+        },
+        {
+          "id": "resident-health-internal",
+          "purpose": "PRIVATE_INTERNAL",
+          "share": 0.03,
+          "vehicleMix": [
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
+          ],
+          "curve": "DAYTIME",
+          "completion": "RETURN_TO_ORIGIN",
+          "legs": [
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": [
+                  "HOSPITAL"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -269,7 +382,9 @@
       "id": "north-east-cordon",
       "from": {
         "kind": "ZONE",
-        "zoneIds": ["north-east-entries"]
+        "zoneIds": [
+          "north-east-entries"
+        ]
       },
       "production": {
         "kind": "ABSOLUTE",
@@ -279,10 +394,16 @@
         {
           "id": "north-east-through",
           "purpose": "THROUGH",
-          "share": 0.20,
+          "share": 0.18,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY",
           "completion": "REMOVE_AT_LAST_STOP",
@@ -290,7 +411,9 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["south-west-exits"]
+                "zoneIds": [
+                  "south-west-exits"
+                ]
               }
             }
           ]
@@ -298,10 +421,16 @@
         {
           "id": "north-east-inbound-work",
           "purpose": "INBOUND_WORK",
-          "share": 0.50,
+          "share": 0.5,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "COMMUTE_AM",
           "completion": "REMOVE_AT_LAST_STOP",
@@ -309,7 +438,10 @@
             {
               "to": {
                 "kind": "BUILDING",
-                "types": ["OFFICE", "COMMERCIAL"]
+                "types": [
+                  "OFFICE",
+                  "COMMERCIAL"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -320,7 +452,10 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["north-east-exits", "south-west-exits"]
+                "zoneIds": [
+                  "north-east-exits",
+                  "south-west-exits"
+                ]
               }
             }
           ]
@@ -328,10 +463,16 @@
         {
           "id": "north-east-visitor",
           "purpose": "VISITOR",
-          "share": 0.30,
+          "share": 0.28,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "VISITOR_DAYTIME",
           "completion": "REMOVE_AT_LAST_STOP",
@@ -339,7 +480,9 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["tourism-core"]
+                "zoneIds": [
+                  "tourism-core"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -350,7 +493,77 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["north-east-exits", "south-west-exits"]
+                "zoneIds": [
+                  "north-east-exits",
+                  "south-west-exits"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "north-east-inbound-medical",
+          "purpose": "INBOUND_WORK",
+          "share": 0.02,
+          "vehicleMix": [
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.6
+            },
+            {
+              "type": "CAR",
+              "share": 0.25
+            },
+            {
+              "type": "EMERGENCY",
+              "share": 0.15
+            }
+          ],
+          "curve": "FLAT",
+          "completion": "REMOVE_AT_LAST_STOP",
+          "legs": [
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": [
+                  "HOSPITAL"
+                ]
+              },
+              "dwell": {
+                "kind": "RANGE",
+                "minSeconds": 600,
+                "maxSeconds": 3600
+              }
+            },
+            {
+              "to": {
+                "kind": "ZONE",
+                "zoneIds": [
+                  "north-east-exits"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "north-east-transit-bus",
+          "purpose": "THROUGH",
+          "share": 0.02,
+          "vehicleMix": [
+            {
+              "type": "BUS",
+              "share": 1
+            }
+          ],
+          "curve": "DAYTIME",
+          "completion": "REMOVE_AT_LAST_STOP",
+          "legs": [
+            {
+              "to": {
+                "kind": "ZONE",
+                "zoneIds": [
+                  "south-west-exits"
+                ]
               }
             }
           ]
@@ -361,7 +574,9 @@
       "id": "south-west-cordon",
       "from": {
         "kind": "ZONE",
-        "zoneIds": ["south-west-entries"]
+        "zoneIds": [
+          "south-west-entries"
+        ]
       },
       "production": {
         "kind": "ABSOLUTE",
@@ -371,10 +586,16 @@
         {
           "id": "south-west-through",
           "purpose": "THROUGH",
-          "share": 0.20,
+          "share": 0.18,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "HOUTRANS_2002_ALL_NON_WALKING_DIGITIZED_PROXY",
           "completion": "REMOVE_AT_LAST_STOP",
@@ -382,7 +603,9 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["north-east-exits"]
+                "zoneIds": [
+                  "north-east-exits"
+                ]
               }
             }
           ]
@@ -390,10 +613,16 @@
         {
           "id": "south-west-inbound-work",
           "purpose": "INBOUND_WORK",
-          "share": 0.50,
+          "share": 0.5,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "COMMUTE_AM",
           "completion": "REMOVE_AT_LAST_STOP",
@@ -401,7 +630,10 @@
             {
               "to": {
                 "kind": "BUILDING",
-                "types": ["OFFICE", "COMMERCIAL"]
+                "types": [
+                  "OFFICE",
+                  "COMMERCIAL"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -412,7 +644,10 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["north-east-exits", "south-west-exits"]
+                "zoneIds": [
+                  "north-east-exits",
+                  "south-west-exits"
+                ]
               }
             }
           ]
@@ -420,10 +655,16 @@
         {
           "id": "south-west-visitor",
           "purpose": "VISITOR",
-          "share": 0.30,
+          "share": 0.28,
           "vehicleMix": [
-            {"type": "MOTORCYCLE", "share": 0.8955},
-            {"type": "CAR", "share": 0.1045}
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
           ],
           "curve": "VISITOR_DAYTIME",
           "completion": "REMOVE_AT_LAST_STOP",
@@ -431,7 +672,9 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["tourism-core"]
+                "zoneIds": [
+                  "tourism-core"
+                ]
               },
               "dwell": {
                 "kind": "RANGE",
@@ -442,7 +685,185 @@
             {
               "to": {
                 "kind": "ZONE",
-                "zoneIds": ["north-east-exits", "south-west-exits"]
+                "zoneIds": [
+                  "north-east-exits",
+                  "south-west-exits"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "south-west-inbound-medical",
+          "purpose": "INBOUND_WORK",
+          "share": 0.02,
+          "vehicleMix": [
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.6
+            },
+            {
+              "type": "CAR",
+              "share": 0.25
+            },
+            {
+              "type": "EMERGENCY",
+              "share": 0.15
+            }
+          ],
+          "curve": "FLAT",
+          "completion": "REMOVE_AT_LAST_STOP",
+          "legs": [
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": [
+                  "HOSPITAL"
+                ]
+              },
+              "dwell": {
+                "kind": "RANGE",
+                "minSeconds": 600,
+                "maxSeconds": 3600
+              }
+            },
+            {
+              "to": {
+                "kind": "ZONE",
+                "zoneIds": [
+                  "south-west-exits"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "south-west-transit-bus",
+          "purpose": "THROUGH",
+          "share": 0.02,
+          "vehicleMix": [
+            {
+              "type": "BUS",
+              "share": 1
+            }
+          ],
+          "curve": "DAYTIME",
+          "completion": "REMOVE_AT_LAST_STOP",
+          "legs": [
+            {
+              "to": {
+                "kind": "ZONE",
+                "zoneIds": [
+                  "north-east-exits"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hospital-operations",
+      "from": {
+        "kind": "BUILDING",
+        "types": [
+          "HOSPITAL"
+        ]
+      },
+      "production": {
+        "kind": "ABSOLUTE",
+        "vehiclesPerDay": 900
+      },
+      "flows": [
+        {
+          "id": "hospital-ambulance-callout",
+          "purpose": "PRIVATE_INTERNAL",
+          "share": 0.25,
+          "vehicleMix": [
+            {
+              "type": "EMERGENCY",
+              "share": 1
+            }
+          ],
+          "curve": "FLAT",
+          "completion": "RETURN_TO_ORIGIN",
+          "legs": [
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": [
+                  "RESIDENTIAL",
+                  "OTHER"
+                ]
+              },
+              "dwell": {
+                "kind": "RANGE",
+                "minSeconds": 300,
+                "maxSeconds": 900
+              }
+            }
+          ]
+        },
+        {
+          "id": "hospital-staff-outbound",
+          "purpose": "WORK_OUTBOUND_PROXY",
+          "share": 0.45,
+          "vehicleMix": [
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8955
+            },
+            {
+              "type": "CAR",
+              "share": 0.1045
+            }
+          ],
+          "curve": "DOUBLE_PEAK",
+          "completion": "REMOVE_AT_LAST_STOP",
+          "legs": [
+            {
+              "to": {
+                "kind": "ZONE",
+                "zoneIds": [
+                  "north-east-exits",
+                  "south-west-exits"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "hospital-transfer-internal",
+          "purpose": "PRIVATE_INTERNAL",
+          "share": 0.3,
+          "vehicleMix": [
+            {
+              "type": "MOTORCYCLE",
+              "share": 0.8
+            },
+            {
+              "type": "CAR",
+              "share": 0.15
+            },
+            {
+              "type": "EMERGENCY",
+              "share": 0.05
+            }
+          ],
+          "curve": "DAYTIME",
+          "completion": "RETURN_TO_ORIGIN",
+          "legs": [
+            {
+              "to": {
+                "kind": "BUILDING",
+                "types": [
+                  "HOSPITAL"
+                ]
+              },
+              "dwell": {
+                "kind": "RANGE",
+                "minSeconds": 900,
+                "maxSeconds": 3600
               }
             }
           ]
