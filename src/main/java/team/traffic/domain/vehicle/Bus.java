@@ -66,6 +66,10 @@ public class Bus extends Vehicle {
 
     public void setStops(List<BusStop> stops) {
         this.stops = stops == null ? List.of() : List.copyOf(stops);
+        // An explicitly supplied list belongs to whatever route is current, so
+        // the lazy refresh must not treat it as stale and wipe it on the next
+        // sub-step. It is replaced only when the route genuinely changes.
+        this.stopsBuiltForRoute = getCurrentRoute();
         servedStopIds.clear();
         dwellingAtStopId = null;
         dwellUntilSeconds = 0.0;
