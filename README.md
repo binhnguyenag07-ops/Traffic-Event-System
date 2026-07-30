@@ -94,6 +94,16 @@ Windows PowerShell:
 .\run-demo.ps1
 ```
 
+Both scripts take the same options. `--port` moves the server, `--scenario`
+starts on a different bundled run (including the physical-view lab cases under
+`data/scenarios/test/`), and `--skip-build` relaunches an existing JAR without
+waiting for a rebuild. Run either with `--help` for the full list. With no
+options the behaviour is unchanged.
+
+```bash
+./run-demo.sh --port 8080 --scenario data/scenarios/test/u-turn.json
+```
+
 The map uses OpenStreetMap tiles, so the basemap requires an internet
 connection. The traffic simulation, routing, events, and vehicle positions run
 locally.
