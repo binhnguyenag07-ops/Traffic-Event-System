@@ -189,7 +189,7 @@ The chosen runtime size is an explicit microscopic sample. HOUTRANS reported
 2.323 million daily non-walking trip ends for the former District 1 in 2002;
 after area allocation, internal-trip de-duplication, modal shares and observed
 occupancy conversion, the evidence note derives a broad 0.4–0.7 million
-vehicle-leg/day historical proxy for this 3.05 km² window. The bundled 69,837
+vehicle-leg/day historical proxy for this 3.05 km² window. The bundled 71,267
 simulated legs are about 1:9 against the 0.6-million midpoint. Runtime
 statistics remain unweighted simulated-agent counts; no result is silently
 expanded.
@@ -343,8 +343,8 @@ Source handling is explicit:
 - An unexpected invalid resolved plan is retained in demand failure statistics
   by plan id instead of being spawned.
 
-The bundled former District 1 study-window scenario resolves 38,518 generated
-plans / 69,837 legs with 0 structural generation failures. That does not
+The bundled former District 1 study-window scenario resolves 39,434 generated
+plans / 71,267 legs with 0 structural generation failures. That does not
 promise immediate road admission: a structurally valid plan that is due while
 its entry is full or temporarily closed becomes a normal `BLOCKED` runtime
 vehicle and retries through the ordinary routing logic. It is not reclassified
@@ -355,7 +355,7 @@ as malformed demand and discarded.
 `DemandDrivenSpawner` queries the model over
 `(lastScannedSeconds, currentElapsedSeconds]`. `GravityDemandModel` stores plans
 in departure order and uses an upper-bound binary search, so each poll does not
-scan all 38,518 future plans. A due plan is converted into one vehicle, assigned
+scan all 39,434 future plans. A due plan is converted into one vehicle, assigned
 its first destination and routed through the ordinary routing service.
 
 Demand statistics report:
@@ -391,7 +391,7 @@ The estimator uses directed Dijkstra free-flow road time plus the 15 km/h
 building access links and declared dwell. It deliberately ignores live queues,
 signals, closures, and incidents; the UI labels every arrival/return value as
 an estimate. Route estimation runs only for the requested page rather than all
-38,518 plans. The **24-hour demand** panel renders the complete hourly
+39,434 plans. The **24-hour demand** panel renders the complete hourly
 aggregate as a read-only profile and requests 12 ordered plan estimates per UI
 page. It has no hour/purpose control that could be mistaken for a spawn rule.
 

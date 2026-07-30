@@ -259,7 +259,7 @@ The implemented controls target the actual bottlenecks:
 - generated plans are ordered once, due-plan intervals use binary bounds, and
   reusable origin/leg destination candidates and gravity weights are cached;
 - the demand schedule endpoint routes only a bounded page (default 250, maximum
-  1,000) instead of all 38,518 plans;
+  1,000) instead of all 39,434 plans;
 - **Real time**, **Balanced**, and **24 h overview** run at approximately 1×,
   10×, and 120× simulated time. A 24-hour demand scenario may use overview
   pace on the macro map; opening Physical View forces 0.25 s / 250 ms live

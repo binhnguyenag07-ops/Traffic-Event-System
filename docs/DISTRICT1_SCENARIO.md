@@ -211,7 +211,7 @@ average density.
 
 The defensible historical order-of-magnitude envelope used here is therefore
 0.4–0.7 million vehicle legs/day, with 0.6 million as a presentation midpoint.
-The bundled run creates 69,837 explicit legs, or about one simulated agent leg
+The bundled run creates 71,267 explicit legs, or about one simulated agent leg
 per 8.6 midpoint legs. This keeps roughly 300 due vehicles in the first
 five-minute pre-roll and thousands of resolvable agents through the day without
 claiming a one-to-one reconstruction. Runtime metrics are **not** multiplied by
@@ -440,11 +440,11 @@ For the committed map, parameter catalog, scenario, algorithm and seed:
 
 | Measure | VERIFIED FACT |
 |---|---:|
-| Generated plans scheduled | 38,518 |
-| Generated vehicle legs | 69,837 |
+| Generated plans scheduled | 39,434 |
+| Generated vehicle legs | 71,267 |
 | Structural generation failures | 0 |
-| Generated motorcycles | 34,506 |
-| Generated cars | 4,012 |
+| Generated motorcycles | 34,219 |
+| Generated cars | 4,161 |
 | First generated departure | less than 1 s after 06:00 |
 | Plans spawned by the first interactive frame | 300 |
 | First interactive clock | 06:05 |
@@ -466,8 +466,10 @@ Purpose counts:
 | `WORK_INTERNAL` | 246 |
 | `WORK_OUTBOUND_PROXY` | 633 |
 
-The generated vehicle-instance result is 89.6% motorcycles
-(`34,506 / 38,518`). It is
+The generated vehicle-instance result is 86.8% motorcycles
+(`34,219 / 39,434`), with 4,161 cars, 719 buses and 335 emergency vehicles. It
+falls below the 89.6% stock proxy because buses and ambulances come from
+dedicated transit and hospital flows instead of that ratio. It is
 a seeded output of the citywide registered-stock proxy, not an observed traffic
 mode share. There is no scripted traffic: the populated 06:05 state is produced
 by the first 300 scheduled plans running through normal physics, and every

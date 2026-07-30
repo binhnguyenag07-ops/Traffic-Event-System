@@ -104,11 +104,11 @@ Its fixed acceptance snapshot is:
 
 | Measure | Seeded result |
 |---|---:|
-| Generated plans | 38,518 |
-| Generated vehicle legs | 69,837 |
+| Generated plans | 39,434 |
+| Generated vehicle legs | 71,267 |
 | Structural generation failures | 0 |
-| Generated motorcycles | 34,506 |
-| Generated cars | 4,012 |
+| Generated motorcycles | 34,219 |
+| Generated cars | 4,161 |
 | First generated departure | less than 1 s after 06:00 |
 | Due plans spawned by first 06:05 frame | 300 |
 | Scripted vehicles | 0 |
@@ -150,7 +150,7 @@ The words are intentional:
   production, modal mix, dwell time, hourly curve, gravity decay or `scale`.
 
 No bundled demand parameter is a **current calibrated estimate** for this study
-window. The 38,518 agents / 69,837 legs are an explicit computational sample,
+window. The 39,434 agents / 71,267 legs are an explicit computational sample,
 about 1:9 against the documented historical 0.4–0.7 million
 vehicle-leg/day proxy. Statistics report simulated agents and are not silently
 multiplied by that ratio. Some ratios and one curve are historical

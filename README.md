@@ -261,7 +261,7 @@ Available map files:
 |---|---|
 | `data/maps/district1_network.json` | default full-viewport District 1 network and buildings |
 | `data/demand/default_assumptions.json` | replaceable occupancy, attraction, decay, and hourly curves |
-| `data/scenarios/district1_typical_day.json` | seeded 24-hour weekday proxy: 38,518 deterministic vehicle plans, a five-minute physical pre-roll, and no scripted vehicles |
+| `data/scenarios/district1_typical_day.json` | seeded 24-hour weekday proxy: 39,434 deterministic vehicle plans, a five-minute physical pre-roll, and no scripted vehicles |
 | `data/results/experiment_results.json` | reproducible experiment baseline |
 
 The District 1 scenario is an educational, research-informed microscopic
@@ -273,10 +273,12 @@ in one peak hour at the Thủ Thiêm tunnel. Those anchors prove that the old
 156-plan workload was only a smoke test; they do not supply a current OD matrix
 for this exact map rectangle.
 
-For the committed seed, 38,518 simulated plans contain 69,837 vehicle legs, and
+For the committed seed, 39,434 simulated plans contain 71,267 vehicle legs, and
 zero plans fail structural generation. Each plan is one vehicle for its whole
-multi-leg day, so the mode split counts plans, not legs: 34,506 motorcycles and
-4,012 cars, or 89.6% motorcycles.
+multi-leg day, so the mode split counts plans, not legs: 34,219 motorcycles,
+4,161 cars, 719 buses and 335 emergency vehicles, or 86.8% motorcycles. That is
+below the 89.6% citywide two-wheeler stock proxy because buses and ambulances
+are generated from their own flows rather than drawn from that ratio.
 This is roughly a 1:9 agent sample of the documented 0.4–0.7 million
 vehicle-leg/day historical proxy for the 3.05 km² study window. Counts are not
 automatically expanded in statistics, and the exact cordon allocation, dwell
