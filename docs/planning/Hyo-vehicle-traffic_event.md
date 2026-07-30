@@ -79,7 +79,7 @@ The pose offset is:
 ```
 
 `Motorcycle` is 2.1 m long and 0.75 m wide. Its driver profile keeps shorter
-gaps and its `MotorcycleLaneChangeModel` accepts any adjacent lane with a real
+gaps and its `FilteringLaneChangeModel` accepts any adjacent lane with a real
 speed benefit while retaining the ordinary MOBIL target-follower braking check.
 The smaller body therefore fits some longitudinal openings that reject a car.
 This remains a discrete-lane approximation; continuous between-lane filtering

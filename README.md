@@ -263,8 +263,10 @@ in one peak hour at the Thủ Thiêm tunnel. Those anchors prove that the old
 156-plan workload was only a smoke test; they do not supply a current OD matrix
 for this exact map rectangle.
 
-For the committed seed, 38,518 simulated plans contain 69,837 vehicle legs:
-34,506 motorcycles and 4,012 cars, with zero structural generation failures.
+For the committed seed, 38,518 simulated plans contain 69,837 vehicle legs, and
+zero plans fail structural generation. Each plan is one vehicle for its whole
+multi-leg day, so the mode split counts plans, not legs: 34,506 motorcycles and
+4,012 cars, or 89.6% motorcycles.
 This is roughly a 1:9 agent sample of the documented 0.4–0.7 million
 vehicle-leg/day historical proxy for the 3.05 km² study window. Counts are not
 automatically expanded in statistics, and the exact cordon allocation, dwell
