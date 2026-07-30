@@ -40,3 +40,6 @@ PRESENTATION.html
 # repository and therefore out of the submission package.
 COMMIT_REPORT.md
 COMMIT_HISTORY.csv
+
+# Co-author worksheet, filled in locally before rewriting history.
+COAUTHOR_WORKSHEET.md
