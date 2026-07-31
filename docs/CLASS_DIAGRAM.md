@@ -80,7 +80,7 @@ classDiagram
         +chooseTargetLane(request) int
     }
     class MobilLaneChangeModel
-    class MotorcycleLaneChangeModel
+    class FilteringLaneChangeModel
     class CarFollowingModel {
         <<interface>>
         +nextSpeedMps(context) double
@@ -89,8 +89,8 @@ classDiagram
     TrafficState --> RoadOccupancy
     RoadOccupancy "1" *-- "many" Lane
     LaneChangeModel <|.. MobilLaneChangeModel
-    LaneChangeModel <|.. MotorcycleLaneChangeModel
-    Motorcycle --> MotorcycleLaneChangeModel
+    LaneChangeModel <|.. FilteringLaneChangeModel
+    Motorcycle --> FilteringLaneChangeModel
     CarFollowingModel <|.. KraussCarFollowingModel
     Vehicle --> LaneChangeModel
     Vehicle --> CarFollowingModel

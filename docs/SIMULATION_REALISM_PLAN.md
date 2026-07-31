@@ -48,7 +48,7 @@ The backend owns these decisions. Frontend interpolation is presentation only.
   initialization pre-roll creates the first populated 06:05 frame without
   retaining artificial fast-forward history.
 
-The 38,518-plan / 69,837-leg output is an explicit microscopic sample against a
+The 39,434-plan / 71,267-leg output is an explicit microscopic sample against a
 documented historical 0.4–0.7 million-leg/day proxy envelope. It is therefore a
 deterministic educational scenario, not a calibrated traffic forecast or
 evidence of current District 1 traffic volume.

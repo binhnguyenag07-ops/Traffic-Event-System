@@ -91107,5 +91107,667 @@
         ]
       ]
     }
+  ],
+  "busStops": [
+    {
+      "id": "S3016612589",
+      "name": "Bảo tàng Tôn Đức Thắng",
+      "roadId": "W1461789905-0F",
+      "positionAlongRoad": 0.167853
+    },
+    {
+      "id": "S3124681592",
+      "name": "Bến Bạch Đằng",
+      "roadId": "W1391340873-1F",
+      "positionAlongRoad": 0.768593
+    },
+    {
+      "id": "S3166133532",
+      "name": "Nguyễn Thị Nghĩa",
+      "roadId": "W1289160316-0F",
+      "positionAlongRoad": 0.340632
+    },
+    {
+      "id": "S3166133536",
+      "name": "Chợ Bến Thành",
+      "roadId": "W1228345137-0F",
+      "positionAlongRoad": 0.60187
+    },
+    {
+      "id": "S3166179576",
+      "name": "Nhà hát Thành phố",
+      "roadId": "W863689512-1F",
+      "positionAlongRoad": 0.427098
+    },
+    {
+      "id": "S3166179577",
+      "name": "Bệnh viện Nhi đồng 2",
+      "roadId": "W329878178-0F",
+      "positionAlongRoad": 0.61812
+    },
+    {
+      "id": "S3168095079",
+      "name": "Lý Tự Trọng",
+      "roadId": "W329878186-0F",
+      "positionAlongRoad": 0.26031
+    },
+    {
+      "id": "S3168095080",
+      "name": "Lê Duẩn",
+      "roadId": "W747231131-0F",
+      "positionAlongRoad": 0.558755
+    },
+    {
+      "id": "S3168095081",
+      "name": "Nguyễn Thị Minh Khai",
+      "roadId": "W678315476-0F",
+      "positionAlongRoad": 0.144632
+    },
+    {
+      "id": "S3168095082",
+      "name": "Đại học Kiến trúc",
+      "roadId": "W326849846-1F",
+      "positionAlongRoad": 0.152038
+    },
+    {
+      "id": "S3168120094",
+      "name": "Co.opmart Nguyễn Đình Chiểu",
+      "roadId": "W608262688-0F",
+      "positionAlongRoad": 0.208555
+    },
+    {
+      "id": "S3168120097",
+      "name": "Chùa Ông",
+      "roadId": "W1343964595-0F",
+      "positionAlongRoad": 0.562389
+    },
+    {
+      "id": "S3335337340",
+      "name": "Công trường Mê Linh",
+      "roadId": "W326848026-0F",
+      "positionAlongRoad": 0.96733
+    },
+    {
+      "id": "S3339195232",
+      "name": "Công trường Mê Linh",
+      "roadId": "W35114854-1F",
+      "positionAlongRoad": 0.715541
+    },
+    {
+      "id": "S4855836437",
+      "name": "Trạm Xe Bus Cityview Shuttle",
+      "roadId": "W666609822-0F",
+      "positionAlongRoad": 0.563719
+    },
+    {
+      "id": "S5192476721",
+      "name": "Sở Tài nguyên và Môi trường",
+      "roadId": "W1278461435-0F",
+      "positionAlongRoad": 0.354597
+    },
+    {
+      "id": "S5416310315",
+      "name": "Bến Bạch Đằng",
+      "roadId": "W323397719-0F",
+      "positionAlongRoad": 0.79092
+    },
+    {
+      "id": "S6047997501",
+      "name": "Bảo tàng Mỹ thuật",
+      "roadId": "W1228572418-0F",
+      "positionAlongRoad": 0.25863
+    },
+    {
+      "id": "S6047997502",
+      "name": "Tòa nhà Bitexco",
+      "roadId": "W1177488207-0F",
+      "positionAlongRoad": 0.196592
+    },
+    {
+      "id": "S6128564185",
+      "name": "Lê Thánh Tôn",
+      "roadId": "W35113743-0F",
+      "positionAlongRoad": 0.488777
+    },
+    {
+      "id": "S6315351594",
+      "name": "Thư viện Khoa học Tổng hợp",
+      "roadId": "W716065020-0F",
+      "positionAlongRoad": 0.714686
+    },
+    {
+      "id": "S6315672385",
+      "name": "Nguyễn Thị Nghĩa",
+      "roadId": "W1218693155-0F",
+      "positionAlongRoad": 0.292641
+    },
+    {
+      "id": "S6315672832",
+      "name": "Giao lộ Hàm Nghi - Tôn Thất Đạm",
+      "roadId": "W1271931188-0F",
+      "positionAlongRoad": 0.565697
+    },
+    {
+      "id": "S6789351748",
+      "name": "Khách sạn New World",
+      "roadId": "W245571623-0F",
+      "positionAlongRoad": 0.246211
+    },
+    {
+      "id": "S6795152088",
+      "name": "Khách sạn New World",
+      "roadId": "W719043756-0F",
+      "positionAlongRoad": 0.748464
+    },
+    {
+      "id": "S6956317386",
+      "name": "Trường Ernst Thälmann",
+      "roadId": "W682107400-0F",
+      "positionAlongRoad": 0.663703
+    },
+    {
+      "id": "S7520799016",
+      "name": "Hồ Tùng Mậu",
+      "roadId": "W621157034-0F",
+      "positionAlongRoad": 0.503469
+    },
+    {
+      "id": "S7520799029",
+      "name": "Cục Hải quan Thành phố",
+      "roadId": "W1027351471-0F",
+      "positionAlongRoad": 0.744778
+    },
+    {
+      "id": "S7520799030",
+      "name": "Cục Hải quan Thành phố",
+      "roadId": "W409294121-0F",
+      "positionAlongRoad": 0.397822
+    },
+    {
+      "id": "S7739047808",
+      "name": "Đền thờ Ấn Giáo",
+      "roadId": "W1232849513-0F",
+      "positionAlongRoad": 0.256624
+    },
+    {
+      "id": "S8995419786",
+      "name": "Sân Phan Đình Phùng",
+      "roadId": "W928038825-1F",
+      "positionAlongRoad": 0.286447
+    },
+    {
+      "id": "S8995419789",
+      "name": "Bảo tàng Chứng tích Chiến tranh",
+      "roadId": "W35114207-0F",
+      "positionAlongRoad": 0.284697
+    },
+    {
+      "id": "S8995419790",
+      "name": "Trần Quốc Thảo",
+      "roadId": "W35114207-1F",
+      "positionAlongRoad": 0.67469
+    },
+    {
+      "id": "S8995806230",
+      "name": "Nhà Văn hóa Lao động",
+      "roadId": "W193256696-0F",
+      "positionAlongRoad": 0.751481
+    },
+    {
+      "id": "S8995806231",
+      "name": "Pasteur",
+      "roadId": "W326849845-0F",
+      "positionAlongRoad": 0.443709
+    },
+    {
+      "id": "S9402954175",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.862949
+    },
+    {
+      "id": "S9402954176",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.822618
+    },
+    {
+      "id": "S9402954180",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.701834
+    },
+    {
+      "id": "S9402954181",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.795069
+    },
+    {
+      "id": "S9402954182",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.656812
+    },
+    {
+      "id": "S9402954183",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.819329
+    },
+    {
+      "id": "S9402954185",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.362036
+    },
+    {
+      "id": "S9402954187",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.159776
+    },
+    {
+      "id": "S9402954188",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W718499698-0F",
+      "positionAlongRoad": 0.822663
+    },
+    {
+      "id": "S9402954189",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W718499698-0F",
+      "positionAlongRoad": 0.784454
+    },
+    {
+      "id": "S9402954190",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W718499698-0F",
+      "positionAlongRoad": 0.574127
+    },
+    {
+      "id": "S9468454790",
+      "name": "Chợ Cũ",
+      "roadId": "W1271931190-0F",
+      "positionAlongRoad": 0.355821
+    },
+    {
+      "id": "S9468454791",
+      "name": "Trường Cao đẳng Kỹ thuật Cao Thắng",
+      "roadId": "W1018203946-0F",
+      "positionAlongRoad": 0.614085
+    },
+    {
+      "id": "S9470667890",
+      "name": "Nam Kỳ Khởi Nghĩa",
+      "roadId": "W703812263-0F",
+      "positionAlongRoad": 0.250633
+    },
+    {
+      "id": "S9470667891",
+      "name": "Chợ Cũ",
+      "roadId": "W703812263-0F",
+      "positionAlongRoad": 0.580611
+    },
+    {
+      "id": "S9585162923",
+      "name": "Nhà Xe Hoa Mai",
+      "roadId": "W1228572418-0R",
+      "positionAlongRoad": 0.839755
+    },
+    {
+      "id": "S9585162924",
+      "name": "Nhà Xe Toàn Thắng",
+      "roadId": "W1185268321-0R",
+      "positionAlongRoad": 0.892405
+    },
+    {
+      "id": "S10262053478",
+      "name": "Trường Trung học Phổ thông Lê Quý Đôn",
+      "roadId": "W749986989-0F",
+      "positionAlongRoad": 0.645668
+    },
+    {
+      "id": "S11625809673",
+      "name": "Nguyễn Đình Chiểu",
+      "roadId": "W658328100-0F",
+      "positionAlongRoad": 0.410672
+    },
+    {
+      "id": "S11625810073",
+      "name": "Co.opmart Nguyễn Đình Chiểu",
+      "roadId": "W1184372243-0F",
+      "positionAlongRoad": 0.670738
+    },
+    {
+      "id": "S11625833369",
+      "name": "Ngã sáu Phù Đổng",
+      "roadId": "W192680178-0F",
+      "positionAlongRoad": 0.577539
+    },
+    {
+      "id": "S11625833669",
+      "name": "Nguyễn Thị Nghĩa",
+      "roadId": "W192680173-0F",
+      "positionAlongRoad": 0.419862
+    },
+    {
+      "id": "S11628663569",
+      "name": "Nguyễn Trãi",
+      "roadId": "W35115101-0F",
+      "positionAlongRoad": 0.294284
+    },
+    {
+      "id": "S11628674869",
+      "name": "Trường Trung học Cơ sở Lê Quý Đôn",
+      "roadId": "W35112971-0F",
+      "positionAlongRoad": 0.406826
+    },
+    {
+      "id": "S11629642669",
+      "name": "Khách sạn Golden",
+      "roadId": "W1267913079-1F",
+      "positionAlongRoad": 0.2295
+    },
+    {
+      "id": "S11753277684",
+      "name": "Trường Ernst Thälmann",
+      "roadId": "W724060391-1F",
+      "positionAlongRoad": 0.552318
+    },
+    {
+      "id": "S11753277695",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.656421
+    },
+    {
+      "id": "S11753277698",
+      "name": "Bưu điện Thành phố",
+      "roadId": "W329878177-0F",
+      "positionAlongRoad": 0.295535
+    },
+    {
+      "id": "S11753290075",
+      "name": "Lê Duẩn",
+      "roadId": "W1265822569-0R",
+      "positionAlongRoad": 0.205765
+    },
+    {
+      "id": "S11753290076",
+      "name": "Bệnh viện Nhi đồng 2",
+      "roadId": "W329878178-0R",
+      "positionAlongRoad": 0.798326
+    },
+    {
+      "id": "S11753290077",
+      "name": "Nhà hát Thành phố",
+      "roadId": "W863689512-1R",
+      "positionAlongRoad": 0.661662
+    },
+    {
+      "id": "S11753290078",
+      "name": "Công trường Mê Linh",
+      "roadId": "W35114854-1R",
+      "positionAlongRoad": 0.26014
+    },
+    {
+      "id": "S11754611890",
+      "name": "Tòa án Nhân dân Thành phố",
+      "roadId": "W329878183-0F",
+      "positionAlongRoad": 0.785538
+    },
+    {
+      "id": "S11754611892",
+      "name": "Trường Cao đẳng Kỹ thuật Cao Thắng",
+      "roadId": "W329878184-4F",
+      "positionAlongRoad": 0.41295
+    },
+    {
+      "id": "S11757386653",
+      "name": "Trống Đồng",
+      "roadId": "W220862996-0F",
+      "positionAlongRoad": 0.164983
+    },
+    {
+      "id": "S11758401306",
+      "name": "Diamond Plaza",
+      "roadId": "W747226799-2F",
+      "positionAlongRoad": 0.341523
+    },
+    {
+      "id": "S11758401405",
+      "name": "Diamond Plaza",
+      "roadId": "W1182181717-2F",
+      "positionAlongRoad": 0.328702
+    },
+    {
+      "id": "S11769143878",
+      "name": "Tôn Thất Tùng",
+      "roadId": "W35115101-2F",
+      "positionAlongRoad": 0.765612
+    },
+    {
+      "id": "S11771724338",
+      "name": "Nhà Văn hóa Thanh niên",
+      "roadId": "W1162554504-0R",
+      "positionAlongRoad": 0.835732
+    },
+    {
+      "id": "S11771724349",
+      "name": "Nhà Văn hóa Thanh niên",
+      "roadId": "W1162554504-0F",
+      "positionAlongRoad": 0.125347
+    },
+    {
+      "id": "S11773317349",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W718499698-0F",
+      "positionAlongRoad": 0.73109
+    },
+    {
+      "id": "S11773317350",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W718499698-0F",
+      "positionAlongRoad": 0.62871
+    },
+    {
+      "id": "S11773317351",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W718499698-0F",
+      "positionAlongRoad": 0.512097
+    },
+    {
+      "id": "S11773317352",
+      "name": "Trạm trung chuyển Hàm Nghi",
+      "roadId": "W326848022-0F",
+      "positionAlongRoad": 0.599019
+    },
+    {
+      "id": "S11774744262",
+      "name": "Nhà thờ Đức Bà",
+      "roadId": "W35114262-1F",
+      "positionAlongRoad": 0.388393
+    },
+    {
+      "id": "S11774744263",
+      "name": "Pasteur",
+      "roadId": "W732571882-0F",
+      "positionAlongRoad": 0.53478
+    },
+    {
+      "id": "S11774744264",
+      "name": "Nam Kỳ Khởi Nghĩa",
+      "roadId": "W732571882-1F",
+      "positionAlongRoad": 0.588721
+    },
+    {
+      "id": "S11775484743",
+      "name": "Lê Thị Hồng Gấm",
+      "roadId": "W1228572417-0F",
+      "positionAlongRoad": 0.0
+    },
+    {
+      "id": "S11775484744",
+      "name": "TTTM Vincom",
+      "roadId": "W329878181-0F",
+      "positionAlongRoad": 0.524588
+    },
+    {
+      "id": "S11775484745",
+      "name": "Bệnh viện Nhi đồng 2",
+      "roadId": "W329878182-0F",
+      "positionAlongRoad": 0.246064
+    },
+    {
+      "id": "S11775484746",
+      "name": "Ba Son",
+      "roadId": "W986725618-0F",
+      "positionAlongRoad": 0.325292
+    },
+    {
+      "id": "S11775484747",
+      "name": "Ba Son",
+      "roadId": "W1040378572-2F",
+      "positionAlongRoad": 0.102819
+    },
+    {
+      "id": "S11775511385",
+      "name": "Chu Mạnh Trinh",
+      "roadId": "W828323704-0F",
+      "positionAlongRoad": 0.507245
+    },
+    {
+      "id": "S11775511386",
+      "name": "Sở Kế hoạch và Đầu tư",
+      "roadId": "W828323704-4F",
+      "positionAlongRoad": 0.278132
+    },
+    {
+      "id": "S11775511387",
+      "name": "Vincom Center Đồng Khởi - 72 Lê Thánh Tôn",
+      "roadId": "W1278461436-0F",
+      "positionAlongRoad": 0.573343
+    },
+    {
+      "id": "S11775511388",
+      "name": "Phố đi bộ Nguyễn Huệ",
+      "roadId": "W724391099-0F",
+      "positionAlongRoad": 0.288558
+    },
+    {
+      "id": "S11793308592",
+      "name": "Bảo tàng Tôn Đức Thắng",
+      "roadId": "W1046359810-0F",
+      "positionAlongRoad": 0.632869
+    },
+    {
+      "id": "S11868700614",
+      "name": "Sở Giao dịch Chứng khoán",
+      "roadId": "W326848019-0R",
+      "positionAlongRoad": 0.387924
+    },
+    {
+      "id": "S11898041253",
+      "name": "Bến Bạch Đằng",
+      "roadId": "W1046359810-0F",
+      "positionAlongRoad": 0.327237
+    },
+    {
+      "id": "S12422921828",
+      "name": "Stop 12422921828",
+      "roadId": "W245571623-0F",
+      "positionAlongRoad": 0.03238
+    },
+    {
+      "id": "S12435161747",
+      "name": "Trung tâm VinCom",
+      "roadId": "W1278461439-0F",
+      "positionAlongRoad": 0.617592
+    },
+    {
+      "id": "S12435161748",
+      "name": "Nhà hát Thành phố",
+      "roadId": "W1278461439-5F",
+      "positionAlongRoad": 0.634286
+    },
+    {
+      "id": "S12435161749",
+      "name": "Dinh Độc Lập",
+      "roadId": "W758852506-0F",
+      "positionAlongRoad": 0.914974
+    },
+    {
+      "id": "S12435545047",
+      "name": "Sân vận động Tao Đàn",
+      "roadId": "W35114852-0F",
+      "positionAlongRoad": 0.468578
+    },
+    {
+      "id": "S12435545048",
+      "name": "Thủ Khoa Huân",
+      "roadId": "W1205444142-0F",
+      "positionAlongRoad": 0.585151
+    },
+    {
+      "id": "S12435545049",
+      "name": "Chùa Bà Ấn",
+      "roadId": "W1228550742-0F",
+      "positionAlongRoad": 0.257673
+    },
+    {
+      "id": "S12451337729",
+      "name": "Nhà Văn hóa Thanh niên",
+      "roadId": "W803279639-0F",
+      "positionAlongRoad": 0.692022
+    },
+    {
+      "id": "S12451337731",
+      "name": "Nhà Văn hóa Thanh niên",
+      "roadId": "W803279639-0R",
+      "positionAlongRoad": 0.307169
+    },
+    {
+      "id": "S12679325321",
+      "name": "Ga Bến Thành",
+      "roadId": "W1041892671-0F",
+      "positionAlongRoad": 0.444836
+    },
+    {
+      "id": "S12679325326",
+      "name": "Công viên Tao Đàn",
+      "roadId": "W1162414403-0F",
+      "positionAlongRoad": 0.358132
+    },
+    {
+      "id": "S12684839321",
+      "name": "Ga Bến Thành",
+      "roadId": "W1041892671-0R",
+      "positionAlongRoad": 0.567659
+    },
+    {
+      "id": "S12871242815",
+      "name": "Chùa Trường Thạnh",
+      "roadId": "W1278204168-0R",
+      "positionAlongRoad": 1.0
+    },
+    {
+      "id": "S13619847101",
+      "name": "Điểm đầu cuối Nguyễn Siêu",
+      "roadId": "W1485632374-0F",
+      "positionAlongRoad": 0.959162
+    },
+    {
+      "id": "S13619847102",
+      "name": "Ngô Văn Năm",
+      "roadId": "W1151133823-0F",
+      "positionAlongRoad": 0.501763
+    },
+    {
+      "id": "S13653915921",
+      "name": "Chung cư Nguyễn Thái Bình",
+      "roadId": "W1185268321-0R",
+      "positionAlongRoad": 0.439591
+    }
   ]
 }

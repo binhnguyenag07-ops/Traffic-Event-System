@@ -21,7 +21,7 @@ import team.traffic.domain.signal.TrafficSignal;
 import team.traffic.domain.scene.LaneGeometryBuilder;
 import team.traffic.domain.scene.StopLine;
 import team.traffic.domain.vehicle.Bus;
-import team.traffic.domain.vehicle.BusStop;
+import team.traffic.domain.network.BusStop;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.domain.vehicle.pose.PolylineGeometry;
@@ -91,7 +91,9 @@ class StopLineIntegrationTest {
         RoadNetwork network = twoRoadNetwork();
         Bus bus = new Bus("bus", "A", "B", 40);
         bus.setCurrentRoute(route());
-        bus.setStops(List.of(new BusStop("J", 12.0)));
+        // Kerb-side stop near the far end of road "IN", where the junction-based
+        // stop used to sit, so this still exercises dwelling beside moving traffic.
+        bus.setStops(List.of(new BusStop("S1", "Stop", "IN", 0.98, 12.0)));
         Car car = new Car("car", "A", "B");
         car.setCurrentRoute(route());
         List<Vehicle> vehicles = new ArrayList<>();
@@ -107,9 +109,12 @@ class StopLineIntegrationTest {
         boolean carPassedDwellingBus = false;
         for (int second = 4; second < 60; second++) {
             engine.step(second, second, network, vehicles, List.of(), 1.0);
+            // Keyed off the stop rather than a fixed progress value: the bus
+            // halts a couple of metres short of the kerb, which on this 50 m
+            // road is a whole 0.04 of progress.
             boolean busDwelling = "IN".equals(bus.getOccupiedRoadId())
-                    && bus.getRoadProgress() > 0.98
-                    && !bus.getServedStopJunctionIds().contains("J")
+                    && bus.getRoadProgress() > 0.9
+                    && !bus.getServedStopIds().contains("S1")
                     && bus.getInstantaneousSpeedMps() < 0.5;
             if (busDwelling) {
                 observedPhysicalDwell = true;
@@ -121,7 +126,7 @@ class StopLineIntegrationTest {
 
         assertThat(observedPhysicalDwell).isTrue();
         assertThat(carPassedDwellingBus).isTrue();
-        assertThat(bus.getServedStopJunctionIds()).contains("J");
+        assertThat(bus.getServedStopIds()).contains("S1");
     }
 
     private static RoadNetwork twoRoadNetwork() {

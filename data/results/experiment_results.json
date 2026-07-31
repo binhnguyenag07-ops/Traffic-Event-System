@@ -1,5 +1,5 @@
 {
-  "generatedAt" : "2026-07-26T05:39:11.400106900Z",
+  "generatedAt" : "2026-07-30T16:18:32.410351200Z",
   "seed" : 42,
   "requestsPerScenario" : 30,
   "scenarios" : [ {
@@ -14,8 +14,8 @@
       "successes" : 26,
       "failures" : 4,
       "successRate" : 86.66666666666667,
-      "averageComputationTimeMillis" : 0.9398307692307692,
-      "averageVisitedNodes" : 144.53846153846155,
+      "averageComputationTimeMillis" : 1.933026923076923,
+      "averageVisitedNodes" : 270.7307692307692,
       "averageRouteCost" : 13.23076923076923,
       "averagePathOptimality" : 100.0
     }, {
@@ -25,8 +25,8 @@
       "successes" : 26,
       "failures" : 4,
       "successRate" : 86.66666666666667,
-      "averageComputationTimeMillis" : 0.8201,
-      "averageVisitedNodes" : 154.80769230769232,
+      "averageComputationTimeMillis" : 0.8702846153846154,
+      "averageVisitedNodes" : 238.80769230769232,
       "averageRouteCost" : 0.02395334615384615,
       "averagePathOptimality" : 100.0
     }, {
@@ -36,8 +36,8 @@
       "successes" : 26,
       "failures" : 4,
       "successRate" : 86.66666666666667,
-      "averageComputationTimeMillis" : 0.8663038461538461,
-      "averageVisitedNodes" : 58.92307692307692,
+      "averageComputationTimeMillis" : 0.4830846153846154,
+      "averageVisitedNodes" : 80.46153846153847,
       "averageRouteCost" : 0.02395334615384615,
       "averagePathOptimality" : 100.0
     } ]
@@ -53,8 +53,8 @@
       "successes" : 23,
       "failures" : 7,
       "successRate" : 76.66666666666667,
-      "averageComputationTimeMillis" : 0.31298695652173913,
-      "averageVisitedNodes" : 150.34782608695653,
+      "averageComputationTimeMillis" : 0.5794608695652174,
+      "averageVisitedNodes" : 288.8695652173913,
       "averageRouteCost" : 13.26086956521739,
       "averagePathOptimality" : 100.0
     }, {
@@ -64,9 +64,9 @@
       "successes" : 23,
       "failures" : 7,
       "successRate" : 76.66666666666667,
-      "averageComputationTimeMillis" : 0.49653043478260867,
-      "averageVisitedNodes" : 190.30434782608697,
-      "averageRouteCost" : 0.02515039855072464,
+      "averageComputationTimeMillis" : 0.6700913043478262,
+      "averageVisitedNodes" : 293.7391304347826,
+      "averageRouteCost" : 0.025150398550724637,
       "averagePathOptimality" : 100.0
     }, {
       "algorithm" : "A*",
@@ -75,9 +75,9 @@
       "successes" : 23,
       "failures" : 7,
       "successRate" : 76.66666666666667,
-      "averageComputationTimeMillis" : 0.3829130434782609,
-      "averageVisitedNodes" : 71.52173913043478,
-      "averageRouteCost" : 0.02515039855072464,
+      "averageComputationTimeMillis" : 0.3509086956521739,
+      "averageVisitedNodes" : 103.69565217391305,
+      "averageRouteCost" : 0.025150398550724637,
       "averagePathOptimality" : 100.0
     } ]
   }, {
@@ -89,34 +89,34 @@
       "algorithm" : "BFS",
       "objective" : "MINIMUM_HOPS",
       "requests" : 30,
-      "successes" : 16,
-      "failures" : 14,
-      "successRate" : 53.333333333333336,
-      "averageComputationTimeMillis" : 0.3031125,
-      "averageVisitedNodes" : 135.625,
-      "averageRouteCost" : 17.625,
+      "successes" : 21,
+      "failures" : 9,
+      "successRate" : 70.0,
+      "averageComputationTimeMillis" : 0.6337285714285714,
+      "averageVisitedNodes" : 281.85714285714283,
+      "averageRouteCost" : 16.714285714285715,
       "averagePathOptimality" : 100.0
     }, {
       "algorithm" : "Dijkstra",
       "objective" : "SHORTEST_TIME",
       "requests" : 30,
-      "successes" : 16,
-      "failures" : 14,
-      "successRate" : 53.333333333333336,
-      "averageComputationTimeMillis" : 0.25215,
-      "averageVisitedNodes" : 150.875,
-      "averageRouteCost" : 0.03496514930555555,
+      "successes" : 21,
+      "failures" : 9,
+      "successRate" : 70.0,
+      "averageComputationTimeMillis" : 0.37247619047619046,
+      "averageVisitedNodes" : 280.0,
+      "averageRouteCost" : 0.03303654497354497,
       "averagePathOptimality" : 100.0
     }, {
       "algorithm" : "A*",
       "objective" : "SHORTEST_TIME",
       "requests" : 30,
-      "successes" : 16,
-      "failures" : 14,
-      "successRate" : 53.333333333333336,
-      "averageComputationTimeMillis" : 0.566225,
-      "averageVisitedNodes" : 89.5,
-      "averageRouteCost" : 0.03496514930555555,
+      "successes" : 21,
+      "failures" : 9,
+      "successRate" : 70.0,
+      "averageComputationTimeMillis" : 0.27904761904761904,
+      "averageVisitedNodes" : 172.42857142857142,
+      "averageRouteCost" : 0.03303654497354497,
       "averagePathOptimality" : 100.0
     } ]
   }, {
@@ -131,8 +131,8 @@
       "successes" : 30,
       "failures" : 0,
       "successRate" : 100.0,
-      "averageComputationTimeMillis" : 0.39657,
-      "averageVisitedNodes" : 148.7,
+      "averageComputationTimeMillis" : 0.8123033333333333,
+      "averageVisitedNodes" : 566.2,
       "averageRouteCost" : 11.066666666666666,
       "averagePathOptimality" : 100.0
     }, {
@@ -142,8 +142,8 @@
       "successes" : 30,
       "failures" : 0,
       "successRate" : 100.0,
-      "averageComputationTimeMillis" : 0.3348933333333333,
-      "averageVisitedNodes" : 164.7,
+      "averageComputationTimeMillis" : 0.6334833333333333,
+      "averageVisitedNodes" : 566.2,
       "averageRouteCost" : 0.22133333333333333,
       "averagePathOptimality" : 100.0
     }, {
@@ -153,8 +153,8 @@
       "successes" : 30,
       "failures" : 0,
       "successRate" : 100.0,
-      "averageComputationTimeMillis" : 0.42872333333333335,
-      "averageVisitedNodes" : 45.0,
+      "averageComputationTimeMillis" : 0.12655,
+      "averageVisitedNodes" : 98.53333333333333,
       "averageRouteCost" : 0.22133333333333333,
       "averagePathOptimality" : 100.0
     } ]

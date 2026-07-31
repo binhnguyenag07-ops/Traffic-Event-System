@@ -43,7 +43,7 @@ class JsonScenarioLoaderTest {
         assertThat(loaded.network().getIntersectionCount()).isGreaterThan(100);
         assertThat(loaded.network().getBuildingCount()).isEqualTo(1162);
         assertThat(demand.seed()).isEqualTo(20260728);
-        assertThat(demand.sources()).hasSize(3);
+        assertThat(demand.sources()).hasSize(4);
         assertThat(demand.zones()).containsOnlyKeys(
                 "north-east-entries",
                 "south-west-entries",
@@ -59,18 +59,18 @@ class JsonScenarioLoaderTest {
         GravityDemandModel replay =
                 new GravityDemandModel(loaded.network(), demand);
 
-        assertThat(first.allPlans()).isEqualTo(replay.allPlans()).hasSize(38_518);
-        assertThat(first.scheduledTripCount()).isEqualTo(38_518);
+        assertThat(first.allPlans()).isEqualTo(replay.allPlans()).hasSize(39_434);
+        assertThat(first.scheduledTripCount()).isEqualTo(39_434);
         assertThat(first.generationFailedPlanIds()).isEmpty();
         assertThat(first.allPlans().stream()
                         .mapToInt(plan -> plan.legs().size())
                         .sum())
-                .isEqualTo(69_837);
+                .isEqualTo(71_267);
         assertThat(first.allPlans().stream()
                         .filter(plan -> Set.of("INBOUND_WORK", "THROUGH", "VISITOR")
                                 .contains(plan.purpose().value()))
                         .count())
-                .isEqualTo(35_999);
+                .isEqualTo(35_994);
         assertThat(first.allPlans())
                 .allSatisfy(plan -> assertThat(
                         TripPlanReachability.isReachable(loaded.network(), plan))
@@ -84,23 +84,25 @@ class JsonScenarioLoaderTest {
                         plan -> plan.purpose().value(),
                         Collectors.counting())))
                 .containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
-                        Map.entry("BUSINESS_INTERNAL", 25L),
-                        Map.entry("BUSINESS_OUTBOUND_PROXY", 67L),
-                        Map.entry("INBOUND_WORK", 18_000L),
-                        Map.entry("PRIVATE_INTERNAL", 489L),
-                        Map.entry("PRIVATE_OUTBOUND_PROXY", 781L),
-                        Map.entry("SCHOOL_INTERNAL_ESCORT", 117L),
-                        Map.entry("SCHOOL_OUTBOUND_ESCORT_PROXY", 161L),
-                        Map.entry("THROUGH", 7_199L),
-                        Map.entry("VISITOR", 10_800L),
-                        Map.entry("WORK_INTERNAL", 246L),
-                        Map.entry("WORK_OUTBOUND_PROXY", 633L)));
+                        Map.entry("BUSINESS_INTERNAL", 28L),
+                        Map.entry("BUSINESS_OUTBOUND_PROXY", 68L),
+                        Map.entry("INBOUND_WORK", 18_720L),
+                        Map.entry("PRIVATE_INTERNAL", 1_009L),
+                        Map.entry("PRIVATE_OUTBOUND_PROXY", 787L),
+                        Map.entry("SCHOOL_INTERNAL_ESCORT", 122L),
+                        Map.entry("SCHOOL_OUTBOUND_ESCORT_PROXY", 158L),
+                        Map.entry("THROUGH", 7_194L),
+                        Map.entry("VISITOR", 10_080L),
+                        Map.entry("WORK_INTERNAL", 224L),
+                        Map.entry("WORK_OUTBOUND_PROXY", 1_044L)));
         assertThat(first.allPlans().stream().collect(Collectors.groupingBy(
                         TripPlan::vehicleType,
                         Collectors.counting())))
                 .containsExactlyInAnyOrderEntriesOf(Map.of(
-                        VehicleType.MOTORCYCLE, 34_506L,
-                        VehicleType.CAR, 4_012L));
+                        VehicleType.MOTORCYCLE, 34_219L,
+                        VehicleType.CAR, 4_161L,
+                        VehicleType.BUS, 719L,
+                        VehicleType.EMERGENCY, 335L));
         assertThat(first.allPlans().get(0).departAtSeconds()).isLessThan(1);
         assertThat(first.allPlans())
                 .anySatisfy(plan -> assertThat(plan.departAtSeconds())
@@ -183,9 +185,9 @@ class JsonScenarioLoaderTest {
         assertThat(simulator.getElapsedSeconds()).isEqualTo(300);
         assertThat(simulator.getClock().formatTimeOfDay()).isEqualTo("06:05");
         assertThat(simulator.getDemandRunStatistics().scheduledTrips())
-                .isEqualTo(38_518);
+                .isEqualTo(39_434);
         assertThat(simulator.getDemandRunStatistics().spawnedTrips())
-                .isEqualTo(300);
+                .isEqualTo(278);
         assertThat(simulator.getVehicles()).isNotEmpty();
         assertThat(simulator.getVehicles().stream()
                         .filter(vehicle -> vehicle.getOccupiedRoadId() != null))

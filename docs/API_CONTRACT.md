@@ -234,7 +234,7 @@ response shape is:
 ```jsonc
 {
   "startTimeOfDaySeconds": 21600.0,
-  "totalPlans": 38518,
+  "totalPlans": 39434,
   "offset": 0,
   "limit": 250,
   "returnedPlans": 250,
@@ -247,7 +247,7 @@ response shape is:
     "VISITOR": 10800
   },
   "vehicleTypeCounts": {
-    "MOTORCYCLE": 34506,
+    "MOTORCYCLE": 34219,
     "CAR": 4012
   },
   "estimateBasis": "DIRECTED_FREE_FLOW_SHORTEST_TIME_PLUS_BUILDING_DRIVEWAYS_AND_DWELL",
@@ -341,7 +341,7 @@ network geometry.
   "timeOfDaySeconds": 21900.0,
   "timeOfDay": "06:05",
   "demand": {
-    "scheduledTrips": 38518,
+    "scheduledTrips": 39434,
     "spawnedTrips": 300,
     "failedTrips": 0,
     "pendingTrips": 38218,

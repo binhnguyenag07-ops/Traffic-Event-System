@@ -25,6 +25,7 @@ import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.network.Building;
+import team.traffic.domain.network.BusStop;
 import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.vehicle.VehicleType;
@@ -88,6 +89,7 @@ public class JsonMapLoader implements MapLoader {
                         : mapData.junctionMovements);
         addBuildings(roadNetwork, mapData.buildings == null ? Collections.emptyList() : mapData.buildings);
         addLandCovers(roadNetwork, mapData.landCovers == null ? Collections.emptyList() : mapData.landCovers);
+        addBusStops(roadNetwork, mapData.busStops == null ? Collections.emptyList() : mapData.busStops);
         return roadNetwork;
     }
 
@@ -201,6 +203,18 @@ public class JsonMapLoader implements MapLoader {
         }
     }
 
+    private void addBusStops(RoadNetwork roadNetwork, List<BusStopData> busStops)
+            throws InvalidMapException {
+        for (int index = 0; index < busStops.size(); index++) {
+            try {
+                BusStopData data = requireEntry(busStops.get(index), "busStop", index);
+                roadNetwork.addBusStop(data.toBusStop());
+            } catch (RuntimeException exception) {
+                throw invalidEntry("busStop", index, exception);
+            }
+        }
+    }
+
     private <T> T requireEntry(T entry, String type, int index) {
         if (entry == null) {
             throw new IllegalArgumentException(type + " entry must not be null at index " + index);
@@ -221,6 +235,28 @@ public class JsonMapLoader implements MapLoader {
         public List<JunctionMovementData> junctionMovements;
         public List<BuildingData> buildings;
         public List<LandCoverData> landCovers;
+        public List<BusStopData> busStops;
+    }
+
+    static class BusStopData {
+        public String id;
+        public String name;
+        public String roadId;
+        public Double positionAlongRoad;
+        public Double dwellSeconds;
+
+        BusStop toBusStop() {
+            if (positionAlongRoad == null) {
+                throw new IllegalArgumentException("Bus-stop positionAlongRoad is required.");
+            }
+            // Dwell is optional in the map: the generator knows where a stop is
+            // but not how long a bus waits there, which is a property of the
+            // service rather than of the kerb.
+            double dwell = dwellSeconds == null
+                    ? BusStop.DEFAULT_DWELL_SECONDS
+                    : dwellSeconds;
+            return new BusStop(id, name, roadId, positionAlongRoad, dwell);
+        }
     }
 
     static class TurnaroundPointData {

@@ -40,12 +40,6 @@ Built features, and why they are shaped the way they are.
 | [PHYSICAL_VIEW_PLAN.md](PHYSICAL_VIEW_PLAN.md) | Macro/physical two-renderer split, the interpolation contract, and what is built. |
 | [MOTORCYCLE_FILTERING_PLAN.md](MOTORCYCLE_FILTERING_PLAN.md) | Sub-lane occupancy and lateral overlap for genuine between-lane filtering. |
 
-## Change records
-
-| Document | Purpose |
-|---|---|
-| [BUILDING_ROUTING_CHANGE_SUMMARY.md](BUILDING_ROUTING_CHANGE_SUMMARY.md) | Why building-to-building routing crossed several members' packages. |
-
 ## Member scope
 
 One document per member, recording implemented scope and integration boundaries.

@@ -1,14 +1,34 @@
 package team.traffic.domain.vehicle;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import team.traffic.domain.network.BusStop;
+import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.routing.Route;
 import team.traffic.service.RoutingService;
 
 public class Bus extends Vehicle {
     private static final double DEFAULT_CRUISING_SPEED_KPH = 35.0;
+
+    /**
+     * How close to the kerb counts as arrived, in metres.
+     *
+     * <p>A bus never lands exactly on a stop: it moves in sub-steps of up to a
+     * second and overshoots or stops short by whatever it covered in the last
+     * one. Without a tolerance it would creep towards a target it can never hit
+     * and dwell would never begin.</p>
+     */
+    private static final double ARRIVAL_TOLERANCE_METRES = 2.0;
+
     private final int passengerCapacity;
-    private java.util.List<BusStop> stops = java.util.List.of();
-    private final java.util.Set<String> servedStopJunctionIds = new java.util.LinkedHashSet<>();
-    private String dwellingAtJunctionId;
+    private RoadNetwork network;
+    private Route stopsBuiltForRoute;
+    private List<BusStop> stops = List.of();
+    private final Set<String> servedStopIds = new LinkedHashSet<>();
+    private String dwellingAtStopId;
     private double dwellUntilSeconds;
 
     public Bus(String id, String currentIntersectionId, String destinationIntersectionId, int passengerCapacity) {
@@ -39,65 +59,123 @@ public class Bus extends Vehicle {
         return passengerCapacity;
     }
 
-    public java.util.List<BusStop> getStops() {
+    /** Stops this bus will serve, in the order its route passes them. */
+    public List<BusStop> getStops() {
         return stops;
     }
 
-    public void setStops(java.util.List<BusStop> stops) {
-        this.stops = stops == null ? java.util.List.of() : java.util.List.copyOf(stops);
-        servedStopJunctionIds.clear();
-        dwellingAtJunctionId = null;
+    public void setStops(List<BusStop> stops) {
+        this.stops = stops == null ? List.of() : List.copyOf(stops);
+        // An explicitly supplied list belongs to whatever route is current, so
+        // the lazy refresh must not treat it as stale and wipe it on the next
+        // sub-step. It is replaced only when the route genuinely changes.
+        this.stopsBuiltForRoute = getCurrentRoute();
+        servedStopIds.clear();
+        dwellingAtStopId = null;
         dwellUntilSeconds = 0.0;
     }
 
-    /** Rebuilds the default stop list after creation or a dynamic reroute. */
-    public void configureDefaultStopsFromRoute() {
-        if (getCurrentRoute() == null || getCurrentRoute().getStepCount() < 2) {
-            setStops(java.util.List.of());
+    public Set<String> getServedStopIds() {
+        return Set.copyOf(servedStopIds);
+    }
+
+    /**
+     * Collects the kerb-side stops lying on this bus's current route.
+     *
+     * <p>Dwell comes from this bus's capacity rather than from the map: boarding
+     * a sixty-seat bus takes longer than boarding a minibus at the same kerb, so
+     * the wait belongs to the vehicle and not to the concrete.</p>
+     */
+    public void configureStopsFromNetwork(RoadNetwork roadNetwork) {
+        this.network = roadNetwork;
+        refreshStopsIfRouteChanged();
+    }
+
+    /**
+     * Rebuilds the stop list when the route it was derived from is no longer
+     * the current one.
+     *
+     * <p>Callers configure a bus at whatever moment suits them, and for a
+     * demand-spawned bus that moment is before the trip lifecycle has assigned
+     * it a route at all -- the stop list would be permanently empty and the bus
+     * would sail past every kerb. Rechecking here rather than trusting call
+     * order also covers a multi-leg plan, where each leg brings a new route and
+     * therefore a new set of stops.</p>
+     */
+    private void refreshStopsIfRouteChanged() {
+        Route route = getCurrentRoute();
+        if (route == stopsBuiltForRoute) return;
+        stopsBuiltForRoute = route;
+        if (network == null || route == null) {
+            setStops(List.of());
             return;
         }
-        java.util.LinkedHashSet<String> intermediateJunctions = new java.util.LinkedHashSet<>();
-        int lastStep = getCurrentRoute().getStepCount() - 1;
-        for (int index = 0; index < lastStep; index++) {
-            intermediateJunctions.add(getCurrentRoute().getSteps().get(index).getToIntersectionId());
+        List<BusStop> onRoute = new ArrayList<>();
+        for (var step : route.getSteps()) {
+            for (BusStop stop : network.getBusStopsOnRoad(step.getRoadId())) {
+                onRoute.add(new BusStop(
+                        stop.id(),
+                        stop.name(),
+                        stop.roadId(),
+                        stop.positionAlongRoad(),
+                        BusStop.dwellForPassengerCapacity(passengerCapacity)));
+            }
         }
-        setStops(intermediateJunctions.stream()
-                .map(junctionId -> BusStop.forPassengerCapacity(junctionId, passengerCapacity))
-                .toList());
+        setStops(onRoute);
     }
 
     @Override
     public void recomputeRoute(RoadNetwork roadNetwork, RoutingService routingService) {
         super.recomputeRoute(roadNetwork, routingService);
-        configureDefaultStopsFromRoute();
+        configureStopsFromNetwork(roadNetwork);
     }
 
-    public java.util.Set<String> getServedStopJunctionIds() {
-        return java.util.Set.copyOf(servedStopJunctionIds);
-    }
-
+    /**
+     * Distance to the next kerb this bus owes a stop to, or infinity.
+     *
+     * <p>Returning a distance rather than a boolean is what lets a stop sit
+     * anywhere along the road. The car-following model already knows how to
+     * brake smoothly to a point ahead, so a bus decelerates into its stop the
+     * same way it decelerates for a queue, and the traffic behind reacts to the
+     * bus itself rather than to a special case.</p>
+     */
     @Override
-    protected boolean shouldHoldAtRoadExit(
-            String junctionId, double distanceToExitMetres, double elapsedSeconds) {
-        BusStop stop = stops.stream()
-                .filter(candidate -> candidate.junctionId().equals(junctionId))
-                .filter(candidate -> !servedStopJunctionIds.contains(candidate.junctionId()))
-                .findFirst()
-                .orElse(null);
-        if (stop == null) return false;
-        // Announce the stop while approaching so the following model brakes at
-        // the line, but begin passenger dwell only once the bus is at the curb.
-        if (distanceToExitMetres > 1.0 && !junctionId.equals(dwellingAtJunctionId)) {
-            return true;
+    protected double holdDistanceAheadMetres(Road road, double progressAlongRoad, double elapsedSeconds) {
+        refreshStopsIfRouteChanged();
+        if (road == null || stops.isEmpty()) return Double.POSITIVE_INFINITY;
+
+        BusStop next = null;
+        for (BusStop stop : stops) {
+            if (!stop.roadId().equals(road.getId())) continue;
+            if (servedStopIds.contains(stop.id())) continue;
+            // Keep a stop selected while dwelling at it even though the bus may
+            // have crept a few centimetres past its nominal position.
+            if (stop.id().equals(dwellingAtStopId)) {
+                next = stop;
+                break;
+            }
+            if (stop.positionAlongRoad() >= progressAlongRoad) {
+                next = stop;
+                break;
+            }
         }
-        if (!junctionId.equals(dwellingAtJunctionId)) {
-            dwellingAtJunctionId = junctionId;
-            dwellUntilSeconds = elapsedSeconds + stop.dwellSeconds();
+        if (next == null) return Double.POSITIVE_INFINITY;
+
+        double distanceMetres =
+                (next.positionAlongRoad() - progressAlongRoad) * road.getDistance() * 1_000.0;
+
+        if (next.id().equals(dwellingAtStopId)) {
+            if (elapsedSeconds < dwellUntilSeconds) return 0.0;
+            servedStopIds.add(next.id());
+            dwellingAtStopId = null;
+            dwellUntilSeconds = 0.0;
+            return Double.POSITIVE_INFINITY;
         }
-        if (elapsedSeconds < dwellUntilSeconds) return true;
-        servedStopJunctionIds.add(junctionId);
-        dwellingAtJunctionId = null;
-        dwellUntilSeconds = 0.0;
-        return false;
+        if (distanceMetres <= ARRIVAL_TOLERANCE_METRES) {
+            dwellingAtStopId = next.id();
+            dwellUntilSeconds = elapsedSeconds + next.dwellSeconds();
+            return 0.0;
+        }
+        return distanceMetres;
     }
 }

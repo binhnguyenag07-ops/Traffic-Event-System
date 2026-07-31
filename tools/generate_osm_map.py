@@ -63,6 +63,11 @@ LAND_COVER_TYPES = {
 
 # A building further than this from any junction has no plausible access.
 MAX_DRIVEWAY_METRES = 160.0
+# A bus stop further than this from any carriageway is not a stop on this map's
+# streets. Tighter than the driveway limit because a stop is at the kerb, not
+# down a drive: the slack here is footway offset and OSM node placement, not
+# distance travelled.
+MAX_STOP_TO_ROAD_METRES = 35.0
 
 
 def distance_km(first, second):
@@ -205,6 +210,120 @@ def fetch_buildings(allow_stale_cache=False):
     return overpass(f'''[out:json][timeout:180];
 way["building"]({south},{west},{north},{east});
 out body geom;''', "buildings", allow_stale_cache)
+
+
+def fetch_bus_stops(allow_stale_cache=False):
+    """Kerb-side transit stops. Nodes, not ways: a stop has a position, not a footprint."""
+    south, west, north, east = BOUNDS
+    return overpass(f'''[out:json][timeout:180];
+(node["highway"="bus_stop"]({south},{west},{north},{east});
+ node["amenity"="bus_station"]({south},{west},{north},{east}););
+out body;''', "bus_stops", allow_stale_cache)
+
+
+def _project_onto_segment(point, start, end):
+    """
+    Nearest point on one segment, as (metres away, fraction along, side sign).
+
+    Works in a local flat approximation. Over a segment of a few hundred metres
+    at this latitude the error is far below the tens of metres that decide
+    whether a stop belongs to a road at all.
+    """
+    lat_scale = 110_574.0
+    lon_scale = 111_320.0 * math.cos(math.radians(start[0]))
+    ax, ay = start[1] * lon_scale, start[0] * lat_scale
+    bx, by = end[1] * lon_scale, end[0] * lat_scale
+    px, py = point[1] * lon_scale, point[0] * lat_scale
+    dx, dy = bx - ax, by - ay
+    length_squared = dx * dx + dy * dy
+    if length_squared == 0:
+        return math.hypot(px - ax, py - ay), 0.0, 0.0
+    fraction = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length_squared))
+    nearest_x, nearest_y = ax + fraction * dx, ay + fraction * dy
+    # Sign of the cross product: negative means the point lies to the right of
+    # travel from start to end.
+    side = dx * (py - ay) - dy * (px - ax)
+    return math.hypot(px - nearest_x, py - nearest_y), fraction, side
+
+
+def _snap_to_road(point, road):
+    """Distance in metres, position along the road in [0, 1], and which side."""
+    geometry = road.get("geometry") or []
+    if len(geometry) < 2:
+        return None
+    lengths = [distance_km(geometry[i], geometry[i + 1]) * 1000.0
+               for i in range(len(geometry) - 1)]
+    total = sum(lengths)
+    if total <= 0:
+        return None
+    best = None
+    travelled = 0.0
+    for index, length in enumerate(lengths):
+        metres, fraction, side = _project_onto_segment(
+            point, geometry[index], geometry[index + 1])
+        if best is None or metres < best[0]:
+            best = (metres, (travelled + fraction * length) / total, side)
+        travelled += length
+    return best
+
+
+def build_bus_stops(stop_nodes, roads):
+    """
+    Attaches each transit node to the one directed road it serves.
+
+    Direction is chosen, not guessed at random. Vietnam drives on the right, so
+    a kerb-side stop serves the direction that passes it on the driver's right.
+    Where a street is split into two directed roads sharing a physicalRoadId,
+    that rule puts the stop on the correct side and leaves the opposite kerb --
+    a different stop, across the road -- to the other direction.
+    """
+    by_physical = {}
+    for road in roads:
+        by_physical.setdefault(road["physicalRoadId"], []).append(road)
+
+    stops = []
+    dropped = 0
+    for node in stop_nodes:
+        if node.get("lat") is None or node.get("lon") is None:
+            continue
+        point = (node["lat"], node["lon"])
+        south, west, north, east = BOUNDS
+        if not (south <= point[0] <= north and west <= point[1] <= east):
+            continue
+
+        best = None
+        for road in roads:
+            snapped = _snap_to_road(point, road)
+            if snapped is None:
+                continue
+            metres, position, side = snapped
+            if best is None or metres < best[0]:
+                best = (metres, position, side, road)
+        if best is None or best[0] > MAX_STOP_TO_ROAD_METRES:
+            dropped += 1
+            continue
+
+        metres, position, side, road = best
+        # Prefer the opposite direction when this one passes the stop on its
+        # left. Only possible where the street is actually two-way; a one-way
+        # street serves its stops whichever side they sit on.
+        if side > 0:
+            for sibling in by_physical.get(road["physicalRoadId"], []):
+                if sibling["id"] != road["id"]:
+                    snapped = _snap_to_road(point, sibling)
+                    if snapped is not None:
+                        metres, position, _ = snapped
+                        road = sibling
+                    break
+
+        tags = node.get("tags", {})
+        stops.append({
+            "id": f"S{node['id']}",
+            "name": tags.get("name") or f"Stop {node['id']}",
+            "roadId": road["id"],
+            "positionAlongRoad": round(min(1.0, max(0.0, position)), 6),
+        })
+    return stops, dropped
 
 
 def parse_speed(tags, road_class):
@@ -404,7 +523,7 @@ def build_buildings(building_ways, intersections, center_lat, center_lon):
     return buildings, dropped
 
 
-def build_map(ways, building_ways, land_cover_ways):
+def build_map(ways, building_ways, land_cover_ways, stop_nodes=()):
     segments, node_positions, node_streets = split_ways(ways)
     segments = largest_component(segments)
     used_nodes = {segment[key] for segment in segments for key in ("start", "end")}
@@ -489,8 +608,12 @@ def build_map(ways, building_ways, land_cover_ways):
     by_type = Counter(building["type"] for building in buildings)
     print(f"  building mix : {dict(by_type.most_common())}")
     print(f"  land cover   : {len(land_covers)} polygons {dict(cover_counts.most_common(6))}")
+    bus_stops, stops_dropped = build_bus_stops(stop_nodes, roads)
+    print(f"  bus stops    : {len(bus_stops)} attached, {stops_dropped} dropped with no road "
+          f"within {MAX_STOP_TO_ROAD_METRES:.0f} m")
     return {"intersections": intersections, "roads": roads,
-            "buildings": buildings, "landCovers": land_covers}
+            "buildings": buildings, "landCovers": land_covers,
+            "busStops": bus_stops}
 
 
 def main():
@@ -505,10 +628,12 @@ def main():
     network = build_map(
         fetch_ways(args.offline_cache),
         fetch_buildings(args.offline_cache),
-        fetch_land_cover(args.offline_cache))
+        fetch_land_cover(args.offline_cache),
+        fetch_bus_stops(args.offline_cache))
     print(f"Generated {len(network['intersections'])} intersections, "
           f"{len(network['roads'])} directed roads, {len(network['buildings'])} buildings, "
-          f"{len(network['landCovers'])} land-cover polygons")
+          f"{len(network['landCovers'])} land-cover polygons, "
+          f"{len(network['busStops'])} bus stops")
     if not args.dry_run:
         Path(args.output).write_text(json.dumps(network, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
