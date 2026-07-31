@@ -46,7 +46,7 @@ One document per member, recording implemented scope and integration boundaries.
 
 | Member | Document |
 |---|---|
-| Binh | [planning/Binh-network-persistence.md](planning/Binh-network-persistence.md) |
-| Nguyie | [planning/nguynie-routing-algorithms.md](planning/nguynie-routing-algorithms.md) |
-| Hyo | [planning/Hyo-vehicle-traffic_event.md](planning/Hyo-vehicle-traffic_event.md) |
-| An | [planning/An-simulation-API-services-frontend.md](planning/An-simulation-API-services-frontend.md) |
+| Student A | [planning/student-a-network-persistence.md](planning/student-a-network-persistence.md) |
+| Student B | [planning/student-b-routing-algorithms.md](planning/student-b-routing-algorithms.md) |
+| Student C | [planning/student-c-vehicle-traffic-event.md](planning/student-c-vehicle-traffic-event.md) |
+| Student D | [planning/student-d-simulation-api-frontend.md](planning/student-d-simulation-api-frontend.md) |

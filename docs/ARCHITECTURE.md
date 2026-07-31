@@ -282,10 +282,10 @@ The implemented controls target the actual bottlenecks:
 
 | Member | Primary area |
 |---|---|
-| Binh | Road network and persistence |
-| Nguyie | Routing algorithms |
-| Hyo | Vehicles and traffic events |
-| An | Simulation, API, services, and frontend |
+| Student A | Road network and persistence |
+| Student B | Routing algorithms |
+| Student C | Vehicles and traffic events |
+| Student D | Simulation, API, services, and frontend |
 
 See [CLASS_DIAGRAM.md](CLASS_DIAGRAM.md) for the implemented class
 relationships and [API_CONTRACT.md](API_CONTRACT.md) for the external HTTP

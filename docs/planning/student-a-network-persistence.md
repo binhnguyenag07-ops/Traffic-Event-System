@@ -1,7 +1,7 @@
-# Binh: Road Network and Persistence
+# Student A: Road Network and Persistence
 
-This document contains Binh's part of the first documentation commit.
-Binh is responsible for the road network model, road condition model, map loading, map saving, and synthetic map generation.
+This document contains Student A's part of the first documentation commit.
+Student A is responsible for the road network model, road condition model, map loading, map saving, and synthetic map generation.
 
 ## Folder Structure
 
@@ -76,7 +76,7 @@ closed, or full road has an infinite routing cost.
 
 ### Lane-layout compatibility extension
 
-The lane upgrade is additive to Binh's density and routing contract. `Road`
+The lane upgrade is additive to Student A's density and routing contract. `Road`
 retains its original identity, endpoints, capacity, condition, and travel-cost
 behaviour, while restoring `name`, `physicalRoadId`, `laneCount`, and geometry
 that had been lost during an earlier merge. `laneWidthMetres` is the only new
@@ -172,7 +172,7 @@ capacity usage changes road availability and congestion-aware cost.
 
 ## Week 6 Visualization Data Handoff
 
-Binh's visualization boundary remains the network, persistence, and data
+Student A's visualization boundary remains the network, persistence, and data
 layers. The frontend and API layers consume these contracts but are owned by
 the integration/frontend member.
 

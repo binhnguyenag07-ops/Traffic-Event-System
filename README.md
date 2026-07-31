@@ -17,8 +17,7 @@
   <a href="#requirements-coverage">Requirements</a> ·
   <a href="#run-the-application">Quick Start</a> ·
   <a href="#architecture-and-object-oriented-design">Architecture</a> ·
-  <a href="#project-documentation">Documentation</a> ·
-  <a href="#contributors">Contributors</a>
+  <a href="#project-documentation">Documentation</a>
 </p>
 
 </div>
@@ -83,10 +82,10 @@ Install these tools before running the project:
 
 ### Clone and launch
 
-Clone the private repository and enter its root directory:
+Clone the repository and enter its root directory:
 
 ```bash
-git clone https://github.com/binhnguyenag07-ops/Traffic-Event-System.git
+git clone <repository-url>
 cd Traffic-Event-System
 ```
 
@@ -264,17 +263,6 @@ The repository includes each documentation deliverable from the project specific
 - [District 1 scenario and data sources](docs/DISTRICT1_SCENARIO.md)
 - [Experiment summary](docs/EXPERIMENT_RESULTS.md)
 - [Live demonstration guide](docs/DEMO_GUIDE.md)
-
-## Contributors
-
-The four team members are listed by GitHub account. Replace the identity placeholders before submission:
-
-| GitHub | Full name | Student ID |
-|---|---|---|
-| [@Vo-Minh-Tri1412](https://github.com/Vo-Minh-Tri1412) | `[full_name]` | `[student_id]` |
-| [@binhnguyenag07-ops](https://github.com/binhnguyenag07-ops) | `[full_name]` | `[student_id]` |
-| [@Nguynie](https://github.com/Nguynie) | `[full_name]` | `[student_id]` |
-| [@anle6329](https://github.com/anle6329) | `[full_name]` | `[student_id]` |
 
 ## License
 
