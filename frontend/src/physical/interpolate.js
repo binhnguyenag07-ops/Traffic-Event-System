@@ -392,17 +392,22 @@ function lanePose(source, target, lane, sourceProgress, targetProgress, fraction
   }
   const point = positionAt(fraction)
   if (!point) return null
-  const travelDistance = Math.abs(to - from) * metrics.total
-    + Math.hypot(targetOffsetX - offsetX, targetOffsetY - offsetY)
+  const lanePoint = pointAtDistance(
+    metrics,
+    metrics.total * (from + (to - from) * fraction),
+  )
   return {
     ...target,
     x: point[0],
     y: point[1],
-    headingDegrees: motionBearing(
-      positionAt,
-      fraction,
+    // Lateral interpolation positions a lane-changing vehicle correctly, but
+    // it is not the direction of travel. Derive orientation only from the
+    // directed lane tangent so a stopped/slow vehicle can never turn broadside
+    // merely because two authoritative frames have different offsets.
+    headingDegrees: laneBearingAt(
+      lane,
+      lanePoint,
       authoritativeHeading(source, target, fraction),
-      TANGENT_SAMPLE_METRES / Math.max(travelDistance, EPSILON),
     ),
   }
 }

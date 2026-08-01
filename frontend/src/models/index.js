@@ -11,7 +11,6 @@ export class Intersection {
     this.name = data.name || this.id
     this.x = numberOr(data.x ?? data.longitude ?? data.location?.x, 0)
     this.y = numberOr(data.y ?? data.latitude ?? data.location?.y, 0)
-    this.locationType = data.locationType || data.type || 'NORMAL'
   }
 }
 

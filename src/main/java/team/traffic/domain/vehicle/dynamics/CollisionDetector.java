@@ -89,7 +89,8 @@ public final class CollisionDetector {
             if (candidate == follower || candidate.getId().equals(follower.getId())) continue;
             if (!followerExtent.overlaps(candidate.lateralExtent(), CONTACT_CLEARANCE_METRES)) continue;
             double position = candidate.getRoadProgress() * roadLengthMetres;
-            if (position < followerPosition) continue;
+            if (!LongitudinalOrder.isAhead(
+                    candidate, position, follower, followerPosition)) continue;
             if (position < nearestPosition
                     || position == nearestPosition
                             && candidate.getId().compareTo(nearest.getId()) < 0) {

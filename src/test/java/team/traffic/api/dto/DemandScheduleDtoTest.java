@@ -13,7 +13,7 @@ import team.traffic.domain.network.Building;
 import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -114,12 +114,8 @@ class DemandScheduleDtoTest {
 
     private static RoadNetwork network() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection(
-                "A", "Home Street", 0, 0, LocationType.NORMAL,
-                10.77002, 106.70002));
-        network.addIntersection(new Intersection(
-                "B", "Office Street", 1, 0, LocationType.NORMAL,
-                10.77102, 106.70102));
+        network.addIntersection(new Intersection("A", "Home Street", 0, 0, 10.77002, 106.70002));
+        network.addIntersection(new Intersection("B", "Office Street", 1, 0, 10.77102, 106.70102));
         network.addRoad(road("AB", "A", "B"));
         network.addRoad(road("BA", "B", "A"));
         network.addBuilding(new Building(

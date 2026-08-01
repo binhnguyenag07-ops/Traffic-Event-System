@@ -58,6 +58,64 @@ describe('interpolateVehicles', () => {
     expect(result).toHaveLength(0)
   })
 
+  // A straight lane running north, the shape a queue forms on.
+  const straightLane = {
+    lanes: [{ roadId: 'R', laneIndex: 0, centreline: [[0, 0], [0, 40]] }],
+  }
+
+  it('keeps a queueing vehicle pointing along its lane while it edges sideways', () => {
+    // Cover ordinary polls, delayed polls, and skipped snapshots. Orientation
+    // must be invariant to lateral distance; only lane progress can turn it.
+    for (const lateralDelta of [0.25, 0.5, 0.6, 1.0]) {
+      const held = {
+        id: 'Q', type: 'MOTORCYCLE', headingDegrees: 0,
+        x: lateralDelta, y: 20, roadId: 'R', roadProgress: 0.5, laneIndex: 0,
+      }
+      const edged = {
+        ...held,
+        x: 0,
+        y: 20.02,
+        roadProgress: 0.5005,
+      }
+
+      for (const fraction of [0.25, 0.5, 0.75]) {
+        const [drawn] = interpolateVehicles([held], [edged], fraction, straightLane)
+        expect(Math.abs(shortestTurn(drawn.headingDegrees, 0))).toBeLessThan(1)
+      }
+    }
+  })
+
+  it('does not rotate during a pure lateral settle even after a skipped frame', () => {
+    const held = {
+      id: 'S', type: 'CAR', headingDegrees: 0,
+      x: 1.2, y: 20, roadId: 'R', roadProgress: 0.5, laneIndex: 0,
+    }
+    const settled = { ...held, x: 0 }
+
+    for (const fraction of [0.1, 0.5, 0.9]) {
+      const [drawn] = interpolateVehicles([held], [settled], fraction, straightLane)
+      expect(Math.abs(shortestTurn(drawn.headingDegrees, 0))).toBeLessThan(1)
+    }
+  })
+
+  it('still takes its bearing from the lane once it is genuinely moving', () => {
+    // The sideways guard must not cost a travelling vehicle its lane
+    // following: over a frame of real travel the drawn heading still has to
+    // track the path.
+    const from = {
+      id: 'M', type: 'CAR', headingDegrees: 0,
+      x: 0, y: 4, roadId: 'R', roadProgress: 0.1, laneIndex: 0,
+    }
+    const to = {
+      id: 'M', type: 'CAR', headingDegrees: 0,
+      x: 0, y: 12, roadId: 'R', roadProgress: 0.3, laneIndex: 0,
+    }
+
+    const [drawn] = interpolateVehicles([from], [to], 0.5, straightLane)
+    expect(Math.abs(shortestTurn(drawn.headingDegrees, 0))).toBeLessThan(1)
+    expect(headingToTrajectoryError(from, to, 0.5, straightLane)).toBeLessThan(1)
+  })
+
   it('moves monotonically between consecutive authoritative driveway frames', () => {
     const source = {
       ...a0,

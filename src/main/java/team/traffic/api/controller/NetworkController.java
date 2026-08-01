@@ -5,7 +5,6 @@ import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadNetwork;
-import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.network.Building;
 import team.traffic.domain.network.JunctionMovement;
@@ -159,9 +158,8 @@ public class NetworkController {
     private void addIntersection(io.javalin.http.Context ctx) {
         runEdit(ctx, () -> {
             IntersectionCreationRequest request = ctx.bodyAsClass(IntersectionCreationRequest.class);
-            LocationType type = LocationType.valueOf(request.locationType.toUpperCase());
             Intersection intersection = requireEditor().addIntersection(
-                    request.id, request.name, type, request.latitude, request.longitude);
+                    request.id, request.name, request.latitude, request.longitude);
             ctx.status(201).json(toMap(intersection));
         });
     }
@@ -235,7 +233,6 @@ public class NetworkController {
         result.put("name", i.getName());
         result.put("x", i.getX());
         result.put("y", i.getY());
-        result.put("locationType", i.getLocationType().name());
         result.put("latitude", i.getLatitude());
         result.put("longitude", i.getLongitude());
         return result;
@@ -294,10 +291,10 @@ public class NetworkController {
         return result;
     }
 
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public static class IntersectionCreationRequest {
         public String id;
         public String name;
-        public String locationType = "NORMAL";
         public double latitude;
         public double longitude;
     }

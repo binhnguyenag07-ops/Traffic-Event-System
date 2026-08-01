@@ -108,8 +108,8 @@ class MapImportServiceTest {
         return """
                 {
                   "intersections": [
-                    {"id":"A","name":"A","x":0,"y":0,"locationType":"NORMAL","latitude":10.770,"longitude":106.700},
-                    {"id":"B","name":"B","x":1,"y":1,"locationType":"NORMAL","latitude":10.780,"longitude":106.710}
+                    {"id":"A","name":"A","x":0,"y":0,"latitude":10.770,"longitude":106.700},
+                    {"id":"B","name":"B","x":1,"y":1,"latitude":10.780,"longitude":106.710}
                   ],
                   "roads": [
                     {"id":"AB","startIntersectionId":"A","endIntersectionId":"B","distance":1,"speedLimit":40,"capacity":10,"currentVehicleCount":0,"congestionLevel":0,"vehicleDensity":0,"roadStatus":"OPEN","roadClass":"RESIDENTIAL","geometry":[[10.770,106.700],[10.780,106.710]]},

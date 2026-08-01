@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadStatus;
@@ -32,53 +31,52 @@ class DomainModelTest {
         @Test
         @DisplayName("valid construction")
         void validConstruction() {
-            Intersection i = new Intersection("A", "Main St", 10.5, 20.3, LocationType.COMMERCIAL);
+            Intersection i = new Intersection("A", "Main St", 10.5, 20.3);
             assertThat(i.getId()).isEqualTo("A");
             assertThat(i.getName()).isEqualTo("Main St");
             assertThat(i.getX()).isEqualTo(10.5);
             assertThat(i.getY()).isEqualTo(20.3);
-            assertThat(i.getLocationType()).isEqualTo(LocationType.COMMERCIAL);
         }
 
         @Test
         @DisplayName("null id throws")
         void nullId() {
-            assertThatThrownBy(() -> new Intersection(null, "name", 0, 0, LocationType.NORMAL))
+            assertThatThrownBy(() -> new Intersection(null, "name", 0, 0))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         @DisplayName("blank id throws")
         void blankId() {
-            assertThatThrownBy(() -> new Intersection("  ", "name", 0, 0, LocationType.NORMAL))
+            assertThatThrownBy(() -> new Intersection("  ", "name", 0, 0))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         @DisplayName("empty id throws")
         void emptyId() {
-            assertThatThrownBy(() -> new Intersection("", "name", 0, 0, LocationType.NORMAL))
+            assertThatThrownBy(() -> new Intersection("", "name", 0, 0))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         @DisplayName("null name throws")
         void nullName() {
-            assertThatThrownBy(() -> new Intersection("A", null, 0, 0, LocationType.NORMAL))
+            assertThatThrownBy(() -> new Intersection("A", null, 0, 0))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         @DisplayName("blank name throws")
         void blankName() {
-            assertThatThrownBy(() -> new Intersection("A", "  ", 0, 0, LocationType.NORMAL))
+            assertThatThrownBy(() -> new Intersection("A", "  ", 0, 0))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         @DisplayName("zero coordinates are valid")
         void zeroCoordinates() {
-            Intersection i = new Intersection("A", "A", 0, 0, LocationType.NORMAL);
+            Intersection i = new Intersection("A", "A", 0, 0);
             assertThat(i.getX()).isEqualTo(0.0);
             assertThat(i.getY()).isEqualTo(0.0);
         }
@@ -86,7 +84,7 @@ class DomainModelTest {
         @Test
         @DisplayName("negative coordinates are valid")
         void negativeCoordinates() {
-            Intersection i = new Intersection("A", "A", -10.5, -20.3, LocationType.NORMAL);
+            Intersection i = new Intersection("A", "A", -10.5, -20.3);
             assertThat(i.getX()).isEqualTo(-10.5);
             assertThat(i.getY()).isEqualTo(-20.3);
         }

@@ -11,7 +11,7 @@ import team.traffic.domain.network.Building;
 import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -105,7 +105,7 @@ class PlaceResolverTest {
     }
 
     private static Intersection intersection(String id, double x, double y) {
-        return new Intersection(id, id, x, y, LocationType.NORMAL);
+        return new Intersection(id, id, x, y);
     }
 
     private static void addRoad(RoadNetwork network, String id, String from, String to) {

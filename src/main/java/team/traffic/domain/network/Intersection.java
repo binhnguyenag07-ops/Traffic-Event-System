@@ -5,16 +5,15 @@ public class Intersection {
     private final String name;
     private final double x;
     private final double y;
-    private final LocationType locationType;
     private final Double latitude;
     private final Double longitude;
 
     // Creates one valid map point that can safely be used by routing and visualization.
-    public Intersection(String id, String name, double x, double y, LocationType locationType) {
-        this(id, name, x, y, locationType, null, null);
+    public Intersection(String id, String name, double x, double y) {
+        this(id, name, x, y, null, null);
     }
 
-    public Intersection(String id, String name, double x, double y, LocationType locationType,
+    public Intersection(String id, String name, double x, double y,
             Double latitude, Double longitude) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Intersection id is required");
@@ -24,9 +23,6 @@ public class Intersection {
         }
         if (!Double.isFinite(x) || !Double.isFinite(y)) {
             throw new IllegalArgumentException("Intersection coordinates must be finite");
-        }
-        if (locationType == null) {
-            throw new IllegalArgumentException("Location type is required");
         }
         if ((latitude == null) != (longitude == null)) {
             throw new IllegalArgumentException("Latitude and longitude must be provided together");
@@ -39,7 +35,6 @@ public class Intersection {
         this.name = name;
         this.x = x;
         this.y = y;
-        this.locationType = locationType;
         this.latitude = latitude;
         this.longitude = longitude;
     }
@@ -58,10 +53,6 @@ public class Intersection {
 
     public double getY() {
         return y;
-    }
-
-    public LocationType getLocationType() {
-        return locationType;
     }
 
     public Double getLatitude() { return latitude; }

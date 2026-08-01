@@ -1,7 +1,7 @@
 package team.traffic.routing;
 
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -21,10 +21,10 @@ final class TestGraph {
     static RoadNetwork buildSmallGraph() {
         RoadNetwork network = new RoadNetwork();
 
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 10, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 0, 5, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 10, 5, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 10, 0));
+        network.addIntersection(new Intersection("C", "C", 0, 5));
+        network.addIntersection(new Intersection("D", "D", 10, 5));
 
         network.addRoad(road("AB", "A", "B", 10, 50));
         network.addRoad(road("BA", "B", "A", 10, 50));
@@ -49,10 +49,10 @@ final class TestGraph {
     static RoadNetwork buildTimePreferenceGraph() {
         RoadNetwork network = new RoadNetwork();
 
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 10, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 0, 5, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 10, 5, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 10, 0));
+        network.addIntersection(new Intersection("C", "C", 0, 5));
+        network.addIntersection(new Intersection("D", "D", 10, 5));
 
         network.addRoad(road("AB", "A", "B", 10, 100));
         network.addRoad(road("BA", "B", "A", 10, 100));
@@ -86,10 +86,10 @@ final class TestGraph {
     static RoadNetwork buildDisconnectedGraph() {
         RoadNetwork network = new RoadNetwork();
 
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 20, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 25, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
+        network.addIntersection(new Intersection("C", "C", 20, 0));
+        network.addIntersection(new Intersection("D", "D", 25, 0));
 
         network.addRoad(road("AB", "A", "B", 5, 50));
         network.addRoad(road("CD", "C", "D", 5, 50));
@@ -100,15 +100,15 @@ final class TestGraph {
     // Builds a single-node graph with no roads.
     static RoadNetwork buildSingleNodeGraph() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
         return network;
     }
 
     // Builds a graph with a self-loop: A -> A.
     static RoadNetwork buildSelfLoopGraph() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
         network.addRoad(road("AA", "A", "A", 3, 50));
         network.addRoad(road("AB", "A", "B", 5, 50));
         return network;
@@ -118,9 +118,9 @@ final class TestGraph {
     static RoadNetwork buildCyclicGraph() {
         RoadNetwork network = new RoadNetwork();
 
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 10, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 5, 8, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 10, 0));
+        network.addIntersection(new Intersection("C", "C", 5, 8));
 
         network.addRoad(road("AB", "A", "B", 10, 50));
         network.addRoad(road("BC", "B", "C", 10, 50));
@@ -133,10 +133,10 @@ final class TestGraph {
     static RoadNetwork buildLinearGraph() {
         RoadNetwork network = new RoadNetwork();
 
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 10, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 15, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
+        network.addIntersection(new Intersection("C", "C", 10, 0));
+        network.addIntersection(new Intersection("D", "D", 15, 0));
 
         network.addRoad(road("AB", "A", "B", 5, 50));
         network.addRoad(road("BC", "B", "C", 5, 50));
@@ -154,9 +154,9 @@ final class TestGraph {
     static RoadNetwork buildTriangleGraph() {
         RoadNetwork network = new RoadNetwork();
 
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 10, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 5, 3, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 10, 0));
+        network.addIntersection(new Intersection("C", "C", 5, 3));
 
         network.addRoad(road("AB", "A", "B", 10, 50));
         network.addRoad(road("AC", "A", "C", 3, 50));
@@ -176,9 +176,9 @@ final class TestGraph {
     static RoadNetwork buildHopsVsDistanceGraph() {
         RoadNetwork network = new RoadNetwork();
 
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 10, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
+        network.addIntersection(new Intersection("D", "D", 10, 0));
 
         network.addRoad(road("AD", "A", "D", 100, 50));
         network.addRoad(road("AB", "A", "B", 5, 50));

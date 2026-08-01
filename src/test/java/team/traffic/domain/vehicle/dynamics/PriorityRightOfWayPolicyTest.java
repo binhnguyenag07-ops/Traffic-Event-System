@@ -59,11 +59,41 @@ class PriorityRightOfWayPolicyTest {
                 SIDE_STREET,
                 EXIT_NORTH,
                 TurnDirection.STRAIGHT,
-                PriorityRightOfWayPolicy.STARVATION_TICKS);
+                PriorityRightOfWayPolicy.STARVATION_SECONDS);
         JunctionApproach mainRoad = approach(
                 new Car("main-car", "C", "E"), MAIN_ROAD, EXIT_EAST, TurnDirection.STRAIGHT, 0);
 
         assertThat(order(mainRoad, starved)).containsExactly("starved", "main-car");
+    }
+
+    @Test
+    void amongStarvedTrafficTheOneStuckLongestGoesFirst() {
+        // A saturated junction leaves every approach starved, so the starvation
+        // flag alone cannot separate them and the order would otherwise settle
+        // on road class and vehicle id — the same arm winning every step.
+        JunctionApproach mainRoadStuckBriefly = approach(
+                new Car("main-car", "C", "E"), MAIN_ROAD, EXIT_EAST, TurnDirection.STRAIGHT,
+                PriorityRightOfWayPolicy.STARVATION_SECONDS);
+        JunctionApproach sideStreetStuckLonger = approach(
+                new Car("side-car", "C", "N"), SIDE_STREET, EXIT_NORTH, TurnDirection.STRAIGHT,
+                60.0);
+
+        assertThat(order(mainRoadStuckBriefly, sideStreetStuckLonger))
+                .containsExactly("side-car", "main-car");
+    }
+
+    @Test
+    void theMainRoadStillWinsWhileTrafficIsMoving() {
+        // Below the starvation threshold the hierarchy must still decide, so a
+        // fractional difference in wait cannot demote the priority road.
+        JunctionApproach mainRoad = approach(
+                new Car("main-car", "C", "E"), MAIN_ROAD, EXIT_EAST, TurnDirection.STRAIGHT,
+                0.5);
+        JunctionApproach sideStreet = approach(
+                new Car("side-car", "C", "N"), SIDE_STREET, EXIT_NORTH, TurnDirection.STRAIGHT,
+                1.5);
+
+        assertThat(order(sideStreet, mainRoad)).containsExactly("main-car", "side-car");
     }
 
     @Test
@@ -113,8 +143,10 @@ class PriorityRightOfWayPolicyTest {
     }
 
     private static JunctionApproach approach(
-            Vehicle vehicle, Road from, Road to, TurnDirection direction, long waitedTicks) {
-        return new JunctionApproach(vehicle, "C", from, to, direction, 0.0, waitedTicks);
+            Vehicle vehicle, Road from, Road to, TurnDirection direction,
+            double queueWaitSeconds) {
+        return new JunctionApproach(
+                vehicle, "C", from, to, direction, 0.0, queueWaitSeconds);
     }
 
     private static Road road(String id, RoadClass roadClass) {

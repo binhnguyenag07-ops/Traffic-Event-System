@@ -15,8 +15,26 @@ public record AdaptiveRouteRequest(
         DriverKnowledge knowledge,
         Set<String> temporarilyAvoidedRoadIds,
         UTurnPolicy uTurnPolicy,
+        boolean requireUTurnAsFirstMovement,
         RerouteReason reason,
         long sourceRouteVersion) {
+
+    /** Compatibility constructor for an ordinary reroute rather than a forced turnaround. */
+    public AdaptiveRouteRequest(
+            String vehicleId,
+            VehicleType vehicleType,
+            RouteAnchor anchor,
+            String destinationIntersectionId,
+            RoutePreference preference,
+            DriverKnowledge knowledge,
+            Set<String> temporarilyAvoidedRoadIds,
+            UTurnPolicy uTurnPolicy,
+            RerouteReason reason,
+            long sourceRouteVersion) {
+        this(vehicleId, vehicleType, anchor, destinationIntersectionId,
+                preference, knowledge, temporarilyAvoidedRoadIds, uTurnPolicy,
+                false, reason, sourceRouteVersion);
+    }
 
     public AdaptiveRouteRequest {
         if (vehicleId == null || vehicleId.isBlank()

@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.RoadNetwork;
 
 class DemandScenarioParserTest {
@@ -98,8 +98,8 @@ class DemandScenarioParserTest {
 
     private static RoadNetwork network() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         return network;
     }
 

@@ -146,7 +146,9 @@ public final class RoadOccupancy {
                 if (!follower.lateralExtent().overlaps(
                         candidate.lateralExtent(), lateralClearanceMetres)) continue;
                 double candidatePosition = positionMetresOf(candidate);
-                if (candidatePosition >= followerPosition && candidatePosition < nearestPosition) {
+                if (LongitudinalOrder.isAhead(
+                                candidate, candidatePosition, follower, followerPosition)
+                        && candidatePosition < nearestPosition) {
                     nearest = candidate;
                     nearestPosition = candidatePosition;
                 }
@@ -178,7 +180,9 @@ public final class RoadOccupancy {
                 if (candidate == follower || candidate.getId().equals(follower.getId())) continue;
                 if (!followerExtent.overlaps(candidate.lateralExtent(), lateralClearanceMetres)) continue;
                 double position = positionMetresOf(candidate);
-                if (position >= followerPosition && position < closestPosition) {
+                if (LongitudinalOrder.isAhead(
+                                candidate, position, follower, followerPosition)
+                        && position < closestPosition) {
                     closestPosition = position;
                     closestLength = candidate.getLength();
                     closestSpeed = candidate.getInstantaneousSpeedMps();

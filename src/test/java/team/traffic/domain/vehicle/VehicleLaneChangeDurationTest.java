@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import team.traffic.domain.event.AccidentEvent;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
@@ -166,8 +166,8 @@ class VehicleLaneChangeDurationTest {
 
     private RoadNetwork network(int laneCount) {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road("AB", "Broad road", "AB", "A", "B", ROAD_LENGTH_KM, 100, 200, 0,
                 laneCount, LANE_WIDTH_METRES, new RoadCondition(0, 0, RoadStatus.OPEN),
                 List.of(), RoadClass.PRIMARY));

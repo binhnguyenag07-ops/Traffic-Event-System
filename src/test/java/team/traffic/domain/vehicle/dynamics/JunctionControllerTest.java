@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Road;
@@ -12,6 +13,7 @@ import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.EmergencyVehicle;
+import team.traffic.domain.vehicle.Motorcycle;
 import team.traffic.domain.vehicle.Vehicle;
 
 class JunctionControllerTest {
@@ -50,6 +52,47 @@ class JunctionControllerTest {
         Set<String> cleared = controller.resolve(new StubEnvironment(false, Double.POSITIVE_INFINITY));
 
         assertThat(cleared).isEmpty();
+    }
+
+    @Test
+    void aSmallerNewArrivalCannotBargeIntoTheGapReservedForAnOlderVehicle() {
+        JunctionController controller = controller();
+        Car olderCar = new Car("older-car", "C", "N");
+        Motorcycle newerMotorcycle = new Motorcycle("newer-motorcycle", "C", "N");
+        controller.register(new JunctionApproach(
+                olderCar, "C", MAIN_ROAD, EXIT_NORTH, 0,
+                TurnDirection.STRAIGHT, 0.0, 30.0));
+        controller.register(new JunctionApproach(
+                newerMotorcycle, "C", MAIN_ROAD, EXIT_NORTH, 0,
+                TurnDirection.STRAIGHT, 0.0, 1.0));
+
+        Map<String, JunctionDecision> decisions = controller.resolveDecisions(
+                new VehicleSpecificSpaceEnvironment(Set.of("newer-motorcycle")));
+
+        assertThat(decisions.get("older-car").denialReason())
+                .isEqualTo(JunctionDenialReason.DOWNSTREAM_FULL);
+        assertThat(decisions.get("newer-motorcycle").denialReason())
+                .as("the small gap must grow for the older car instead of being consumed again")
+                .isEqualTo(JunctionDenialReason.DOWNSTREAM_FULL);
+    }
+
+    @Test
+    void aCapacityReservationDoesNotStopAnotherOutgoingLane() {
+        JunctionController controller = controller();
+        Car olderCar = new Car("older-car", "C", "N");
+        Motorcycle otherLaneMotorcycle = new Motorcycle("other-lane", "C", "N");
+        controller.register(new JunctionApproach(
+                olderCar, "C", MAIN_ROAD, EXIT_NORTH, 0,
+                TurnDirection.STRAIGHT, 0.0, 30.0));
+        controller.register(new JunctionApproach(
+                otherLaneMotorcycle, "C", MAIN_ROAD, EXIT_NORTH, 1,
+                TurnDirection.STRAIGHT, 0.0, 1.0));
+
+        Map<String, JunctionDecision> decisions = controller.resolveDecisions(
+                new VehicleSpecificSpaceEnvironment(Set.of("other-lane")));
+
+        assertThat(decisions.get("older-car").granted()).isFalse();
+        assertThat(decisions.get("other-lane").granted()).isTrue();
     }
 
     @Test
@@ -130,6 +173,20 @@ class JunctionControllerTest {
         @Override
         public double secondsUntilNextArrival(String junctionId, String excludedIncomingRoadId) {
             return gapSeconds;
+        }
+    }
+
+    private record VehicleSpecificSpaceEnvironment(Set<String> vehiclesWithSpace)
+            implements JunctionEnvironment {
+
+        @Override
+        public boolean hasPhysicalSpaceFor(JunctionApproach approach) {
+            return vehiclesWithSpace.contains(approach.vehicleId());
+        }
+
+        @Override
+        public double secondsUntilNextArrival(String junctionId, String excludedIncomingRoadId) {
+            return Double.POSITIVE_INFINITY;
         }
     }
 }

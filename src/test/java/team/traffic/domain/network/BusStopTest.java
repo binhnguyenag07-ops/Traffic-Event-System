@@ -13,8 +13,8 @@ class BusStopTest {
     @BeforeEach
     void setUp() {
         network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 0, 1, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 0, 1));
         network.addRoad(road("R1", "A", "B"));
     }
 

@@ -1,7 +1,7 @@
 {
   "id": "test-u-turn",
-  "name": "U-turn at a junction",
-  "description": "A two-way street with a junction in the middle. A vehicle sent back the way it came must swing round through an arc. If it flips 180 degrees on the spot in one frame, U-turns have no turning geometry.",
+  "name": "Emergency U-turn at a junction",
+  "description": "An ambulance enters the northbound approach before the road ahead closes. Its only legal detour starts with a U-turn at M, which must follow an arc instead of flipping 180 degrees in one frame.",
   "map": "../../maps/test/u-turn.json",
   "lab": {
     "physicalOnly": true,
@@ -9,16 +9,24 @@
       10.78,
       106.7
     ],
-    "radiusMetres": 220,
-    "expect": "A two-way street with a junction in the middle. A vehicle sent back the way it came must swing round through an arc. If it flips 180 degrees on the spot in one frame, U-turns have no turning geometry."
+    "radiusMetres": 420,
+    "expect": "The ambulance drives north from A, receives the R2-F closure, turns around through an arc at M, then returns to A and takes the eastern detour to D."
   },
   "vehicles": [
     {
       "id": "v-uturn",
-      "type": "CAR",
+      "type": "EMERGENCY",
       "startIntersectionId": "A",
-      "destinationIntersectionId": "A"
+      "destinationIntersectionId": "D"
     }
   ],
-  "events": []
+  "events": [
+    {
+      "id": "closure-ahead",
+      "type": "ROAD_CLOSURE",
+      "affectedRoadId": "R2-F",
+      "startTimeSeconds": 3,
+      "durationSeconds": 900
+    }
+  ]
 }

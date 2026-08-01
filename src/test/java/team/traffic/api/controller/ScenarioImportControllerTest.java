@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import team.traffic.domain.demand.DemandScenario;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.Vehicle;
 import team.traffic.service.SimulationService;
@@ -32,7 +32,7 @@ class ScenarioImportControllerTest {
     @BeforeEach
     void setUp() {
         RoadNetwork original = new RoadNetwork();
-        original.addIntersection(new Intersection("ORIGINAL", "Original", 0, 0, LocationType.NORMAL));
+        original.addIntersection(new Intersection("ORIGINAL", "Original", 0, 0));
         networkService = new RoadNetworkServiceImpl(original);
         simulationService = new CapturingSimulationService(original);
         MapImportService importService = new MapImportService((start, end) -> null);
@@ -102,8 +102,8 @@ class ScenarioImportControllerTest {
     private String validMap() {
         return """
                 {"intersections":[
-                  {"id":"A","name":"A","x":0,"y":0,"locationType":"NORMAL","latitude":10.770,"longitude":106.700},
-                  {"id":"B","name":"B","x":1,"y":1,"locationType":"NORMAL","latitude":10.780,"longitude":106.710}
+                  {"id":"A","name":"A","x":0,"y":0,"latitude":10.770,"longitude":106.700},
+                  {"id":"B","name":"B","x":1,"y":1,"latitude":10.780,"longitude":106.710}
                 ],"roads":[
                   {"id":"AB","startIntersectionId":"A","endIntersectionId":"B","distance":1,"speedLimit":40,"capacity":10,"currentVehicleCount":0,"congestionLevel":0,"vehicleDensity":0,"roadStatus":"OPEN","geometry":[[10.770,106.700],[10.780,106.710]]}
                 ]}

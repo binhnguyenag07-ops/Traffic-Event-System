@@ -1,0 +1,39 @@
+{
+  "id": "test-ambulance-queue-4way",
+  "name": "Four-way queue: ambulance must not deadlock it",
+  "description": "An ambulance enters the north approach from a feeder after an ordinary queue has already formed. It must wait behind its physical leader and obey red, without reserving the junction or freezing the green cross street; when north turns green it must clear the junction.",
+  "map": "../../maps/test/junction-4way.json",
+  "lab": {
+    "physicalOnly": true,
+    "centre": [
+      10.78,
+      106.7
+    ],
+    "radiusMetres": 220,
+    "expect": "The white emergency vehicle joins behind the northbound queue. Cross traffic continues on green; the ambulance later crosses south instead of permanently blocking the junction."
+  },
+  "vehicles": [
+    {"id":"north-lead-0","type":"CAR","startIntersectionId":"N","destinationIntersectionId":"S"},
+    {"id":"north-lead-1","type":"CAR","startIntersectionId":"N","destinationIntersectionId":"S"},
+    {"id":"north-lead-2","type":"CAR","startIntersectionId":"N","destinationIntersectionId":"S"},
+    {"id":"north-lead-3","type":"CAR","startIntersectionId":"N","destinationIntersectionId":"S"},
+    {"id":"north-lead-4","type":"CAR","startIntersectionId":"N","destinationIntersectionId":"S"},
+    {"id":"north-lead-5","type":"CAR","startIntersectionId":"N","destinationIntersectionId":"S"},
+    {"id":"north-lead-6","type":"CAR","startIntersectionId":"N","destinationIntersectionId":"S"},
+    {"id":"north-lead-7","type":"CAR","startIntersectionId":"N","destinationIntersectionId":"S"},
+    {"id":"ambulance","type":"EMERGENCY","startIntersectionId":"N2","destinationIntersectionId":"S"},
+    {"id":"east-0","type":"CAR","startIntersectionId":"E","destinationIntersectionId":"W"},
+    {"id":"east-1","type":"MOTORCYCLE","startIntersectionId":"E","destinationIntersectionId":"W"},
+    {"id":"east-2","type":"CAR","startIntersectionId":"E","destinationIntersectionId":"W"},
+    {"id":"east-3","type":"MOTORCYCLE","startIntersectionId":"E","destinationIntersectionId":"W"},
+    {"id":"west-0","type":"BUS","startIntersectionId":"W","destinationIntersectionId":"E"},
+    {"id":"west-1","type":"CAR","startIntersectionId":"W","destinationIntersectionId":"E"},
+    {"id":"west-2","type":"MOTORCYCLE","startIntersectionId":"W","destinationIntersectionId":"E"},
+    {"id":"west-3","type":"CAR","startIntersectionId":"W","destinationIntersectionId":"E"},
+    {"id":"south-0","type":"CAR","startIntersectionId":"S","destinationIntersectionId":"N2"},
+    {"id":"south-1","type":"MOTORCYCLE","startIntersectionId":"S","destinationIntersectionId":"N2"},
+    {"id":"south-2","type":"CAR","startIntersectionId":"S","destinationIntersectionId":"N2"},
+    {"id":"south-3","type":"MOTORCYCLE","startIntersectionId":"S","destinationIntersectionId":"N2"}
+  ],
+  "events": []
+}

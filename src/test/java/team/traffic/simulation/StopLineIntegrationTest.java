@@ -8,7 +8,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.GeoPoint;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
@@ -131,9 +131,9 @@ class StopLineIntegrationTest {
 
     private static RoadNetwork twoRoadNetwork() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("J", "J", 1, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 2, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("J", "J", 1, 0));
+        network.addIntersection(new Intersection("B", "B", 2, 0));
         network.addRoad(road("IN", "A", "J"));
         network.addRoad(road("OUT", "J", "B"));
         return network;
@@ -144,13 +144,9 @@ class StopLineIntegrationTest {
         GeoPoint a = new GeoPoint(10.000000, 106.000000);
         GeoPoint junction = new GeoPoint(10.000449, 106.000000);
         GeoPoint b = new GeoPoint(10.000898, 106.000000);
-        network.addIntersection(new Intersection(
-                "A", "A", 0, 0, LocationType.NORMAL, a.latitude(), a.longitude()));
-        network.addIntersection(new Intersection(
-                "J", "J", 0, 1, LocationType.NORMAL,
-                junction.latitude(), junction.longitude()));
-        network.addIntersection(new Intersection(
-                "B", "B", 0, 2, LocationType.NORMAL, b.latitude(), b.longitude()));
+        network.addIntersection(new Intersection("A", "A", 0, 0, a.latitude(), a.longitude()));
+        network.addIntersection(new Intersection("J", "J", 0, 1, junction.latitude(), junction.longitude()));
+        network.addIntersection(new Intersection("B", "B", 0, 2, b.latitude(), b.longitude()));
         network.addRoad(road("IN", "A", "J", List.of(a, junction)));
         network.addRoad(road("OUT", "J", "B", List.of(junction, b)));
         return network;

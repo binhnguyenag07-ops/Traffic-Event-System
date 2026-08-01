@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadClass;
@@ -103,7 +103,7 @@ class NetworkEditingServiceImplTest {
 
     @Test
     void exportsTheEditedNetworkAsJson() throws Exception {
-        editingService.addIntersection("E", "Edited junction", LocationType.NORMAL, 10.775, 106.702);
+        editingService.addIntersection("E", "Edited junction", 10.775, 106.702);
 
         assertThat(editingService.exportJson())
                 .contains("\"id\" : \"E\"")
@@ -124,7 +124,7 @@ class NetworkEditingServiceImplTest {
     }
 
     private Intersection intersection(String id, double latitude, double longitude) {
-        return new Intersection(id, id, 0, 0, LocationType.NORMAL, latitude, longitude);
+        return new Intersection(id, id, 0, 0, latitude, longitude);
     }
 
     private Road road(String id, String start, String end, double distance) {

@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -35,7 +35,7 @@ class JunctionTest {
     private static RoadNetwork network(String... ids) {
         RoadNetwork network = new RoadNetwork();
         for (int index = 0; index < ids.length; index++) {
-            network.addIntersection(new Intersection(ids[index], ids[index], index, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection(ids[index], ids[index], index, 0));
         }
         return network;
     }

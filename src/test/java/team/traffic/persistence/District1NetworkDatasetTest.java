@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadNetwork;
+import team.traffic.domain.vehicle.dynamics.TurnDirection;
 import team.traffic.service.impl.MapImportService;
 
 class District1NetworkDatasetTest {
@@ -79,6 +80,19 @@ class District1NetworkDatasetTest {
         assertThat(network.getRoad("W1267138238-0F").getLaneCount()).isEqualTo(3);
         assertThat(network.getRoad("W1267462154-0F").getLaneCount()).isEqualTo(3);
         assertThat(network.getRoad("W1267462155-0F").getLaneCount()).isEqualTo(3);
+    }
+
+    @Test
+    void leThanhTonContinuationAtTheObservedQueueIsStraight() throws Exception {
+        RoadNetwork network = loadBundledNetwork();
+
+        assertThat(network.getMovementGraph().find(
+                "N411926596",
+                "W828323704-1F",
+                "W828323704-2F"))
+                .get()
+                .extracting(movement -> movement.direction())
+                .isEqualTo(TurnDirection.STRAIGHT);
     }
 
     private RoadNetwork loadBundledNetwork() throws Exception {

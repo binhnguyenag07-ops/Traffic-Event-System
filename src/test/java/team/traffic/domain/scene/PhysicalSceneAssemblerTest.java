@@ -13,7 +13,7 @@ import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.LandCover;
 import team.traffic.domain.network.LandCoverType;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
@@ -241,6 +241,6 @@ class PhysicalSceneAssemblerTest {
     }
 
     private Intersection junction(String id, double lat, double lon) {
-        return new Intersection(id, id, lon, lat, LocationType.NORMAL, lat, lon);
+        return new Intersection(id, id, lon, lat, lat, lon);
     }
 }

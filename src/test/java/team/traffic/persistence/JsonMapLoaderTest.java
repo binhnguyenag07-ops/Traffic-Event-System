@@ -33,7 +33,7 @@ class JsonMapLoaderTest {
         Path file = writeJson("""
                 {
                   "intersections": [
-                    {"id":"I1","name":"First","y":0,"locationType":"NORMAL"}
+                    {"id":"I1","name":"First","y":0}
                   ],
                   "roads": []
                 }
@@ -50,7 +50,7 @@ class JsonMapLoaderTest {
         Path file = writeJson("""
                 {
                   "intersections": [
-                    {"id":"I1","name":"First","x":0,"y":0,"locationType":"NORMAL"}
+                    {"id":"I1","name":"First","x":0,"y":0}
                   ],
                   "roads": [
                     {
@@ -80,8 +80,8 @@ class JsonMapLoaderTest {
         Path file = writeJson("""
                 {
                   "intersections": [
-                    {"id":"I1","name":"First","x":0,"y":0,"locationType":"NORMAL"},
-                    {"id":"I2","name":"Second","x":1,"y":0,"locationType":"NORMAL"}
+                    {"id":"I1","name":"First","x":0,"y":0},
+                    {"id":"I2","name":"Second","x":1,"y":0}
                   ],
                   "roads": [
                     {
@@ -112,8 +112,8 @@ class JsonMapLoaderTest {
         Path file = writeJson("""
                 {
                   "intersections": [
-                    {"id":"I1","name":"First","x":0,"y":0,"locationType":"NORMAL"},
-                    {"id":"I2","name":"Second","x":1,"y":0,"locationType":"NORMAL"}
+                    {"id":"I1","name":"First","x":0,"y":0},
+                    {"id":"I2","name":"Second","x":1,"y":0}
                   ],
                   "roads": [
                     {
@@ -137,7 +137,7 @@ class JsonMapLoaderTest {
     }
 
     @Test
-    void rejectsUnknownEnumValueAsInvalidJsonMap() throws IOException {
+    void ignoresLegacyLocationTypeValuesDuringMigration() throws IOException {
         Path file = writeJson("""
                 {
                   "intersections": [
@@ -147,9 +147,25 @@ class JsonMapLoaderTest {
                 }
                 """);
 
-        assertThatThrownBy(() -> loader.load(file.toString()))
-                .isInstanceOf(InvalidMapException.class)
-                .hasMessageContaining("Invalid JSON map");
+        RoadNetwork network = loader.load(file.toString());
+
+        assertThat(network.getIntersection("I1").getName()).isEqualTo("First");
+    }
+
+    @Test
+    void loadsCurrentIntersectionSchemaWithoutLegacyLocationType() throws IOException {
+        Path file = writeJson("""
+                {
+                  "intersections": [
+                    {"id":"I1","name":"First","x":0,"y":0}
+                  ],
+                  "roads": []
+                }
+                """);
+
+        RoadNetwork network = loader.load(file.toString());
+
+        assertThat(network.getIntersection("I1").getName()).isEqualTo("First");
     }
 
     @Test
@@ -173,8 +189,8 @@ class JsonMapLoaderTest {
         Path file = writeJson("""
                 {
                   "intersections": [
-                    {"id":"A1","name":"West curb","x":0,"y":0,"locationType":"NORMAL"},
-                    {"id":"A2","name":"East curb","x":1,"y":0,"locationType":"NORMAL"}
+                    {"id":"A1","name":"West curb","x":0,"y":0},
+                    {"id":"A2","name":"East curb","x":1,"y":0}
                   ],
                   "roads": [],
                   "buildings": [{
@@ -201,7 +217,7 @@ class JsonMapLoaderTest {
         Path file = writeJson("""
                 {
                   "intersections": [
-                    {"id":"A1","name":"West curb","x":0,"y":0,"locationType":"NORMAL"}
+                    {"id":"A1","name":"West curb","x":0,"y":0}
                   ],
                   "roads": [],
                   "buildings": [{

@@ -3,12 +3,8 @@ package team.traffic.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import org.junit.jupiter.api.Test;
 
-import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
@@ -74,23 +70,5 @@ class SyntheticMapGeneratorTest {
         assertThat(road.getCondition().getCongestionLevel()).isZero();
         assertThat(road.getCondition().getVehicleDensity()).isZero();
         assertThat(road.getCondition().getRoadStatus()).isEqualTo(RoadStatus.OPEN);
-    }
-
-    @Test
-    void assignsLocationTypesDeterministically() {
-        RoadNetwork network = generator.generateGridMap(2, 3);
-        Set<LocationType> locationTypes = network.getIntersections().values().stream()
-                .map(intersection -> intersection.getLocationType())
-                .collect(Collectors.toSet());
-
-        assertThat(network.getIntersection("I_0_0").getLocationType())
-                .isEqualTo(LocationType.SCHOOL);
-        assertThat(network.getIntersection("I_1_2").getLocationType())
-                .isEqualTo(LocationType.RESIDENTIAL);
-        assertThat(locationTypes).contains(
-                LocationType.SCHOOL,
-                LocationType.HOSPITAL,
-                LocationType.BAR,
-                LocationType.RESIDENTIAL);
     }
 }

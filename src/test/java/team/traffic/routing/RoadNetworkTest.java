@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -29,7 +29,7 @@ class RoadNetworkTest {
         @DisplayName("add intersection successfully")
         void addIntersection() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
 
             assertThat(network.getIntersections()).hasSize(1);
             assertThat(network.getIntersection("A")).isNotNull();
@@ -47,10 +47,10 @@ class RoadNetworkTest {
         @DisplayName("duplicate intersection ID throws")
         void duplicateIntersectionIdThrows() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "Old", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "Old", 0, 0));
 
             assertThatThrownBy(() ->
-                    network.addIntersection(new Intersection("A", "New", 1, 1, LocationType.NORMAL)))
+                    network.addIntersection(new Intersection("A", "New", 1, 1)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Duplicate intersection id");
 
@@ -61,7 +61,7 @@ class RoadNetworkTest {
         @DisplayName("remove existing intersection")
         void removeIntersection() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
             network.removeIntersection("A");
 
             assertThat(network.getIntersections()).isEmpty();
@@ -72,7 +72,7 @@ class RoadNetworkTest {
         @DisplayName("remove non-existing intersection is a no-op")
         void removeNonExistingIntersection() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
             network.removeIntersection("Z");
 
             assertThat(network.getIntersections()).hasSize(1);
@@ -82,8 +82,8 @@ class RoadNetworkTest {
         @DisplayName("remove intersection cascades to connected roads")
         void removeIntersectionCascadesRoads() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
             network.addRoad(new Road("BA", "B", "A", 5, 50, 100, 0, null));
 
@@ -97,10 +97,10 @@ class RoadNetworkTest {
         @DisplayName("get unmodifiable intersections map")
         void unmodifiableIntersections() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
 
             Map<String, Intersection> intersections = network.getIntersections();
-            assertThatThrownBy(() -> intersections.put("X", new Intersection("X", "X", 0, 0, LocationType.NORMAL)))
+            assertThatThrownBy(() -> intersections.put("X", new Intersection("X", "X", 0, 0)))
                     .isInstanceOf(UnsupportedOperationException.class);
         }
     }
@@ -115,8 +115,8 @@ class RoadNetworkTest {
         @DisplayName("add road successfully")
         void addRoad() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
 
             assertThat(network.getRoads()).hasSize(1);
@@ -127,7 +127,7 @@ class RoadNetworkTest {
         @DisplayName("add null road throws")
         void addNullRoad() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
             assertThatThrownBy(() -> network.addRoad(null))
                     .isInstanceOf(IllegalArgumentException.class);
         }
@@ -136,7 +136,7 @@ class RoadNetworkTest {
         @DisplayName("add road with non-existing start intersection throws")
         void addRoadMissingStart() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
             assertThatThrownBy(() -> network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Start intersection does not exist");
@@ -146,7 +146,7 @@ class RoadNetworkTest {
         @DisplayName("add road with non-existing end intersection throws")
         void addRoadMissingEnd() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
             assertThatThrownBy(() -> network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("End intersection does not exist");
@@ -156,8 +156,8 @@ class RoadNetworkTest {
         @DisplayName("remove road by ID")
         void removeRoad() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
 
             network.removeRoad("AB");
@@ -168,8 +168,8 @@ class RoadNetworkTest {
         @DisplayName("remove non-existing road is a no-op")
         void removeNonExistingRoad() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
 
             network.removeRoad("ZZ");
@@ -180,8 +180,8 @@ class RoadNetworkTest {
         @DisplayName("duplicate road ID throws")
         void duplicateRoadIdThrows() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 1, 0));
 
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
 
@@ -197,7 +197,7 @@ class RoadNetworkTest {
         @DisplayName("self-loop road is allowed")
         void selfLoopRoad() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
             network.addRoad(new Road("AA", "A", "A", 3, 50, 100, 0, null));
 
             assertThat(network.getRoads()).hasSize(1);
@@ -209,8 +209,8 @@ class RoadNetworkTest {
         @DisplayName("get unmodifiable roads map")
         void unmodifiableRoads() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
 
             Map<String, Road> roads = network.getRoads();
@@ -229,9 +229,9 @@ class RoadNetworkTest {
         @DisplayName("find outgoing roads returns directed roads from intersection")
         void findOutgoingRoads() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("C", "C", 0, 5, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
+            network.addIntersection(new Intersection("C", "C", 0, 5));
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
             network.addRoad(new Road("AC", "A", "C", 5, 50, 100, 0, null));
             network.addRoad(new Road("BA", "B", "A", 5, 50, 100, 0, null));
@@ -245,7 +245,7 @@ class RoadNetworkTest {
         @DisplayName("find outgoing roads returns empty list for intersection with no roads")
         void findOutgoingRoadsEmpty() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
 
             List<Road> outgoing = network.findOutgoingRoads("A");
             assertThat(outgoing).isEmpty();
@@ -255,9 +255,9 @@ class RoadNetworkTest {
         @DisplayName("find incoming roads returns directed roads to intersection")
         void findIncomingRoads() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("C", "C", 0, 5, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
+            network.addIntersection(new Intersection("C", "C", 0, 5));
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
             network.addRoad(new Road("CB", "C", "B", 5, 50, 100, 0, null));
 
@@ -270,7 +270,7 @@ class RoadNetworkTest {
         @DisplayName("find incoming roads returns empty list for intersection with no roads")
         void findIncomingRoadsEmpty() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
 
             List<Road> incoming = network.findIncomingRoads("A");
             assertThat(incoming).isEmpty();
@@ -280,8 +280,8 @@ class RoadNetworkTest {
         @DisplayName("update road condition for existing road")
         void updateRoadCondition() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
             network.addRoad(new Road("AB", "A", "B", 5, 50, 100, 0, null));
 
             network.updateRoadCondition("AB", new RoadCondition(0.8, 0.5, RoadStatus.CONGESTED));
@@ -340,8 +340,8 @@ class RoadNetworkTest {
         @DisplayName("multiple roads between same intersections allowed")
         void multipleRoadsBetweenSamePair() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 5, 0));
             network.addRoad(new Road("AB_fast", "A", "B", 5, 100, 100, 0, null));
             network.addRoad(new Road("AB_slow", "A", "B", 5, 30, 100, 0, null));
 

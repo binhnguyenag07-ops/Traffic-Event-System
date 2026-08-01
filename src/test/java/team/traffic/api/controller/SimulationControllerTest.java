@@ -18,7 +18,7 @@ import team.traffic.domain.demand.DemandScenario;
 import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.Vehicle;
@@ -356,8 +356,8 @@ class SimulationControllerTest {
 
         private static RoadNetwork demandNetwork() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 1, 0));
             return network;
         }
     }

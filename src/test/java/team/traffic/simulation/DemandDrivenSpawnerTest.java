@@ -11,7 +11,7 @@ import team.traffic.domain.demand.ScriptedDemandModel;
 import team.traffic.domain.demand.TripLeg;
 import team.traffic.domain.demand.TripPlan;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -27,10 +27,8 @@ class DemandDrivenSpawnerTest {
     @Test
     void saturatedEntryQueuesAStructurallyValidTripInsteadOfFailingDemand() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection(
-                "A", "Boundary entry", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection(
-                "B", "District road", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "Boundary entry", 0, 0));
+        network.addIntersection(new Intersection("B", "District road", 1, 0));
         network.addRoad(new Road(
                 "AB", "A", "B", 1, 40, 1, 1,
                 new RoadCondition(1, 1, RoadStatus.CONGESTED)));

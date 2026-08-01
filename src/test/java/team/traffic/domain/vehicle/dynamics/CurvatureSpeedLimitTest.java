@@ -6,7 +6,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
@@ -47,8 +47,8 @@ class CurvatureSpeedLimitTest {
 
     private static Scenario scenario(List<GeoPoint> geometry) {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road("R", "Road", "P", "A", "B", 0.1, 100, 100, 0,
                 1, 3.0, new RoadCondition(0, 0, RoadStatus.OPEN), geometry, RoadClass.RESIDENTIAL));
         Car car = new Car("same-driver", "A", "B");

@@ -62,6 +62,23 @@ class RoadOccupancyTest {
         assertThat(occupancy.canAdmitFromLane(arriving, 1)).isFalse();
     }
 
+    @Test
+    void coLocatedParticipantsHaveOneStableLongitudinalLeader() {
+        Road road = new Road("R", "Road", "P", "A", "B", 0.1, 50, 100, 0,
+                1, 3.5, new RoadCondition(0, 0, RoadStatus.OPEN), List.of(), RoadClass.PRIMARY);
+        TrafficParticipant frontByTieBreak = car("a", 0, 1.0);
+        TrafficParticipant waitingPeer = car("z", 0, 1.0);
+        RoadOccupancy occupancy = RoadOccupancy.of(
+                road, List.of(waitingPeer, frontByTieBreak), new RoadDataRoadLayout(), List.of());
+
+        assertThat(occupancy.findLeaderFor(frontByTieBreak, 0.0).isFreeRoad()).isTrue();
+        assertThat(occupancy.nearestOverlappingLeader(frontByTieBreak, 0.0)).isNull();
+        assertThat(occupancy.findLeaderFor(waitingPeer, 0.0).isFreeRoad()).isFalse();
+        assertThat(occupancy.nearestOverlappingLeader(waitingPeer, 0.0))
+                .extracting(TrafficParticipant::getId)
+                .isEqualTo("a");
+    }
+
     private static TrafficParticipant car(String id, int laneIndex, double progress) {
         return new Stub(id, laneIndex, progress);
     }

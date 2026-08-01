@@ -225,16 +225,48 @@ public final class TrafficState implements JunctionEnvironment {
 
     // --- junction arbitration ---
 
-    /** Registers a vehicle waiting to cross. Call before {@link #resolveJunctions()}. */
+    /**
+     * Registers a vehicle waiting to cross. Call before {@link #resolveJunctions()}.
+     *
+     * <p>Only the physical head of a queue may reserve a junction. Followers
+     * still receive ordinary leader/signal constraints while moving towards the
+     * stop line, but cannot create a "ghost" reservation that blocks another
+     * arm while they are unable to move themselves.</p>
+     */
     public void requestCrossing(JunctionApproach approach) {
         if (approach == null) {
             throw new IllegalArgumentException("Approach is required.");
+        }
+        if (!isPhysicalQueueHead(approach)) {
+            return;
         }
         controllers
                 .computeIfAbsent(
                         approach.junctionId(),
                         id -> new JunctionController(id, rightOfWayPolicy, gapAcceptanceModel))
                 .register(approach);
+    }
+
+    private boolean isPhysicalQueueHead(JunctionApproach approach) {
+        Road fromRoad = approach.fromRoad();
+        String occupiedRoadId = approach.vehicle().getOccupiedRoadId();
+        // Departures and the short junction-side state have no upstream lane.
+        if (fromRoad == null || occupiedRoadId == null) {
+            return true;
+        }
+        if (!fromRoad.getId().equals(occupiedRoadId)) {
+            return false;
+        }
+        RoadOccupancy occupancy = occupancyOf(occupiedRoadId);
+        // Use the same side clearance as longitudinal movement. With zero
+        // clearance an ambulance 0.25 m beside a filtering motorcycle looked
+        // like an independent queue head here, then saw that motorcycle as a
+        // leader while moving. Its dispatch priority could reserve the shared
+        // exit forever even though it was physically unable to use it.
+        return occupancy != null
+                && occupancy.findLeaderFor(
+                        approach.vehicle(),
+                        Lane.QUEUE_LATERAL_CLEARANCE_METRES).isFreeRoad();
     }
 
     /** Runs every junction's arbitration and records who may proceed. */

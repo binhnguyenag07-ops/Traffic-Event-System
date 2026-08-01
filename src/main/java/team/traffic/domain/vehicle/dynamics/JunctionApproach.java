@@ -16,8 +16,11 @@ import team.traffic.domain.network.Road;
  * @param turnDirection            the manoeuvre it is about to perform
  * @param distanceToJunctionMetres how far its front bumper still is from the
  *                                 stop line
- * @param waitedTicks              how long it has already been held up, used so
- *                                 a vehicle on a minor road is not starved
+ * @param queueWaitSeconds         seconds since this vehicle last made
+ *                                 meaningful longitudinal progress while on
+ *                                 this approach. Unlike trip-wide delay, this
+ *                                 resets between approaches and while a queue
+ *                                 advances.
  */
 public record JunctionApproach(
         TrafficParticipant vehicle,
@@ -27,7 +30,7 @@ public record JunctionApproach(
         int fromLaneIndex,
         TurnDirection turnDirection,
         double distanceToJunctionMetres,
-        long waitedTicks) {
+        double queueWaitSeconds) {
 
     /** Compatibility constructor for callers whose participant is still on its approach road. */
     public JunctionApproach(
@@ -37,10 +40,10 @@ public record JunctionApproach(
             Road toRoad,
             TurnDirection turnDirection,
             double distanceToJunctionMetres,
-            long waitedTicks) {
+            double queueWaitSeconds) {
         this(vehicle, junctionId, fromRoad, toRoad,
                 vehicle == null ? 0 : vehicle.getLaneIndex(),
-                turnDirection, distanceToJunctionMetres, waitedTicks);
+                turnDirection, distanceToJunctionMetres, queueWaitSeconds);
     }
 
     public JunctionApproach {
@@ -62,8 +65,8 @@ public record JunctionApproach(
         if (!Double.isFinite(distanceToJunctionMetres) || distanceToJunctionMetres < 0) {
             throw new IllegalArgumentException("Distance to junction must not be negative.");
         }
-        if (waitedTicks < 0) {
-            throw new IllegalArgumentException("Waited ticks must not be negative.");
+        if (!Double.isFinite(queueWaitSeconds) || queueWaitSeconds < 0) {
+            throw new IllegalArgumentException("Queue wait must be finite and not negative.");
         }
     }
 

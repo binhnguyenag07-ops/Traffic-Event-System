@@ -93,6 +93,9 @@ public abstract class Vehicle implements TrafficParticipant {
     private LaneChangeModel laneChangeModel;
     private double instantaneousSpeedMps;
     private WaitState waitState;
+    /** Identity and entry time of the junction queue currently being approached. */
+    private String arbitrationApproachKey;
+    private double arbitrationApproachSinceSeconds = Double.NaN;
     private final DriverKnowledge driverKnowledge = new DriverKnowledge();
     private final NavigationState navigationState = new NavigationState();
     private ProgressStallTracker stallTracker = new ProgressStallTracker();
@@ -544,6 +547,18 @@ public abstract class Vehicle implements TrafficParticipant {
             if (decision.isPresent() && !decision.get().granted()) {
                 return waitFromDecision(decision.get(), observedAtSeconds);
             }
+            RoadOccupancy currentOccupancy = trafficState.occupancyOf(plan.roadId());
+            TrafficParticipant blockingLeader =
+                    currentOccupancy == null
+                            ? null
+                            : currentOccupancy.nearestOverlappingLeader(
+                                    this, lateralClearanceMetres());
+            if (blockingLeader != null) {
+                return waiting(
+                        WaitCause.LEADER,
+                        observedAtSeconds,
+                        Optional.of(new WaitResource.Leader(blockingLeader.getId())));
+            }
             RouteStep current = getNextRouteStep();
             RouteStep following = routePlan.stepAt(1);
             if (current != null && following != null) {
@@ -645,7 +660,8 @@ public abstract class Vehicle implements TrafficParticipant {
             return Optional.empty();
         }
         if (placement.isOnRoad()) {
-            return planRoadExitApproach(roadNetwork, applyRuntimeEffects);
+            return planRoadExitApproach(
+                    roadNetwork, trafficState.getElapsedSeconds(), applyRuntimeEffects);
         }
         if (shouldHoldAtJunction(currentIntersectionId, trafficState.getElapsedSeconds())) {
             if (applyRuntimeEffects) {
@@ -687,11 +703,49 @@ public abstract class Vehicle implements TrafficParticipant {
                 placement.getLastLaneIndex(),
                 turnDirection,
                 0.0,
-                trip.getWaitingTicks()));
+                approachQueueWaitSeconds(
+                        currentIntersectionId,
+                        approachRoad,
+                        placement.getLastLaneIndex(),
+                        trafficState.getElapsedSeconds(),
+                        applyRuntimeEffects)));
+    }
+
+    /**
+     * Age of the queue wait on this exact junction approach.
+     *
+     * <p>The approach key prevents delay from an earlier junction leaking into
+     * this one. The progress stall tracker prevents time spent driving through
+     * the 50 m observation zone from counting as starvation. Taking the smaller
+     * duration leaves only time that belongs both to this queue and to the
+     * current no-progress episode, independent of changes such as
+     * RED_SIGNAL -> JUNCTION_YIELD.</p>
+     */
+    private double approachQueueWaitSeconds(
+            String junctionId,
+            Road approachRoad,
+            int laneIndex,
+            double elapsedSeconds,
+            boolean applyRuntimeEffects) {
+        String key = junctionId + "\u0000"
+                + (approachRoad == null ? "" : approachRoad.getId())
+                + "\u0000" + laneIndex;
+        if (!key.equals(arbitrationApproachKey)) {
+            if (applyRuntimeEffects) {
+                arbitrationApproachKey = key;
+                arbitrationApproachSinceSeconds = elapsedSeconds;
+            }
+            return 0.0;
+        }
+        double approachAge = Math.max(
+                0.0, elapsedSeconds - arbitrationApproachSinceSeconds);
+        double stalledAge = stallTracker.snapshot().stalledForSeconds(elapsedSeconds);
+        return Math.min(approachAge, stalledAge);
     }
 
     private Optional<JunctionApproach> planRoadExitApproach(
             RoadNetwork roadNetwork,
+            double elapsedSeconds,
             boolean applyRuntimeEffects) {
         RouteStep currentStep = getNextRouteStep();
         RouteStep followingStep = routePlan.stepAt(1);
@@ -730,7 +784,12 @@ public abstract class Vehicle implements TrafficParticipant {
                 placement.getLaneIndex(),
                 turnDirection,
                 distanceToJunctionMetres,
-                trip.getWaitingTicks()));
+                approachQueueWaitSeconds(
+                        currentStep.getToIntersectionId(),
+                        approachRoad,
+                        placement.getLaneIndex(),
+                        elapsedSeconds,
+                        applyRuntimeEffects)));
     }
 
     /** Extension point for transit dwell or another junction-side hold. */

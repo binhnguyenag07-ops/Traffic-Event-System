@@ -7,7 +7,6 @@ import java.util.Set;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.event.TrafficEventStatus;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -43,12 +42,12 @@ public class NetworkEditingServiceImpl implements NetworkEditingService {
     }
 
     @Override
-    public Intersection addIntersection(String id, String name, LocationType type,
+    public Intersection addIntersection(String id, String name,
             double latitude, double longitude) {
         double y = (latitude - HCMC_REFERENCE_LATITUDE) * 110.574;
         double x = (longitude - HCMC_REFERENCE_LONGITUDE) * 111.320
                 * Math.cos(Math.toRadians(latitude));
-        Intersection intersection = new Intersection(id, name, x, y, type, latitude, longitude);
+        Intersection intersection = new Intersection(id, name, x, y, latitude, longitude);
         synchronized (simulator) {
             requireEditable();
             simulator.getNetwork().addIntersection(intersection);

@@ -7,7 +7,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.event.AccidentEvent;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
@@ -35,8 +35,8 @@ class PositionedEventObstacleTest {
 
     private static RoadNetwork network() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road("R", "Road", "P", "A", "B", 0.1, 50, 100, 0,
                 2, 3.5, new RoadCondition(0, 0, RoadStatus.OPEN), List.of(), RoadClass.SECONDARY));
         return network;

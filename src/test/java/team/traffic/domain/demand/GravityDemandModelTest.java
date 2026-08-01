@@ -11,7 +11,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -23,7 +23,7 @@ class GravityDemandModelTest {
     void permitsTheSameFlowIdInDifferentSourcesWithoutSharingCachedDestinations() {
         RoadNetwork network = new RoadNetwork();
         for (String id : List.of("A", "B", "C")) {
-            network.addIntersection(new Intersection(id, id, 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection(id, id, 0, 0));
         }
         network.addRoad(road("AB", "A", "B"));
         network.addRoad(road("AC", "A", "C"));
@@ -94,8 +94,8 @@ class GravityDemandModelTest {
     @Test
     void generatesDeterministicClosedPlansForAnOpenPurposeIdentifier() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(road("AB", "A", "B"));
         network.addRoad(road("BA", "B", "A"));
         DemandCurve hourSix = new DemandCurve(
@@ -158,8 +158,8 @@ class GravityDemandModelTest {
     @Test
     void rejectsAnAbsoluteFlowWithNoReachableCompletionChain() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(road("AB", "A", "B"));
         DemandCurve hourSix = new DemandCurve(
                 "HOUR_SIX",
@@ -200,7 +200,7 @@ class GravityDemandModelTest {
     void samplesOnlyCandidatesThatCanReachEveryLaterLegAndReturnToOrigin() {
         RoadNetwork network = new RoadNetwork();
         for (String id : List.of("A", "B", "C", "D")) {
-            network.addIntersection(new Intersection(id, id, 0, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection(id, id, 0, 0));
         }
         network.addRoad(road("AB", "A", "B"));
         network.addRoad(road("AC", "A", "C"));

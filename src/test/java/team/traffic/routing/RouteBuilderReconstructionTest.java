@@ -4,7 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -25,8 +25,8 @@ class RouteBuilderReconstructionTest {
     @DisplayName("reconstruct 1-step route")
     void oneStepRoute() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
         network.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0, null));
 
         Map<String, String> prev = Map.of("B", "A");
@@ -44,9 +44,9 @@ class RouteBuilderReconstructionTest {
     @DisplayName("reconstruct multi-step route preserves order")
     void multiStepRouteOrder() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 10, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
+        network.addIntersection(new Intersection("C", "C", 10, 0));
         network.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0, null));
         network.addRoad(new Road("BC", "B", "C", 10, 50, 100, 0, null));
 
@@ -72,9 +72,9 @@ class RouteBuilderReconstructionTest {
     @DisplayName("total distance equals sum of road distances")
     void totalDistanceSum() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 10, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
+        network.addIntersection(new Intersection("C", "C", 10, 0));
         network.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0, null));
         network.addRoad(new Road("BC", "B", "C", 15, 50, 100, 0, null));
 
@@ -94,9 +94,9 @@ class RouteBuilderReconstructionTest {
     @DisplayName("total time equals sum of distance/speedLimit")
     void totalTimeSum() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 10, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
+        network.addIntersection(new Intersection("C", "C", 10, 0));
         network.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0, null));
         network.addRoad(new Road("BC", "B", "C", 20, 100, 100, 0, null));
 
@@ -117,8 +117,8 @@ class RouteBuilderReconstructionTest {
     @DisplayName("total cost matches SHORTEST_DISTANCE weight (distance)")
     void totalCostDistance() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
         network.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0, null));
 
         Map<String, String> prev = Map.of("B", "A");
@@ -133,8 +133,8 @@ class RouteBuilderReconstructionTest {
     @DisplayName("total cost matches SHORTEST_TIME weight (time)")
     void totalCostTime() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
         network.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0, null));
 
         Map<String, String> prev = Map.of("B", "A");
@@ -150,8 +150,8 @@ class RouteBuilderReconstructionTest {
     @DisplayName("total cost matches CONGESTION_AWARE weight")
     void totalCostCongestionAware() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 5, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 5, 0));
         network.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0,
                 new RoadCondition(0.5, 0.3, RoadStatus.CONGESTED)));
 

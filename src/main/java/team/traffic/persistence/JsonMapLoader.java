@@ -15,7 +15,6 @@ import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.LandCover;
 import team.traffic.domain.network.LandCoverType;
-import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.JunctionMovement;
 import team.traffic.domain.network.MovementPermission;
 import team.traffic.domain.network.MovementProvenance;
@@ -346,7 +345,8 @@ public class JsonMapLoader implements MapLoader {
         public String name;
         public Double x;
         public Double y;
-        public LocationType locationType;
+        /** Accepted only so pre-migration map files remain readable. */
+        public String locationType;
         public Double latitude;
         public Double longitude;
 
@@ -357,7 +357,6 @@ public class JsonMapLoader implements MapLoader {
                     name,
                     requireField(x, "x"),
                     requireField(y, "y"),
-                    locationType,
                     latitude,
                     longitude);
         }

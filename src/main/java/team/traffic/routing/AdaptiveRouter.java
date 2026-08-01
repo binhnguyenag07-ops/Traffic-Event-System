@@ -68,6 +68,11 @@ public final class AdaptiveRouter {
                     current.junctionId(),
                     current.incomingRoadId(),
                     request.vehicleType())) {
+                if (current.equals(start)
+                        && request.requireUTurnAsFirstMovement()
+                        && !movement.isUTurn()) {
+                    continue;
+                }
                 if (!uTurnAllowed(movement, request)) continue;
                 Road road = network.getRoad(movement.toRoadId());
                 if (road == null || request.temporarilyAvoidedRoadIds().contains(road.getId())) continue;
@@ -83,7 +88,7 @@ public final class AdaptiveRouter {
                         road,
                         roadState,
                         movement,
-                        request.preference(),
+                        request,
                         expectedRoadSeconds,
                         uncertaintySeconds);
                 State next = new State(road.getEndIntersectionId(), road.getId());
@@ -174,11 +179,16 @@ public final class AdaptiveRouter {
             Road road,
             RoutingSnapshot.RoadState roadState,
             JunctionMovement movement,
-            team.traffic.domain.routing.RoutePreference preference,
+            AdaptiveRouteRequest request,
             double expectedRoadSeconds,
             double uncertaintySeconds) {
         double movementPenalty = movement.penaltySeconds();
-        return switch (preference) {
+        if (request.vehicleType()
+                == team.traffic.domain.vehicle.VehicleType.EMERGENCY
+                && movement.isUTurn()) {
+            movementPenalty *= 0.2;
+        }
+        return switch (request.preference()) {
             case MINIMUM_HOPS -> 1.0 + (movementPenalty > 0 ? 1.0 : 0.0);
             case SHORTEST_DISTANCE ->
                     road.getDistance() + movementPenalty / 3_600.0;

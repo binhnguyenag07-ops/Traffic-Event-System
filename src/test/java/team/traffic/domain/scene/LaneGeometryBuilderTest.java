@@ -7,7 +7,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
@@ -336,8 +336,8 @@ class LaneGeometryBuilderTest {
     @Test
     void aScenarioWithoutCoordinatesYieldsNoGeometry() {
         RoadNetwork planar = new RoadNetwork();
-        planar.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        planar.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        planar.addIntersection(new Intersection("A", "A", 0, 0));
+        planar.addIntersection(new Intersection("B", "B", 1, 0));
         planar.addRoad(new Road("AB", "A", "B", 1.0, 50, 20, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
 
@@ -429,6 +429,6 @@ class LaneGeometryBuilderTest {
     private Intersection junction(String id, double lat, double lon) {
         // The five-arg constructor leaves latitude and longitude null; the scene
         // builder needs the geographic pair, so set it explicitly.
-        return new Intersection(id, id, lon, lat, LocationType.NORMAL, lat, lon);
+        return new Intersection(id, id, lon, lat, lat, lon);
     }
 }

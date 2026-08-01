@@ -6,8 +6,7 @@
       "x": 0,
       "y": -0.14,
       "latitude": 10.7787424,
-      "longitude": 106.7,
-      "locationType": "NORMAL"
+      "longitude": 106.7
     },
     {
       "id": "J",
@@ -15,8 +14,7 @@
       "x": 0,
       "y": 0,
       "latitude": 10.78,
-      "longitude": 106.7,
-      "locationType": "NORMAL"
+      "longitude": 106.7
     },
     {
       "id": "B",
@@ -24,8 +22,7 @@
       "x": 0,
       "y": 0.14,
       "latitude": 10.7812576,
-      "longitude": 106.7,
-      "locationType": "NORMAL"
+      "longitude": 106.7
     },
     {
       "id": "W",
@@ -33,8 +30,7 @@
       "x": -0.14,
       "y": 0,
       "latitude": 10.78,
-      "longitude": 106.6987198,
-      "locationType": "NORMAL"
+      "longitude": 106.6987198
     },
     {
       "id": "E",
@@ -42,8 +38,7 @@
       "x": 0.14,
       "y": 0,
       "latitude": 10.78,
-      "longitude": 106.7012802,
-      "locationType": "NORMAL"
+      "longitude": 106.7012802
     }
   ],
   "roads": [
