@@ -205,6 +205,12 @@ public final class AdaptiveNavigationCoordinator {
                 reject(request, "NO_ROUTE", null, simulationSeconds);
                 continue;
             }
+            if (request.uTurnRequested()
+                    && candidate.firstMovement().filter(
+                            team.traffic.domain.network.JunctionMovement::isUTurn).isEmpty()) {
+                reject(request, "NO_LEGAL_UTURN", candidate.expectedCost(), simulationSeconds);
+                continue;
+            }
             boolean hardBlock = request.reason() == RerouteReason.KNOWN_HARD_BLOCK
                     || request.reason() == RerouteReason.STALL_TIMEOUT
                     || request.reason() == RerouteReason.DEADLOCK_RECOVERY;
@@ -311,6 +317,7 @@ public final class AdaptiveNavigationCoordinator {
                 vehicle.getDriverKnowledge(),
                 avoid,
                 vehicle.getDriverProfile().decision().uTurnPolicy(),
+                request.uTurnRequested(),
                 request.reason(),
                 vehicle.getRouteVersion());
         String cacheKey = cacheKey(routeRequest, snapshot, now);
@@ -352,7 +359,9 @@ public final class AdaptiveNavigationCoordinator {
         return request.anchor() + "|" + request.destinationIntersectionId()
                 + "|" + request.knowledge().signature(now)
                 + "|" + request.vehicleType() + "|" + request.preference()
-                + "|" + request.uTurnPolicy() + "|" + request.reason()
+                + "|" + request.uTurnPolicy()
+                + "|forceUTurn=" + request.requireUTurnAsFirstMovement()
+                + "|" + request.reason()
                 + "|" + new java.util.TreeSet<>(
                         request.temporarilyAvoidedRoadIds())
                 + "|" + snapshot.virtualDemandSignature();

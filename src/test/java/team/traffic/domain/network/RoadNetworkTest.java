@@ -239,7 +239,7 @@ class RoadNetworkTest {
     }
 
     private Intersection intersection(String id, String name) {
-        return new Intersection(id, name, 0, 0, LocationType.NORMAL);
+        return new Intersection(id, name, 0, 0);
     }
 
     private Road road(String id, double distance) {

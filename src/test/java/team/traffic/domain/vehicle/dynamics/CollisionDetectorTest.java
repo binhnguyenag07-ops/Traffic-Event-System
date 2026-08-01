@@ -10,15 +10,15 @@ import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.network.RoadStatus;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.vehicle.VehicleType;
 
 class CollisionDetectorTest {
     @Test
     void reportsFollowerAsCausingVehicleWhenRequiredBrakingIsImpossible() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road("R", "A", "B", 0.1, 50, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
         Stub follower = new Stub("follower", 0.40, 20);

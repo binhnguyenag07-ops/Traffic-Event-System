@@ -10,7 +10,7 @@ import team.traffic.domain.event.CongestionEvent;
 import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -45,10 +45,10 @@ class DynamicReroutingListenerTest {
     @BeforeEach
     void setUp() {
         network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 10, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 0, 5, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 10, 5, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 10, 0));
+        network.addIntersection(new Intersection("C", "C", 0, 5));
+        network.addIntersection(new Intersection("D", "D", 10, 5));
 
         network.addRoad(new Road("AB", "A", "B", 10, 100, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
@@ -282,8 +282,8 @@ class DynamicReroutingListenerTest {
         @DisplayName("vehicle stays blocked when no alternative exists")
         void staysBlockedWhenNoAlternative() {
             RoadNetwork noAlternative = new RoadNetwork();
-            noAlternative.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            noAlternative.addIntersection(new Intersection("B", "B", 10, 0, LocationType.NORMAL));
+            noAlternative.addIntersection(new Intersection("A", "A", 0, 0));
+            noAlternative.addIntersection(new Intersection("B", "B", 10, 0));
 
             noAlternative.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0,
                     new RoadCondition(0, 0, RoadStatus.OPEN)));
@@ -397,8 +397,8 @@ class DynamicReroutingListenerTest {
         @DisplayName("routing uses congested road when no alternative exists")
         void routingUsesCongestedRoadWhenNoAlternative() {
             RoadNetwork simpleNetwork = new RoadNetwork();
-            simpleNetwork.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            simpleNetwork.addIntersection(new Intersection("B", "B", 10, 0, LocationType.NORMAL));
+            simpleNetwork.addIntersection(new Intersection("A", "A", 0, 0));
+            simpleNetwork.addIntersection(new Intersection("B", "B", 10, 0));
 
             simpleNetwork.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0,
                     new RoadCondition(0.9, 0, RoadStatus.CONGESTED)));

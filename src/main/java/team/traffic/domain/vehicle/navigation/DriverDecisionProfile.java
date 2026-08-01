@@ -54,7 +54,7 @@ public record DriverDecisionProfile(
                     UTurnPolicy.ONLY_WHEN_CURRENT_ROUTE_BLOCKED);
             case EMERGENCY -> new DriverDecisionProfile(
                     InformationAccess.CONNECTED_NAVIGATION,
-                    420.0, 1.0, 1.0, 3.0, 3.0, 10.0, 20.0,
+                    420.0, 1.0, 1.0, 3.0, 3.0, 3.0, 8.0,
                     UTurnPolicy.WHEN_MATERIALLY_BETTER);
         };
     }

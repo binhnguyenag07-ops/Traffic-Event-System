@@ -13,7 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadClass;
 import team.traffic.domain.network.RoadCondition;
@@ -158,8 +158,8 @@ class PhysicalViewControllerTest {
 
     private RoadNetwork network() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 106.000, 10.0, LocationType.NORMAL, 10.0, 106.000));
-        network.addIntersection(new Intersection("B", "B", 106.002, 10.0, LocationType.NORMAL, 10.0, 106.002));
+        network.addIntersection(new Intersection("A", "A", 106.000, 10.0, 10.0, 106.000));
+        network.addIntersection(new Intersection("B", "B", 106.002, 10.0, 10.0, 106.002));
         network.addRoad(new Road("AB", "Main", "AB", "A", "B", 0.22, 50, 100, 0,
                 2, 3.5, new RoadCondition(0, 0, RoadStatus.OPEN),
                 List.of(new GeoPoint(10.0, 106.000), new GeoPoint(10.0, 106.002)),

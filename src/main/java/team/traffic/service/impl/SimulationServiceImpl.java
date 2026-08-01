@@ -216,9 +216,37 @@ public class SimulationServiceImpl implements SimulationService, AutoCloseable {
 
     @Override
     public synchronized void setParameters(double simulationSecondsPerTick, long playbackIntervalMillis) {
+        validateParameters(simulationSecondsPerTick, playbackIntervalMillis);
+        applyParameters(simulationSecondsPerTick, playbackIntervalMillis);
+    }
+
+    @Override
+    public synchronized boolean setParametersIfCurrent(
+            double expectedSimulationSecondsPerTick,
+            long expectedPlaybackIntervalMillis,
+            double simulationSecondsPerTick,
+            long playbackIntervalMillis) {
+        validateParameters(simulationSecondsPerTick, playbackIntervalMillis);
+        if (Math.abs(simulator.getSimulationSecondsPerTick() - expectedSimulationSecondsPerTick) > 1e-9
+                || this.playbackIntervalMillis != expectedPlaybackIntervalMillis) {
+            return false;
+        }
+        applyParameters(simulationSecondsPerTick, playbackIntervalMillis);
+        return true;
+    }
+
+    private static void validateParameters(
+            double simulationSecondsPerTick,
+            long playbackIntervalMillis) {
         if (playbackIntervalMillis < 250 || playbackIntervalMillis > 2000) {
             throw new IllegalArgumentException("Playback interval must be between 250 and 2000 milliseconds.");
         }
+        if (!Double.isFinite(simulationSecondsPerTick) || simulationSecondsPerTick <= 0) {
+            throw new IllegalArgumentException("Simulation seconds per tick must be finite and positive.");
+        }
+    }
+
+    private void applyParameters(double simulationSecondsPerTick, long playbackIntervalMillis) {
         simulator.setSimulationSecondsPerTick(simulationSecondsPerTick);
         this.playbackIntervalMillis = playbackIntervalMillis;
         if (simulator.getStatus() == SimulationStatus.RUNNING) {

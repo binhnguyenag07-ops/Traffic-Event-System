@@ -18,7 +18,7 @@ import team.traffic.domain.demand.DemandScenario;
 import team.traffic.domain.event.RoadClosureEvent;
 import team.traffic.domain.event.TrafficEvent;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.RoadNetwork;
 import team.traffic.domain.vehicle.Car;
 import team.traffic.domain.vehicle.Vehicle;
@@ -137,6 +137,62 @@ class SimulationControllerTest {
     }
 
     @Test
+    void conditionalPaceRestoreCannotOverwriteANewerDashboardChoice() throws Exception {
+        HttpResponse<String> selected = putJson(
+                "/api/simulation/parameters",
+                """
+                {
+                  "simulationSecondsPerTick": 2.5,
+                  "playbackIntervalMs": 250
+                }
+                """);
+        HttpResponse<String> staleRestore = putJson(
+                "/api/simulation/parameters",
+                """
+                {
+                  "simulationSecondsPerTick": 30,
+                  "playbackIntervalMs": 250,
+                  "expectedSimulationSecondsPerTick": 0.25,
+                  "expectedPlaybackIntervalMs": 250
+                }
+                """);
+
+        assertThat(selected.statusCode()).isEqualTo(200);
+        assertThat(selected.body()).contains("\"parametersApplied\":true");
+        assertThat(staleRestore.statusCode()).isEqualTo(200);
+        assertThat(staleRestore.body()).contains("\"parametersApplied\":false");
+        assertThat(staleRestore.body()).contains("\"simulationSecondsPerTick\":2.5");
+    }
+
+    @Test
+    void currentDashboardClaimRejectsPaceWritesFromAnOutdatedTab() throws Exception {
+        HttpResponse<String> claimed = getWithPaceProtocol("/api/simulation/status");
+        HttpResponse<String> outdated = putJson(
+                "/api/simulation/parameters",
+                """
+                {
+                  "simulationSecondsPerTick": 0.25,
+                  "playbackIntervalMs": 250
+                }
+                """);
+        HttpResponse<String> current = putJsonWithPaceProtocol(
+                "/api/simulation/parameters",
+                """
+                {
+                  "simulationSecondsPerTick": 2.5,
+                  "playbackIntervalMs": 250
+                }
+                """);
+
+        assertThat(claimed.statusCode()).isEqualTo(200);
+        assertThat(outdated.statusCode()).isEqualTo(409);
+        assertThat(outdated.body()).contains("outdated dashboard");
+        assertThat(current.statusCode()).isEqualTo(200);
+        assertThat(current.body()).contains("\"parametersApplied\":true");
+        assertThat(current.body()).contains("\"simulationSecondsPerTick\":2.5");
+    }
+
+    @Test
     void traceEndpointsExposeTheSummaryARangeAndASingleState() throws Exception {
         HttpResponse<String> summaryResponse = get("/api/simulation/trace");
         HttpResponse<String> rangeResponse = get("/api/simulation/trace/vehicles/car-1?fromTick=1&toTick=3");
@@ -238,11 +294,40 @@ class SimulationControllerTest {
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> getWithPaceProtocol(String path) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + app.port() + path))
+                .header("X-Traffic-Pace-Protocol", "2")
+                .GET()
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private HttpResponse<String> postJson(String path, String body) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + app.port() + path))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> putJson(String path, String body) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + app.port() + path))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> putJsonWithPaceProtocol(String path, String body)
+            throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + app.port() + path))
+                .header("Content-Type", "application/json")
+                .header("X-Traffic-Pace-Protocol", "2")
+                .PUT(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
@@ -256,6 +341,8 @@ class SimulationControllerTest {
         private final RoadNetwork network = demandNetwork();
         private long capturedFromTick;
         private long capturedToTick;
+        private double simulationSecondsPerTick = 0.25;
+        private long playbackIntervalMillis = 250;
         private final SimulationFrame historicalFrame = new SimulationFrame(
                 "timeline-1", 2, 2, 2.0, SimulationStatus.RUNNING,
                 List.of(), List.of(), List.of(), List.of());
@@ -302,6 +389,15 @@ class SimulationControllerTest {
         @Override public void addEvent(TrafficEvent event) {}
         @Override public SimulationStatus getStatus() { return SimulationStatus.RUNNING; }
         @Override public long getCurrentTick() { return 3; }
+
+        @Override
+        public void setParameters(double simulationSecondsPerTick, long playbackIntervalMillis) {
+            this.simulationSecondsPerTick = simulationSecondsPerTick;
+            this.playbackIntervalMillis = playbackIntervalMillis;
+        }
+
+        @Override public double getSimulationSecondsPerTick() { return simulationSecondsPerTick; }
+        @Override public long getPlaybackIntervalMillis() { return playbackIntervalMillis; }
 
         @Override
         public SimulationSnapshot getSnapshot() {
@@ -356,8 +452,8 @@ class SimulationControllerTest {
 
         private static RoadNetwork demandNetwork() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 1, 0));
             return network;
         }
     }

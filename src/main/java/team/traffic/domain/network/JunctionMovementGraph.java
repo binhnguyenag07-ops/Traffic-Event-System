@@ -186,11 +186,31 @@ public final class JunctionMovementGraph {
             return null;
         }
         TurnDirection direction = directionOf(network, incoming, outgoing);
-        if (direction == TurnDirection.U_TURN && !canInferUTurn(incoming, outgoing)) {
+        if (direction == TurnDirection.U_TURN) {
+            if (canInferOrdinaryUTurn(incoming, outgoing)) {
+                return inferred(
+                        junctionId,
+                        incomingRoadId,
+                        outgoing,
+                        direction,
+                        inferredUTurnPenaltySeconds);
+            }
+            if (canInferEmergencyUTurn(incoming, outgoing)) {
+                // Emergency services may turn across a major road under the
+                // same junction arbitration as any other conflicting movement.
+                // Restricting the inferred rule to EMERGENCY keeps ordinary
+                // routing and map legality unchanged.
+                return inferred(
+                        junctionId,
+                        incomingRoadId,
+                        outgoing,
+                        direction,
+                        inferredUTurnPenaltySeconds,
+                        java.util.Set.of(VehicleType.EMERGENCY));
+            }
             return null;
         }
-        double penalty = direction == TurnDirection.U_TURN ? inferredUTurnPenaltySeconds : 0.0;
-        return inferred(junctionId, incomingRoadId, outgoing, direction, penalty);
+        return inferred(junctionId, incomingRoadId, outgoing, direction, 0.0);
     }
 
     private JunctionMovement inferred(
@@ -199,31 +219,49 @@ public final class JunctionMovementGraph {
             Road outgoing,
             TurnDirection direction,
             double penaltySeconds) {
+        return inferred(
+                junctionId,
+                incomingRoadId,
+                outgoing,
+                direction,
+                penaltySeconds,
+                java.util.Set.of());
+    }
+
+    private JunctionMovement inferred(
+            String junctionId,
+            String incomingRoadId,
+            Road outgoing,
+            TurnDirection direction,
+            double penaltySeconds,
+            java.util.Set<VehicleType> allowedVehicleTypes) {
         return new JunctionMovement(
                 junctionId,
                 Optional.ofNullable(incomingRoadId),
                 outgoing.getId(),
                 direction,
                 MovementPermission.ALLOWED,
-                java.util.Set.of(),
+                allowedVehicleTypes,
                 penaltySeconds,
                 MovementProvenance.INFERRED);
     }
 
-    private boolean canInferUTurn(Road incoming, Road outgoing) {
+    private boolean canInferOrdinaryUTurn(Road incoming, Road outgoing) {
+        if (!canInferEmergencyUTurn(incoming, outgoing)) return false;
+        return switch (incoming.getRoadClass()) {
+            case RESIDENTIAL, LIVING_STREET, UNCLASSIFIED -> true;
+            default -> false;
+        };
+    }
+
+    private boolean canInferEmergencyUTurn(Road incoming, Road outgoing) {
         if (uTurnPolicy != UTurnNetworkPolicy.EXPLICIT_OR_CONSERVATIVE_LOCAL_INFERENCE) {
             return false;
         }
         if (!incoming.getStartIntersectionId().equals(outgoing.getEndIntersectionId())) {
             return false;
         }
-        if (!incoming.getPhysicalRoadId().equals(outgoing.getPhysicalRoadId())) {
-            return false;
-        }
-        return switch (incoming.getRoadClass()) {
-            case RESIDENTIAL, LIVING_STREET, UNCLASSIFIED -> true;
-            default -> false;
-        };
+        return incoming.getPhysicalRoadId().equals(outgoing.getPhysicalRoadId());
     }
 
     private static TurnDirection directionOf(

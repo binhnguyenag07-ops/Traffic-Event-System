@@ -712,6 +712,26 @@ export function useTrafficDashboard({ physicalLiveMode = false } = {}) {
     return status
   }, [applySimulationStatus, runAction])
 
+  const setSimulationPaceIfCurrent = useCallback(async (
+    simulationSecondsPerTick,
+    playbackIntervalMs,
+    expectedSimulationSecondsPerTick,
+    expectedPlaybackIntervalMs,
+  ) => {
+    const status = await runAction(
+      () => simulationApi.setParametersIfCurrent(
+        simulationSecondsPerTick,
+        playbackIntervalMs,
+        expectedSimulationSecondsPerTick,
+        expectedPlaybackIntervalMs,
+      ),
+      { refresh: false },
+    )
+    applySimulationStatus(status)
+    setSnapshot((current) => ({ ...current, status: status.status }))
+    return status
+  }, [applySimulationStatus, runAction])
+
   return {
     intersections,
     roads: liveRoads,
@@ -763,6 +783,7 @@ export function useTrafficDashboard({ physicalLiveMode = false } = {}) {
       setSnapshot((current) => ({ ...current, status: status.status }))
     },
     setSimulationPace,
+    setSimulationPaceIfCurrent,
     findRoute: async (start, destination, preference, algorithm) => {
       const result = await runAction(
         () => routingApi.findRoute(start, destination, preference, algorithm),

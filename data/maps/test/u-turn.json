@@ -6,8 +6,7 @@
       "x": 0,
       "y": -0.16,
       "latitude": 10.7785627,
-      "longitude": 106.7,
-      "locationType": "NORMAL"
+      "longitude": 106.7
     },
     {
       "id": "M",
@@ -15,8 +14,7 @@
       "x": 0,
       "y": 0,
       "latitude": 10.78,
-      "longitude": 106.7,
-      "locationType": "NORMAL"
+      "longitude": 106.7
     },
     {
       "id": "B",
@@ -24,8 +22,23 @@
       "x": 0,
       "y": 0.16,
       "latitude": 10.7814373,
-      "longitude": 106.7,
-      "locationType": "NORMAL"
+      "longitude": 106.7
+    },
+    {
+      "id": "C",
+      "name": "C",
+      "x": 0.2186,
+      "y": -0.16,
+      "latitude": 10.7785627,
+      "longitude": 106.702
+    },
+    {
+      "id": "D",
+      "name": "D",
+      "x": 0,
+      "y": 0.23,
+      "latitude": 10.7820661,
+      "longitude": 106.7
     }
   ],
   "roads": [
@@ -133,6 +146,87 @@
         ],
         [
           10.78,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "B-D",
+      "name": "B-D",
+      "physicalRoadId": "B-D",
+      "startIntersectionId": "B",
+      "endIntersectionId": "D",
+      "distance": 0.07,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 1,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.7814373,
+          106.7
+        ],
+        [
+          10.7820661,
+          106.7
+        ]
+      ]
+    },
+    {
+      "id": "A-C",
+      "name": "A-C",
+      "physicalRoadId": "A-C",
+      "startIntersectionId": "A",
+      "endIntersectionId": "C",
+      "distance": 0.2186,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 1,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.7785627,
+          106.7
+        ],
+        [
+          10.7785627,
+          106.702
+        ]
+      ]
+    },
+    {
+      "id": "C-D",
+      "name": "C-D",
+      "physicalRoadId": "C-D",
+      "startIntersectionId": "C",
+      "endIntersectionId": "D",
+      "distance": 0.446,
+      "speedLimit": 40,
+      "capacity": 60,
+      "currentVehicleCount": 0,
+      "congestionLevel": 0,
+      "vehicleDensity": 0,
+      "roadStatus": "OPEN",
+      "roadClass": "SECONDARY",
+      "laneCount": 1,
+      "laneWidthMetres": 3.5,
+      "geometry": [
+        [
+          10.7785627,
+          106.702
+        ],
+        [
+          10.7820661,
           106.7
         ]
       ]

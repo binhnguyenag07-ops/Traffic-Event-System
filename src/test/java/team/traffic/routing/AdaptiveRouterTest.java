@@ -10,7 +10,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.JunctionMovement;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.MovementPermission;
 import team.traffic.domain.network.MovementProvenance;
 import team.traffic.domain.network.Road;
@@ -95,11 +95,68 @@ class AdaptiveRouterTest {
     }
 
     @Test
+    void aForcedEmergencyTurnaroundReallyStartsWithAUTurn() {
+        RoadNetwork network = reversePair();
+        network.getMovementGraph().setUTurnPolicy(
+                team.traffic.domain.network.UTurnNetworkPolicy
+                        .EXPLICIT_OR_CONSERVATIVE_LOCAL_INFERENCE);
+        AdaptiveRouteRequest request = new AdaptiveRouteRequest(
+                "ambulance",
+                VehicleType.EMERGENCY,
+                new RouteAnchor.OnRoad("AB", 0.5, "B"),
+                "A",
+                RoutePreference.CONGESTION_AWARE,
+                new DriverKnowledge(),
+                Set.of(),
+                UTurnPolicy.WHEN_MATERIALLY_BETTER,
+                true,
+                RerouteReason.STALL_TIMEOUT,
+                0);
+
+        var candidate = new AdaptiveRouter().findRoute(
+                network,
+                RoutingSnapshot.freeFlow(network, List.of(), 0.0),
+                request);
+
+        assertThat(candidate.firstMovement()).isPresent()
+                .get().extracting(JunctionMovement::direction)
+                .isEqualTo(TurnDirection.U_TURN);
+        assertThat(candidate.route().getSteps())
+                .extracting(step -> step.getRoadId())
+                .containsExactly("BA");
+    }
+
+    @Test
+    void aForcedTurnaroundIsRejectedWhenNoLegalReverseMovementExists() {
+        RoadNetwork network = new RoadNetwork();
+        addJunctions(network);
+        network.addRoad(road("AB", "physical", "A", "B", 10, 0));
+        AdaptiveRouteRequest request = new AdaptiveRouteRequest(
+                "car",
+                VehicleType.CAR,
+                new RouteAnchor.OnRoad("AB", 0.5, "B"),
+                "A",
+                RoutePreference.CONGESTION_AWARE,
+                new DriverKnowledge(),
+                Set.of(),
+                UTurnPolicy.WHEN_MATERIALLY_BETTER,
+                true,
+                RerouteReason.STALL_TIMEOUT,
+                0);
+
+        assertThatThrownBy(() -> new AdaptiveRouter().findRoute(
+                network,
+                RoutingSnapshot.freeFlow(network, List.of(), 0.0),
+                request))
+                .isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
     void routePreferenceStillControlsAdaptiveSearchObjective() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 2, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 1, 1, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 2, 0));
+        network.addIntersection(new Intersection("C", "C", 1, 1));
         network.addRoad(road("AB", "AB", "A", "B", 10.0, 100.0));
         network.addRoad(road("AC", "AC", "A", "C", 1.0, 10.0));
         network.addRoad(road("CB", "CB", "C", "B", 1.0, 10.0));
@@ -134,10 +191,10 @@ class AdaptiveRouterTest {
     @Test
     void virtualBatchDemandCanDistributeEquivalentDrivers() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 1, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 1, -1, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 2, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 1));
+        network.addIntersection(new Intersection("C", "C", 1, -1));
+        network.addIntersection(new Intersection("D", "D", 2, 0));
         network.addRoad(road("AB", "AB", "A", "B", 1.0, 50.0));
         network.addRoad(road("BD", "BD", "B", "D", 1.0, 50.0));
         network.addRoad(road("AC", "AC", "A", "C", 1.0, 50.0));
@@ -200,8 +257,8 @@ class AdaptiveRouterTest {
     }
 
     private static void addJunctions(RoadNetwork network) {
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
     }
 
     private static Road road(

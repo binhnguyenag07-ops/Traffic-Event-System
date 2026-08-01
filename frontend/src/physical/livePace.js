@@ -10,7 +10,7 @@ export const PHYSICAL_LIVE_PACE = Object.freeze({
   playbackIntervalMs: 250,
 })
 
-function samePace(left, right) {
+export function sameSimulationPace(left, right) {
   return Math.abs(
     Number(left?.simulationSecondsPerTick) - Number(right?.simulationSecondsPerTick),
   ) < 1e-9
@@ -25,7 +25,7 @@ function samePace(left, right) {
  * move the simulation clock.
  */
 export function enterPhysicalLivePace(current, savedBeforeOpen = null) {
-  if (samePace(current, PHYSICAL_LIVE_PACE)) {
+  if (sameSimulationPace(current, PHYSICAL_LIVE_PACE)) {
     return {
       shouldApply: false,
       savedBeforeOpen,
@@ -39,6 +39,24 @@ export function enterPhysicalLivePace(current, savedBeforeOpen = null) {
       playbackIntervalMs: Number(current?.playbackIntervalMs),
     },
     target: PHYSICAL_LIVE_PACE,
+  }
+}
+
+/**
+ * Restores the overview cadence only while the live-camera cadence still owns
+ * the server value. Another dashboard may have selected a newer pace while
+ * this camera was open; in that case the newer explicit choice must win.
+ */
+export function leavePhysicalLivePace(current, savedBeforeOpen = null) {
+  if (!savedBeforeOpen || !sameSimulationPace(current, PHYSICAL_LIVE_PACE)) {
+    return {
+      shouldApply: false,
+      target: savedBeforeOpen,
+    }
+  }
+  return {
+    shouldApply: !sameSimulationPace(savedBeforeOpen, PHYSICAL_LIVE_PACE),
+    target: savedBeforeOpen,
   }
 }
 

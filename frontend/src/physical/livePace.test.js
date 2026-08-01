@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   demandStartupPace,
   enterPhysicalLivePace,
+  leavePhysicalLivePace,
   PHYSICAL_LIVE_PACE,
 } from './livePace'
 
@@ -44,6 +45,35 @@ describe('physical live-camera pace', () => {
       shouldApply: false,
       savedBeforeOpen: null,
       target: PHYSICAL_LIVE_PACE,
+    })
+  })
+
+  it('restores the saved overview pace while the camera still owns live pace', () => {
+    expect(leavePhysicalLivePace(PHYSICAL_LIVE_PACE, {
+      simulationSecondsPerTick: 30,
+      playbackIntervalMs: 250,
+    })).toEqual({
+      shouldApply: true,
+      target: {
+        simulationSecondsPerTick: 30,
+        playbackIntervalMs: 250,
+      },
+    })
+  })
+
+  it('does not overwrite a newer pace selected by another dashboard', () => {
+    expect(leavePhysicalLivePace({
+      simulationSecondsPerTick: 2.5,
+      playbackIntervalMs: 250,
+    }, {
+      simulationSecondsPerTick: 30,
+      playbackIntervalMs: 250,
+    })).toEqual({
+      shouldApply: false,
+      target: {
+        simulationSecondsPerTick: 30,
+        playbackIntervalMs: 250,
+      },
     })
   })
 

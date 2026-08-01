@@ -93,7 +93,45 @@ describe('extended traffic API', () => {
 
     const [, options] = fetchMock.mock.calls[0]
     expect(options.method).toBe('PUT')
+    expect(options.headers).toMatchObject({ 'X-Traffic-Pace-Protocol': '2' })
     expect(JSON.parse(options.body)).toEqual({ playbackIntervalMs: 250 })
+  })
+
+  it('claims current playback control when loading simulation status', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      status: 'READY',
+      simulationSecondsPerTick: 0.5,
+      playbackIntervalMs: 1000,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await simulationApi.status()
+
+    const [, options] = fetchMock.mock.calls[0]
+    expect(options.headers).toMatchObject({
+      'Content-Type': 'application/json',
+      'X-Traffic-Pace-Protocol': '2',
+    })
+  })
+
+  it('conditionally restores a camera pace without overwriting a newer choice', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      status: 'RUNNING',
+      simulationSecondsPerTick: 2.5,
+      playbackIntervalMs: 250,
+      parametersApplied: false,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await simulationApi.setParametersIfCurrent(30, 250, 0.25, 250)
+
+    const [, options] = fetchMock.mock.calls[0]
+    expect(options.method).toBe('PUT')
+    expect(options.headers).toMatchObject({ 'X-Traffic-Pace-Protocol': '2' })
+    expect(JSON.parse(options.body)).toEqual({
+      simulationSecondsPerTick: 30,
+      playbackIntervalMs: 250,
+      expectedSimulationSecondsPerTick: 0.25,
+      expectedPlaybackIntervalMs: 250,
+    })
   })
 
   it('preserves the HTTP status on API errors', async () => {

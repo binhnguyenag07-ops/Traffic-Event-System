@@ -195,7 +195,6 @@ public class MapSaver {
         public String name;
         public double x;
         public double y;
-        public String locationType;
         public Double latitude;
         public Double longitude;
 
@@ -205,7 +204,6 @@ public class MapSaver {
             data.name = intersection.getName();
             data.x = intersection.getX();
             data.y = intersection.getY();
-            data.locationType = intersection.getLocationType().name();
             data.latitude = intersection.getLatitude();
             data.longitude = intersection.getLongitude();
             return data;

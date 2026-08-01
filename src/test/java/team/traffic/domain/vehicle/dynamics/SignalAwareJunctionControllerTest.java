@@ -11,7 +11,7 @@ import team.traffic.domain.vehicle.VehicleType;
 
 class SignalAwareJunctionControllerTest {
     @Test
-    void redApproachWaitsWhileEmergencyVehicleReceivesPreemption() {
+    void dispatchPriorityDoesNotSilentlyBypassARedSignal() {
         Road incoming = road("IN", "A", "J");
         Road outgoing = road("OUT", "J", "B");
         JunctionController ordinaryController = new JunctionController("J", new PriorityRightOfWayPolicy());
@@ -25,7 +25,7 @@ class SignalAwareJunctionControllerTest {
         };
 
         assertThat(ordinaryController.resolve(red)).isEmpty();
-        assertThat(emergencyController.resolve(red)).containsExactly("ambulance");
+        assertThat(emergencyController.resolve(red)).isEmpty();
     }
 
     private static JunctionApproach approach(TrafficParticipant vehicle, Road from, Road to) {

@@ -126,6 +126,12 @@ public final class Lane {
      */
     public boolean canAdmit(TrafficParticipant arriving) {
         if (arriving == null) return false;
+        // Imported street graphs often split a junction approach into a
+        // connector shorter than a bus's full standstill footprint. An empty,
+        // unobstructed connector must admit one vehicle or that topology can
+        // never be traversed at all. Once occupied, the ordinary storage and
+        // entry-gap rules prevent a second vehicle from following it in.
+        if (vehicles.isEmpty() && obstructions.isEmpty()) return true;
         return getOccupiedLengthMetres() + queueLengthContributionOf(arriving) <= roadLengthMetres
                 && getEntryGapMetres() >= physicalQueueLengthOf(arriving);
     }
@@ -139,7 +145,9 @@ public final class Lane {
         for (TrafficParticipant candidate : vehicles) {
             if (candidate == follower || candidate.getId().equals(follower.getId())) continue;
             double position = positionMetresOf(candidate);
-            if (position >= followerPosition && position < closestPosition) {
+            if (LongitudinalOrder.isAhead(
+                            candidate, position, follower, followerPosition)
+                    && position < closestPosition) {
                 closestPosition = position;
                 closestLength = candidate.getLength();
                 closestSpeed = candidate.getInstantaneousSpeedMps();

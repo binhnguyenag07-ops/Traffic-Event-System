@@ -16,13 +16,13 @@
 // Requires the backend on :7070.
 
 const API = 'http://localhost:7070'
-const TICKS = 60
+const SAMPLE_DURATION_SECONDS = 60
 
 // A heading step larger than this between consecutive frames is reported. Real
 // cornering is gradual; anything sharper is the bearing being recomputed from a
 // different source rather than the vehicle actually turning that fast.
 const HEADING_JUMP_DEGREES = 45
-// A vehicle covering more than this in one 3 s tick is not driving.
+// A vehicle covering more than this in one authoritative tick is not driving.
 const TELEPORT_METRES = 60
 
 async function json(path, options) {
@@ -42,28 +42,48 @@ async function sample(centre) {
   const [latitude, longitude] = centre
   const view = await json(
     `/api/simulation/physical-view?lat=${latitude}&lon=${longitude}&fullMap=true`)
-  return (view.vehicles || []).map((vehicle) => ({
-    id: vehicle.id,
-    x: vehicle.x,
-    y: vehicle.y,
-    heading: vehicle.headingDegrees,
-  }))
+  return {
+    elapsedSeconds: view.elapsedSeconds,
+    vehicles: (view.vehicles || []).map((vehicle) => ({
+      id: vehicle.id,
+      x: vehicle.x,
+      y: vehicle.y,
+      heading: vehicle.headingDegrees,
+      roadId: vehicle.roadId,
+      inJunction: vehicle.inJunction,
+      junctionFromRoadId: vehicle.junctionFromRoadId,
+      junctionToRoadId: vehicle.junctionToRoadId,
+    })),
+  }
 }
 
 async function runCase(scenario) {
   const centre = scenario.lab.centre
   await json(`/api/scenarios/${scenario.id}/activate`, { method: 'POST' })
+  const status = await json('/api/simulation/status')
+  const tickSeconds = status.simulationSecondsPerTick
+  if (!Number.isFinite(tickSeconds) || tickSeconds <= 0) {
+    throw new Error(`${scenario.id}: invalid simulationSecondsPerTick ${tickSeconds}`)
+  }
+  const sampleDurationSeconds = scenario.id === 'test-ambulance-queue-4way'
+    ? 75
+    : SAMPLE_DURATION_SECONDS
+  const ticks = Math.ceil(sampleDurationSeconds / tickSeconds)
 
   const series = new Map()
   const record = (frame, tick) => {
-    for (const vehicle of frame) {
+    for (const vehicle of frame.vehicles) {
       if (!series.has(vehicle.id)) series.set(vehicle.id, [])
-      series.get(vehicle.id).push({ ...vehicle, tick })
+      series.get(vehicle.id).push({
+        ...vehicle,
+        tick,
+        elapsedSeconds: frame.elapsedSeconds,
+      })
     }
   }
 
   record(await sample(centre), 0)
-  for (let tick = 1; tick <= TICKS; tick += 1) {
+  for (let tick = 1; tick <= ticks; tick += 1) {
     await json('/api/simulation/tick', { method: 'POST' })
     record(await sample(centre), tick)
   }
@@ -88,7 +108,22 @@ async function runCase(scenario) {
       travelled += step
       if (step > worstStep) { worstStep = step; worstStepTick = current.tick }
       const turned = turn(previous.heading, current.heading)
-      if (turned > worstTurn) { worstTurn = turned; worstTurnTick = current.tick }
+      // Authoritative road-end frames legitimately change bearing when a
+      // vehicle enters another road. The physical renderer fills that interval
+      // with the lane connector, so this probe can judge heading continuity
+      // only while both samples belong to the same physical travel segment.
+      const sameTravelSegment = (
+        previous.roadId != null
+        && previous.roadId === current.roadId
+      ) || (
+        previous.inJunction && current.inJunction
+        && previous.junctionFromRoadId === current.junctionFromRoadId
+        && previous.junctionToRoadId === current.junctionToRoadId
+      )
+      if (sameTravelSegment && turned > worstTurn) {
+        worstTurn = turned
+        worstTurnTick = current.tick
+      }
       headingMin = Math.min(headingMin, current.heading)
       headingMax = Math.max(headingMax, current.heading)
       // Exactly due north with neighbours pointing elsewhere is the signature of
@@ -131,10 +166,14 @@ async function specificChecks(scenario, result) {
   }
 
   if (id === 'test-accident-immobile') {
-    // The accident starts at 20 s; each tick is 3 s, so it is live from tick 7.
+    // This dedicated fixture declares its accident at elapsed second 20. The
+    // scenario catalogue intentionally exposes only metadata, not event bodies.
+    const accidentStart = 20
     for (const [vehicleId, data] of result.series) {
       if (!data.points) continue
-      const after = data.points.filter((point) => point.tick >= 10)
+      const after = data.points.filter((point) => (
+        point.elapsedSeconds >= accidentStart + 2
+      ))
       if (after.length < 2) continue
       const moved = Math.hypot(
         after[after.length - 1].x - after[0].x,
@@ -147,6 +186,34 @@ async function specificChecks(scenario, result) {
 
   if (id === 'test-congestion-reroute' && result.movedAtAll === 0) {
     findings.push('no vehicle moved — the control case should show traffic flowing')
+  }
+
+  if (id === 'test-u-turn') {
+    if (result.movedAtAll === 0) {
+      findings.push('the ambulance never moved')
+    }
+    const ambulance = result.series.get('v-uturn')
+    if (ambulance?.points) {
+      const roads = new Set(ambulance.points.map((point) => point.roadId))
+      if (!roads.has('R1-F') || !roads.has('R1-R')) {
+        findings.push('the ambulance did not reverse from R1-F onto R1-R')
+      }
+    }
+  }
+
+  if (id === 'test-ambulance-queue-4way') {
+    const ambulance = result.series.get('ambulance')
+    if (!ambulance?.points) {
+      findings.push('the ambulance never appeared')
+    } else {
+      const roads = new Set(ambulance.points.map((point) => point.roadId))
+      if (!roads.has('FEED-N-F') || !roads.has('ARM-N-F')) {
+        findings.push('the ambulance did not join the queued north approach')
+      }
+      if (!roads.has('ARM-S-R')) {
+        findings.push('the ambulance never cleared the signal onto the south arm')
+      }
+    }
   }
 
   return findings

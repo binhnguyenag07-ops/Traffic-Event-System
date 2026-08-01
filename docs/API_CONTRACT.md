@@ -365,6 +365,19 @@ Physical View launch uses that live pace before playback starts and therefore
 never receives even one 30-second overview tick. Opening or closing the camera
 does not seek or reset elapsed time.
 
+A client restoring a temporary camera pace can make the parameter update
+conditional by also sending `expectedSimulationSecondsPerTick` and
+`expectedPlaybackIntervalMs`. The response includes `parametersApplied`; a
+false value means another client already selected a newer pace and that newer
+server value was preserved. Both expected fields must be supplied together.
+
+The current dashboard sends `X-Traffic-Pace-Protocol: 2` on its status and
+parameter requests. Once a current dashboard has claimed playback control, the
+server returns `409` for unversioned parameter writes for the rest of that
+server run. This prevents a tab that still has an older Physical View bundle in
+memory from silently forcing the shared clock back to 1×; reloading that tab
+makes it participate in the current protocol again.
+
 `startTimeOfDaySeconds` is published so a client can label **any** recorded
 frame with its clock time from that frame's own `elapsedSeconds`:
 

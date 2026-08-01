@@ -13,7 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.GeoPoint;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadClass;
@@ -41,6 +41,7 @@ class MapSaverTest {
         String json = Files.readString(output);
         assertThat(json.indexOf("\"id\" : \"I1\"")).isLessThan(json.indexOf("\"id\" : \"I2\""));
         assertThat(json.indexOf("\"id\" : \"R1\"")).isLessThan(json.indexOf("\"id\" : \"R2\""));
+        assertThat(json).doesNotContain("locationType");
 
         RoadNetwork restored = loader.load(output.toString());
         assertThat(restored.getIntersectionCount()).isEqualTo(original.getIntersectionCount());
@@ -76,8 +77,8 @@ class MapSaverTest {
 
     private RoadNetwork createNetworkInReverseIdOrder() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("I2", "Second", 1, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("I1", "First", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("I2", "Second", 1, 0));
+        network.addIntersection(new Intersection("I1", "First", 0, 0));
         network.addRoad(new Road(
                 "R2", "I2", "I1", 12, 40, 80, 20,
                 new RoadCondition(0.4, 0.25, RoadStatus.CONGESTED)));

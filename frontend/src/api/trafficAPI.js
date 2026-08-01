@@ -1,9 +1,10 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+const PACE_PROTOCOL_HEADERS = Object.freeze({ 'X-Traffic-Pace-Protocol': '2' })
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   })
   if (response.status === 204) return null
   const body = await response.json().catch(() => ({}))
@@ -16,9 +17,14 @@ async function request(path, options = {}) {
   return body
 }
 
-const get = (path) => request(path)
+const get = (path, options = {}) => request(path, options)
 const post = (path, body = {}) => request(path, { method: 'POST', body: JSON.stringify(body) })
 const put = (path, body = {}) => request(path, { method: 'PUT', body: JSON.stringify(body) })
+const putPace = (body) => request('/simulation/parameters', {
+  method: 'PUT',
+  headers: PACE_PROTOCOL_HEADERS,
+  body: JSON.stringify(body),
+})
 const remove = (path) => request(path, { method: 'DELETE' })
 
 export const networkApi = {
@@ -67,7 +73,7 @@ export const simulationApi = {
   reset: () => post('/simulation/reset'),
   tick: () => post('/simulation/tick'),
   snapshot: () => get('/simulation/snapshot'),
-  status: () => get('/simulation/status'),
+  status: () => get('/simulation/status', { headers: PACE_PROTOCOL_HEADERS }),
   demandSchedule: (offset = 0, limit = 12) => get(
     `/simulation/demand/schedule?offset=${encodeURIComponent(offset)}`
     + `&limit=${encodeURIComponent(limit)}`,
@@ -81,9 +87,20 @@ export const simulationApi = {
   fundamentalDiagram: () => get('/simulation/trace/fundamental'),
   timeSpaceDiagram: (roadId) => get(`/simulation/trace/roads/${encodeURIComponent(roadId)}/time-space`),
   setParameters: (simulationSecondsPerTick, playbackIntervalMs) =>
-    put('/simulation/parameters', { simulationSecondsPerTick, playbackIntervalMs }),
+    putPace({ simulationSecondsPerTick, playbackIntervalMs }),
+  setParametersIfCurrent: (
+    simulationSecondsPerTick,
+    playbackIntervalMs,
+    expectedSimulationSecondsPerTick,
+    expectedPlaybackIntervalMs,
+  ) => putPace({
+    simulationSecondsPerTick,
+    playbackIntervalMs,
+    expectedSimulationSecondsPerTick,
+    expectedPlaybackIntervalMs,
+  }),
   setPlaybackInterval: (playbackIntervalMs) =>
-    put('/simulation/parameters', { playbackIntervalMs }),
+    putPace({ playbackIntervalMs }),
   streamUrl: () => `${API_BASE}/simulation/stream`,
   physicalView: (
     lat,

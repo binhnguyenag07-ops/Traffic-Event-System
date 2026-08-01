@@ -10,7 +10,7 @@ import java.util.TreeMap;
 import java.util.function.BiFunction;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -156,9 +156,9 @@ class VehicleDynamicsEngineTest {
         private TrafficState state;
 
         private Fixture() {
-            network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
-            network.addIntersection(new Intersection("C", "C", 2, 0, LocationType.NORMAL));
+            network.addIntersection(new Intersection("A", "A", 0, 0));
+            network.addIntersection(new Intersection("B", "B", 1, 0));
+            network.addIntersection(new Intersection("C", "C", 2, 0));
             network.addRoad(new Road("AB", "A", "B", QUEUE_ROAD_KM, 50, 100, 0,
                     new RoadCondition(0, 0, RoadStatus.OPEN)));
             network.addRoad(new Road("BC", "B", "C", 1.0, 50, 100, 0,

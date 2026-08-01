@@ -51,8 +51,8 @@ class JunctionMovementGraphTest {
     @Test
     void configuredPenaltyIsAppliedToConservativelyInferredUTurn() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("J", "J", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("J", "J", 1, 0));
         network.addRoad(localRoad("AJ", "A", "J"));
         network.addRoad(localRoad("JA", "J", "A"));
         network.getMovementGraph().setUTurnPolicy(
@@ -67,11 +67,30 @@ class JunctionMovementGraphTest {
         assertThat(movement.penaltySeconds()).isEqualTo(47.0);
     }
 
+    @Test
+    void emergencyMayTurnAcrossAnExactMajorRoadReversePairButOrdinaryTrafficMayNot() {
+        RoadNetwork network = new RoadNetwork();
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("J", "J", 1, 0));
+        network.addRoad(majorRoad("AJ", "A", "J"));
+        network.addRoad(majorRoad("JA", "J", "A"));
+        network.getMovementGraph().setUTurnPolicy(
+                UTurnNetworkPolicy.EXPLICIT_OR_CONSERVATIVE_LOCAL_INFERENCE);
+
+        JunctionMovement movement = network.getMovementGraph()
+                .find("J", "AJ", "JA")
+                .orElseThrow();
+
+        assertThat(movement.isUTurn()).isTrue();
+        assertThat(movement.allows(VehicleType.EMERGENCY)).isTrue();
+        assertThat(movement.allows(VehicleType.CAR)).isFalse();
+    }
+
     private static RoadNetwork network() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("J", "J", 1, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 2, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("J", "J", 1, 0));
+        network.addIntersection(new Intersection("B", "B", 2, 0));
         network.addRoad(new Road(
                 "AJ", "A", "J", 1, 40, 10, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
@@ -97,5 +116,23 @@ class JunctionMovementGraphTest {
                 new RoadCondition(0, 0, RoadStatus.OPEN),
                 List.of(),
                 RoadClass.RESIDENTIAL);
+    }
+
+    private static Road majorRoad(String id, String from, String to) {
+        return new Road(
+                id,
+                id,
+                "physical-AJ",
+                from,
+                to,
+                1.0,
+                50,
+                10,
+                0,
+                1,
+                3.5,
+                new RoadCondition(0, 0, RoadStatus.OPEN),
+                List.of(),
+                RoadClass.PRIMARY);
     }
 }

@@ -36,7 +36,6 @@ class MapLoaderConsistencyTest {
         assertThat(actual.getName()).isEqualTo(expected.getName());
         assertThat(actual.getX()).isEqualTo(expected.getX());
         assertThat(actual.getY()).isEqualTo(expected.getY());
-        assertThat(actual.getLocationType()).isEqualTo(expected.getLocationType());
     }
 
     private void assertEquivalent(Road actual, Road expected) {

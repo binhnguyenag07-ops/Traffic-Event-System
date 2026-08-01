@@ -6,7 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -19,8 +19,8 @@ class RoadNetworkServiceImplTest {
     @BeforeEach
     void setUp() {
         network = new RoadNetwork();
-        network.addIntersection(new Intersection("I1", "First", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("I2", "Second", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("I1", "First", 0, 0));
+        network.addIntersection(new Intersection("I2", "Second", 1, 0));
         network.addRoad(new Road(
                 "R1",
                 "I1",

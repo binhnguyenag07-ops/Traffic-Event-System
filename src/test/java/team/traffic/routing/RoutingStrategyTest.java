@@ -68,10 +68,8 @@ class RoutingStrategyTest {
         @DisplayName("throws when no route exists")
         void noRouteExists() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "X", "X", 0, 0, team.traffic.domain.network.LocationType.NORMAL));
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "Y", "Y", 10, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addIntersection(new team.traffic.domain.network.Intersection("X", "X", 0, 0));
+            network.addIntersection(new team.traffic.domain.network.Intersection("Y", "Y", 10, 0));
 
             RouteRequest request = new RouteRequest("X", "Y", RoutePreference.MINIMUM_HOPS);
             assertThatThrownBy(() -> bfs.findRoute(network, request))
@@ -146,10 +144,8 @@ class RoutingStrategyTest {
         @DisplayName("throws when no route exists")
         void noRouteExists() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "X", "X", 0, 0, team.traffic.domain.network.LocationType.NORMAL));
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "Y", "Y", 10, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addIntersection(new team.traffic.domain.network.Intersection("X", "X", 0, 0));
+            network.addIntersection(new team.traffic.domain.network.Intersection("Y", "Y", 10, 0));
 
             RouteRequest request = new RouteRequest("X", "Y", RoutePreference.SHORTEST_TIME);
             assertThatThrownBy(() -> dijkstra.findRoute(network, request))
@@ -204,10 +200,8 @@ class RoutingStrategyTest {
         @DisplayName("uses a saturated legal road when it is the only path")
         void saturatedOnlyPathBecomesAQueueInsteadOfNoRoute() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "A", "A", 0, 0, team.traffic.domain.network.LocationType.NORMAL));
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "B", "B", 1, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addIntersection(new team.traffic.domain.network.Intersection("A", "A", 0, 0));
+            network.addIntersection(new team.traffic.domain.network.Intersection("B", "B", 1, 0));
             network.addRoad(new team.traffic.domain.network.Road(
                     "AB", "A", "B", 1, 40, 5, 5,
                     new team.traffic.domain.network.RoadCondition(
@@ -280,10 +274,8 @@ class RoutingStrategyTest {
         @DisplayName("throws when no route exists")
         void noRouteExists() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "X", "X", 0, 0, team.traffic.domain.network.LocationType.NORMAL));
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "Y", "Y", 10, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addIntersection(new team.traffic.domain.network.Intersection("X", "X", 0, 0));
+            network.addIntersection(new team.traffic.domain.network.Intersection("Y", "Y", 10, 0));
 
             RouteRequest request = new RouteRequest("X", "Y", RoutePreference.SHORTEST_TIME);
             assertThatThrownBy(() -> astar.findRoute(network, request))
@@ -314,12 +306,9 @@ class RoutingStrategyTest {
         @DisplayName("keeps distance heuristic in the same units as travel time")
         void usesAdmissibleTimeHeuristic() {
             RoadNetwork network = new RoadNetwork();
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "A", "A", 0, 0, team.traffic.domain.network.LocationType.NORMAL));
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "C", "C", 10, 0, team.traffic.domain.network.LocationType.NORMAL));
-            network.addIntersection(new team.traffic.domain.network.Intersection(
-                    "D", "D", 2, 0, team.traffic.domain.network.LocationType.NORMAL));
+            network.addIntersection(new team.traffic.domain.network.Intersection("A", "A", 0, 0));
+            network.addIntersection(new team.traffic.domain.network.Intersection("C", "C", 10, 0));
+            network.addIntersection(new team.traffic.domain.network.Intersection("D", "D", 2, 0));
             network.addRoad(new team.traffic.domain.network.Road("AD", "A", "D", 2, 1, 10, 0,
                     new team.traffic.domain.network.RoadCondition(0, 0,
                             team.traffic.domain.network.RoadStatus.OPEN)));

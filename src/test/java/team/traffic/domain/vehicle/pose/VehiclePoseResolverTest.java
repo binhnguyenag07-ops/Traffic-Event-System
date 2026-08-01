@@ -11,7 +11,7 @@ import team.traffic.domain.network.Building;
 import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadClass;
@@ -246,8 +246,8 @@ class VehiclePoseResolverTest {
     @Test
     void aScenarioWithoutGeographicCoordinatesHasNoPose() {
         RoadNetwork planar = new RoadNetwork();
-        planar.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        planar.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        planar.addIntersection(new Intersection("A", "A", 0, 0));
+        planar.addIntersection(new Intersection("B", "B", 1, 0));
         planar.addRoad(new Road("AB", "A", "B", 1.0, 50, 20, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
 
@@ -291,7 +291,7 @@ class VehiclePoseResolverTest {
     }
 
     private static Intersection junction(String id, double latitude, double longitude) {
-        return new Intersection(id, id, longitude, latitude, LocationType.NORMAL, latitude, longitude);
+        return new Intersection(id, id, longitude, latitude, latitude, longitude);
     }
 
     private static Road road(String id, String from, String to, GeoPoint start, GeoPoint end) {

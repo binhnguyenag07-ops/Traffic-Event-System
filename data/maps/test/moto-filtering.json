@@ -6,8 +6,7 @@
       "x": 0,
       "y": -0.1,
       "latitude": 10.7791017,
-      "longitude": 106.7,
-      "locationType": "NORMAL"
+      "longitude": 106.7
     },
     {
       "id": "B",
@@ -15,8 +14,7 @@
       "x": 0,
       "y": 0.1,
       "latitude": 10.7808983,
-      "longitude": 106.7,
-      "locationType": "NORMAL"
+      "longitude": 106.7
     }
   ],
   "roads": [

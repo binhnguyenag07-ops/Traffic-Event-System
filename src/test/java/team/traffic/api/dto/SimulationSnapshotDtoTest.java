@@ -7,7 +7,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -92,10 +92,8 @@ class SimulationSnapshotDtoTest {
 
     private static RoadNetwork geographicNetwork() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection(
-                "A", "A", 106.700, 10.770, LocationType.NORMAL, 10.770, 106.700));
-        network.addIntersection(new Intersection(
-                "B", "B", 106.700, 10.780, LocationType.NORMAL, 10.780, 106.700));
+        network.addIntersection(new Intersection("A", "A", 106.700, 10.770, 10.770, 106.700));
+        network.addIntersection(new Intersection("B", "B", 106.700, 10.780, 10.780, 106.700));
         network.addRoad(new Road("AB", "A", "B", 1.1, 50, 20, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN),
                 List.of(new GeoPoint(10.770, 106.700), new GeoPoint(10.780, 106.700))));

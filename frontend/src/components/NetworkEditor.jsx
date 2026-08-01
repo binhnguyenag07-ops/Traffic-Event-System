@@ -1,7 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { intersectionLabel, roadLabel } from '../displayLabels'
 
-const LOCATION_TYPES = ['NORMAL', 'COMMERCIAL', 'RESIDENTIAL', 'SCHOOL', 'HOSPITAL', 'BAR']
 const ROAD_STATUSES = ['OPEN', 'CONGESTED', 'BLOCKED', 'CLOSED']
 const ROAD_CLASSES = ['PRIMARY', 'SECONDARY', 'TERTIARY', 'UNCLASSIFIED', 'RESIDENTIAL', 'LIVING_STREET']
 
@@ -13,7 +12,6 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
   captureIntersection, setCaptureIntersection, draftPoint, setDraftPoint, onHighlightsChange }) {
   const [junctionId, setJunctionId] = useState('')
   const [junctionName, setJunctionName] = useState('')
-  const [locationType, setLocationType] = useState('NORMAL')
   const [roadId, setRoadId] = useState('')
   const [reverseRoadId, setReverseRoadId] = useState('')
   const [roadStart, setRoadStart] = useState('')
@@ -71,7 +69,7 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
   const addJunction = async () => {
     if (!draftPoint || !junctionId.trim() || !junctionName.trim()) return
     const result = await perform(() => dashboard.addIntersection({
-      id: junctionId.trim(), name: junctionName.trim(), locationType,
+      id: junctionId.trim(), name: junctionName.trim(),
       latitude: draftPoint.latitude, longitude: draftPoint.longitude,
     }), `Junction ${junctionId.trim()} added`)
     if (result) {
@@ -128,11 +126,7 @@ function NetworkEditor({ dashboard, intersections, status, selected, onSelect,
 
         <div className="editor-group">
           <div className="editor-group-title"><strong>Add junction</strong><span>Click an exact map position</span></div>
-          <div className="two-fields">
-            <Field label="ID"><input value={junctionId} onChange={(event) => setJunctionId(event.target.value)} placeholder="I7" /></Field>
-            <Field label="Type"><select value={locationType} onChange={(event) => setLocationType(event.target.value)}>
-              {LOCATION_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field>
-          </div>
+          <Field label="ID"><input value={junctionId} onChange={(event) => setJunctionId(event.target.value)} placeholder="I7" /></Field>
           <Field label="Name"><input value={junctionName} onChange={(event) => setJunctionName(event.target.value)} placeholder="Landmark or junction name" /></Field>
           <div className="coordinate-readout">{draftPoint
             ? `${draftPoint.latitude.toFixed(6)}, ${draftPoint.longitude.toFixed(6)}`

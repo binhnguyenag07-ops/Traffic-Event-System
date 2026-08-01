@@ -284,7 +284,7 @@ function TrafficMap({ intersections, roads, vehicles = [], events, route, select
             >
               {layers.labels && (!denseNetwork || zoom >= 19)
                 ? <Tooltip permanent direction="top" offset={[0, -8]}>{intersection.id}</Tooltip> : null}
-              <Popup><strong>{intersection.name}</strong><br />{intersection.locationType}</Popup>
+              <Popup><strong>{intersection.name}</strong><br />{intersection.id}</Popup>
             </CircleMarker>
             )
           })}

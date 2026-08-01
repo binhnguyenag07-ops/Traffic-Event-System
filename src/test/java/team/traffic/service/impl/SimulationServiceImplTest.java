@@ -15,6 +15,22 @@ import team.traffic.simulation.TrafficSimulator;
 class SimulationServiceImplTest {
 
     @Test
+    void conditionalPaceChangeDoesNotOverwriteANewerSelection() {
+        TrafficSimulator simulator = new TrafficSimulator(
+                new RoadNetwork(),
+                (network, request) -> null);
+
+        try (SimulationServiceImpl service = new SimulationServiceImpl(simulator)) {
+            service.setParameters(0.25, 250);
+
+            assertThat(service.setParametersIfCurrent(0.25, 250, 2.5, 250)).isTrue();
+            assertThat(service.setParametersIfCurrent(0.25, 250, 30.0, 250)).isFalse();
+            assertThat(service.getSimulationSecondsPerTick()).isEqualTo(2.5);
+            assertThat(service.getPlaybackIntervalMillis()).isEqualTo(250);
+        }
+    }
+
+    @Test
     void scheduledTickFailurePausesPlaybackAndCancelsFutureTicks() throws InterruptedException {
         FailingTrafficSimulator simulator = new FailingTrafficSimulator();
         AtomicReference<SimulationStatus> publishedStatus = new AtomicReference<>();

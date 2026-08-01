@@ -13,6 +13,8 @@ import team.traffic.domain.network.RoadClass;
  *   <li>then traffic that has been waiting long enough to be starved, so a
  *       vehicle on a side street eventually gets out even against a steady
  *       stream on the main road;</li>
+ *   <li>among the starved, whoever has been stuck longest without moving, so a
+ *       saturated junction rotates between its arms instead of settling on one;</li>
  *   <li>then traffic arriving on the more important street;</li>
  *   <li>then straight-ahead movements before turns, since a turn crosses or
  *       merges with another stream;</li>
@@ -28,22 +30,24 @@ import team.traffic.domain.network.RoadClass;
 public final class PriorityRightOfWayPolicy implements RightOfWayPolicy {
 
     /**
-     * After waiting this many ticks a vehicle is promoted above hierarchy and
-     * turn rules, which prevents a minor approach from being starved forever.
+     * After being stationary on one approach for this many simulation seconds,
+     * a vehicle is promoted above hierarchy and turn rules. Using elapsed time
+     * keeps fairness stable when the dynamics sub-step size changes.
      */
-    public static final long STARVATION_TICKS = 6;
+    public static final double STARVATION_SECONDS = 6.0;
 
-    private final long starvationTicks;
+    private final double starvationSeconds;
 
     public PriorityRightOfWayPolicy() {
-        this(STARVATION_TICKS);
+        this(STARVATION_SECONDS);
     }
 
-    public PriorityRightOfWayPolicy(long starvationTicks) {
-        if (starvationTicks < 0) {
-            throw new IllegalArgumentException("Starvation threshold must not be negative.");
+    public PriorityRightOfWayPolicy(double starvationSeconds) {
+        if (!Double.isFinite(starvationSeconds) || starvationSeconds < 0) {
+            throw new IllegalArgumentException(
+                    "Starvation threshold must be finite and not negative.");
         }
-        this.starvationTicks = starvationTicks;
+        this.starvationSeconds = starvationSeconds;
     }
 
     @Override
@@ -55,9 +59,25 @@ public final class PriorityRightOfWayPolicy implements RightOfWayPolicy {
             return byDispatchPriority;
         }
 
-        int byStarvation = Boolean.compare(isStarved(second), isStarved(first));
+        boolean firstStarved = isStarved(first);
+        boolean secondStarved = isStarved(second);
+        int byStarvation = Boolean.compare(secondStarved, firstStarved);
         if (byStarvation != 0) {
             return byStarvation;
+        }
+
+        // Once a junction saturates, every approach is starved and the flag
+        // above stops separating anyone: the order falls through to road class,
+        // manoeuvre and vehicle id, all of which are fixed. The same arm then
+        // wins every step and the others are held indefinitely. Ranking the
+        // starved by how long they have actually been stuck turns that into a
+        // rotation, so a queue drains in the order it formed.
+        if (firstStarved) {
+            int byWaitLength = Double.compare(
+                    second.queueWaitSeconds(), first.queueWaitSeconds());
+            if (byWaitLength != 0) {
+                return byWaitLength;
+            }
         }
 
         int byRoadImportance = Integer.compare(
@@ -105,7 +125,7 @@ public final class PriorityRightOfWayPolicy implements RightOfWayPolicy {
     }
 
     private boolean isStarved(JunctionApproach approach) {
-        return approach.waitedTicks() >= starvationTicks;
+        return approach.queueWaitSeconds() >= starvationSeconds;
     }
 
     private static boolean sameApproach(JunctionApproach first, JunctionApproach second) {

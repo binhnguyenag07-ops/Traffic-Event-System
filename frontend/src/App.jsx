@@ -11,7 +11,11 @@ import { isVehicleVisibleOnMap } from './vehicleVisibility'
 import { inspectorEntries } from './inspector'
 import { buildingLabel, intersectionLabel, roadLabel } from './displayLabels'
 import { formatTimeOfDay, timeOfDaySeconds } from './simulationTime'
-import { enterPhysicalLivePace } from './physical/livePace'
+import {
+  enterPhysicalLivePace,
+  leavePhysicalLivePace,
+  PHYSICAL_LIVE_PACE,
+} from './physical/livePace'
 
 // PixiJS is only needed in the lane-level view. Keeping it out of the initial
 // dashboard bundle makes the normal Leaflet view interactive sooner and avoids
@@ -163,6 +167,7 @@ export default function App() {
     route, comparison, selected, loading, error, tickDelay, streamConnected,
     physicalRuntimeStatus, importSummary,
     simulationClock, demandSchedule, demandScheduleLoading, setSimulationPace,
+    setSimulationPaceIfCurrent,
   } = dashboard
   const [routeStart, setRouteStart] = useState('')
   const [routeEnd, setRouteEnd] = useState('')
@@ -185,6 +190,7 @@ export default function App() {
   const mapFileRef = useRef(null)
   const labStarted = useRef(false)
   const prePhysicalPaceRef = useRef(null)
+  const physicalPaceSessionRef = useRef(null)
 
   const labCases = useMemo(() => scenarios.filter((entry) => entry.lab), [scenarios])
   const labScenario = labId ? scenarios.find((entry) => entry.id === labId) : null
@@ -233,9 +239,19 @@ export default function App() {
 
   // Physical View is a camera on the live head, never a 24-hour transport
   // control. It changes only the reversible frame cadence: no tick, seek,
-  // reset, scenario activation or elapsed-time field is touched here.
+  // reset, scenario activation or elapsed-time field is touched here. Each
+  // camera/scenario session claims live cadence once. Reasserting it whenever
+  // the shared status changed made a hidden camera tab overwrite every pace
+  // selected from another Macro Map tab.
   useEffect(() => {
-    if (!physicalOpen || loading) return
+    if (!physicalOpen) {
+      physicalPaceSessionRef.current = null
+      return
+    }
+    if (loading) return
+    const sessionKey = activeScenario || '__loading-scenario__'
+    if (physicalPaceSessionRef.current === sessionKey) return
+    physicalPaceSessionRef.current = sessionKey
     const transition = enterPhysicalLivePace({
       simulationSecondsPerTick: simulationClock.simulationSecondsPerTick,
       playbackIntervalMs: Number(tickDelay),
@@ -247,6 +263,7 @@ export default function App() {
       transition.target.playbackIntervalMs,
     ).catch(() => {})
   }, [
+    activeScenario,
     physicalOpen,
     loading,
     setSimulationPace,
@@ -296,6 +313,7 @@ export default function App() {
     labStarted.current = true
     window.history.replaceState(null, '', window.location.pathname)
     prePhysicalPaceRef.current = null
+    physicalPaceSessionRef.current = null
     setPhysicalOpen(false)
     setMapViewport(null)
     if (real) dashboard.activateScenario(real.id).catch(() => {})
@@ -303,16 +321,27 @@ export default function App() {
 
   const closePhysical = useCallback((viewport) => {
     if (viewport) setMapViewport(viewport)
-    setPhysicalOpen(false)
     const previousPace = prePhysicalPaceRef.current
+    const transition = leavePhysicalLivePace({
+      simulationSecondsPerTick: simulationClock.simulationSecondsPerTick,
+      playbackIntervalMs: Number(tickDelay),
+    }, previousPace)
     prePhysicalPaceRef.current = null
-    if (previousPace) {
-      setSimulationPace(
-        previousPace.simulationSecondsPerTick,
-        previousPace.playbackIntervalMs,
+    physicalPaceSessionRef.current = null
+    setPhysicalOpen(false)
+    if (transition.shouldApply) {
+      setSimulationPaceIfCurrent(
+        transition.target.simulationSecondsPerTick,
+        transition.target.playbackIntervalMs,
+        PHYSICAL_LIVE_PACE.simulationSecondsPerTick,
+        PHYSICAL_LIVE_PACE.playbackIntervalMs,
       ).catch(() => {})
     }
-  }, [setSimulationPace])
+  }, [
+    setSimulationPaceIfCurrent,
+    simulationClock.simulationSecondsPerTick,
+    tickDelay,
+  ])
 
   const traffic = statistics.traffic || {}
   const activeEvents = snapshot.trafficEvents?.filter((event) => event.status === 'ACTIVE') || []

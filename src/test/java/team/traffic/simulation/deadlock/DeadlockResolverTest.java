@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -88,8 +88,8 @@ class DeadlockResolverTest {
 
     private static RoadNetwork network() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("J", "J", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("J", "J", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road(
                 "JB", "J", "B", 0.008, 30, 10, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));

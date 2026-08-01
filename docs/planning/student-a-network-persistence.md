@@ -11,8 +11,7 @@ src/main/java/team/traffic/domain/network/
 |-- Intersection.java
 |-- Road.java
 |-- RoadCondition.java
-|-- RoadStatus.java
-`-- LocationType.java
+`-- RoadStatus.java
 
 src/main/java/team/traffic/persistence/
 |-- MapLoader.java
@@ -38,7 +37,6 @@ data/
 | `Road` | Represents a directed connection between two intersections. |
 | `RoadCondition` | Stores congestion level, vehicle density, and current road status. |
 | `RoadStatus` | Enum for road state: open, congested, blocked, or closed. |
-| `LocationType` | Enum for realistic places such as school, hospital, bar, residential, and commercial areas. |
 | `MapLoader` | Interface for loading a road network from a file. |
 | `CsvMapLoader` | Loads road network data from CSV files. |
 | `JsonMapLoader` | Loads road network data from JSON files. |
@@ -161,7 +159,7 @@ The number of directed roads is:
 ```
 
 `data/maps/small_city.json` is the Week 3 routing dataset. It contains six
-intersections, all supported location types, alternative paths, four congested
+intersections, alternative paths, four congested
 roads, and one blocked direct road. `congestion_demo.json` and
 `accident_demo.json` are complete Week 6 visualization datasets with valid
 coordinates, density values, road states, and alternative routes.
@@ -187,7 +185,8 @@ statistics consumers:
 
 Each road already exposes `getCapacityUsage()`, `calculateTravelCost()`,
 `isAvailable()`, its current vehicle count, and its `RoadCondition`. Each
-intersection exposes stable `x` and `y` coordinates plus `LocationType`.
+intersection exposes stable topology and geographic coordinates. Functional
+place semantics belong to `BuildingType`, where demand generation uses them.
 
 The Week 6 scenario tests verify that:
 
@@ -218,7 +217,6 @@ classDiagram
         -String name
         -double x
         -double y
-        -LocationType locationType
     }
 
     class Road {
@@ -255,16 +253,6 @@ classDiagram
         CLOSED
     }
 
-    class LocationType {
-        <<enumeration>>
-        SCHOOL
-        HOSPITAL
-        BAR
-        RESIDENTIAL
-        COMMERCIAL
-        NORMAL
-    }
-
     class MapLoader {
         <<interface>>
         +load(String) RoadNetwork
@@ -281,8 +269,6 @@ classDiagram
     RoadNetwork "1" *-- "*" Road
     Road --> RoadCondition
     RoadCondition --> RoadStatus
-    Intersection --> LocationType
-
     MapLoader <|.. CsvMapLoader
     MapLoader <|.. JsonMapLoader
     CsvMapLoader --> RoadNetwork

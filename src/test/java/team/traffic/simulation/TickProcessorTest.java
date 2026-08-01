@@ -10,7 +10,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.JunctionMovement;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.MovementPermission;
 import team.traffic.domain.network.MovementProvenance;
 import team.traffic.domain.network.Road;
@@ -43,10 +43,10 @@ class TickProcessorTest {
     @Test
     void anOnRoadVehicleReroutesAroundAForbiddenUpcomingMovement() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 2, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 1, 1, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
+        network.addIntersection(new Intersection("C", "C", 2, 0));
+        network.addIntersection(new Intersection("D", "D", 1, 1));
         network.addRoad(openRoad("AB", "A", "B"));
         network.addRoad(openRoad("BC", "B", "C"));
         network.addRoad(openRoad("BD", "B", "D"));
@@ -81,9 +81,9 @@ class TickProcessorTest {
     @Test
     void aVehicleBlockedByAnIllegalMovementForItsTypeIsRerouted() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("B", "B", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 2, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 1, 1, LocationType.NORMAL));
+        network.addIntersection(new Intersection("B", "B", 0, 0));
+        network.addIntersection(new Intersection("C", "C", 2, 0));
+        network.addIntersection(new Intersection("D", "D", 1, 1));
         network.addRoad(openRoad("BC", "B", "C"));
         network.addRoad(openRoad("BD", "B", "D"));
         network.addRoad(openRoad("DC", "D", "C"));
@@ -136,8 +136,8 @@ class TickProcessorTest {
         // A 100 m road with capacity 100: three cars are 3% of the headcount
         // but 21% of the tarmac.
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road("AB", "A", "B", 0.1, 50, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
 
@@ -166,8 +166,8 @@ class TickProcessorTest {
     @Test
     void unavoidableRearEndCollisionCreatesAccidentStopsBothVehiclesAndLaterReleasesThem() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road("R", "A", "B", 0.1, 50, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
         Car leader = carOnRoute("leader");
@@ -196,8 +196,8 @@ class TickProcessorTest {
     @Test
     void disabledAutomaticCollisionPolicyDoesNotInventAnAccidentEvent() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road("R", "A", "B", 0.1, 50, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
         Car leader = carOnRoute("leader");
@@ -224,8 +224,8 @@ class TickProcessorTest {
     @Test
     void vehicleRemainsStoppedUntilEveryOverlappingFailureIsResolved() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road("R", "A", "B", 0.1, 50, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
         Car car = carOnRoute("car");
@@ -249,8 +249,8 @@ class TickProcessorTest {
     @Test
     void aLogicalTickIsSplitAtExactEventSecondBoundaries() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(new Road("R", "A", "B", 0.1, 50, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
         List<Double> stepDurations = new ArrayList<>();
@@ -321,10 +321,10 @@ class TickProcessorTest {
     /** A to C the direct way through B, or the long way round through D. */
     private static RoadNetwork networkWithAlternativeRoute() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 2, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 1, 1, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
+        network.addIntersection(new Intersection("C", "C", 2, 0));
+        network.addIntersection(new Intersection("D", "D", 1, 1));
         network.addRoad(openRoad("AB", "A", "B"));
         network.addRoad(openRoad("BC", "B", "C"));
         network.addRoad(openRoad("AD", "A", "D"));

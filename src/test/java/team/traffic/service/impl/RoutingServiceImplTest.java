@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -43,10 +43,10 @@ class RoutingServiceImplTest {
         service = new RoutingServiceImpl(registry);
 
         network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 10, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("C", "C", 0, 5, LocationType.NORMAL));
-        network.addIntersection(new Intersection("D", "D", 10, 5, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 10, 0));
+        network.addIntersection(new Intersection("C", "C", 0, 5));
+        network.addIntersection(new Intersection("D", "D", 10, 5));
 
         network.addRoad(new Road("AB", "A", "B", 10, 50, 100, 0,
                 new RoadCondition(0, 0, RoadStatus.OPEN)));
@@ -155,8 +155,8 @@ class RoutingServiceImplTest {
         @DisplayName("throws when no route exists")
         void throwsWhenNoRoute() {
             RoadNetwork disconnected = new RoadNetwork();
-            disconnected.addIntersection(new Intersection("X", "X", 0, 0, LocationType.NORMAL));
-            disconnected.addIntersection(new Intersection("Y", "Y", 10, 0, LocationType.NORMAL));
+            disconnected.addIntersection(new Intersection("X", "X", 0, 0));
+            disconnected.addIntersection(new Intersection("Y", "Y", 10, 0));
 
             RouteRequest request = new RouteRequest("X", "Y", RoutePreference.SHORTEST_DISTANCE);
             assertThatThrownBy(() -> service.findRoute(disconnected, request))

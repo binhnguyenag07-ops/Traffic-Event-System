@@ -46,6 +46,22 @@ class CsvMapLoaderTest {
     }
 
     @Test
+    void loadsCurrentCsvSchemaWithoutLegacyLocationTypeColumn() throws IOException {
+        Path file = tempDirectory.resolve("current-schema.csv");
+        Files.writeString(file, """
+                type,id,name,x,y,startIntersectionId,endIntersectionId,distance,speedLimit,capacity,currentVehicleCount,congestionLevel,vehicleDensity,roadStatus
+                INTERSECTION,I1,First,0,0,,,,,,,,,
+                INTERSECTION,I2,Second,1,0,,,,,,,,,
+                ROAD,R1,,,,I1,I2,10,50,100,0,0,0,OPEN
+                """);
+
+        RoadNetwork network = loader.load(file.toString());
+
+        assertThat(network.getIntersectionCount()).isEqualTo(2);
+        assertThat(network.getRoad("R1")).isNotNull();
+    }
+
+    @Test
     void loadsRoadRecordsThatAppearBeforeIntersections() throws IOException {
         Path file = writeCsv(
                 "ROAD,R1,,,,,I1,I2,10,50,100,0,0,0,OPEN",

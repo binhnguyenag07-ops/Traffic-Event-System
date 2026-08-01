@@ -100,6 +100,7 @@ public final class JunctionController {
 
         List<JunctionApproach> cleared = new ArrayList<>();
         Map<String, JunctionDecision> decisions = new LinkedHashMap<>();
+        Set<EntryChannel> capacityReservedForOlderVehicle = new LinkedHashSet<>();
         for (JunctionApproach candidate : ordered) {
             if (environment.isRecoveryHeld(candidate)
                     && !environment.isRecoveryReserved(candidate)) {
@@ -107,7 +108,10 @@ public final class JunctionController {
                         candidate, JunctionDenialReason.RECOVERY_HOLD));
                 continue;
             }
-            if (candidate.vehicle().getPriorityLevel() <= 0 && !environment.isSignalGreen(candidate)) {
+            // Dispatch priority orders vehicles that are legally able to move;
+            // it is not permission to run a red signal. Real pre-emption must
+            // change the signal phase, not silently bypass it here.
+            if (!environment.isSignalGreen(candidate)) {
                 decisions.put(candidate.vehicleId(), JunctionDecision.denied(
                         candidate,
                         JunctionDenialReason.RED_SIGNAL,
@@ -124,7 +128,20 @@ public final class JunctionController {
                         candidate, JunctionDenialReason.UNSAFE_GAP));
                 continue;
             }
+            EntryChannel entryChannel = EntryChannel.of(candidate);
+            if (capacityReservedForOlderVehicle.contains(entryChannel)) {
+                decisions.put(candidate.vehicleId(), JunctionDecision.denied(
+                        candidate, JunctionDenialReason.DOWNSTREAM_FULL));
+                continue;
+            }
             if (!environment.hasPhysicalSpaceFor(candidate)) {
+                // Do not let a later, smaller participant repeatedly consume a
+                // short entry gap that is insufficient for the older queue
+                // head. Reserving only this outgoing lane lets the gap grow
+                // until the older vehicle fits, while unrelated lanes keep
+                // flowing. Without this no-barging rule a stream of filtering
+                // motorcycles can starve a car or bus forever.
+                capacityReservedForOlderVehicle.add(entryChannel);
                 decisions.put(candidate.vehicleId(), JunctionDecision.denied(
                         candidate, JunctionDenialReason.DOWNSTREAM_FULL));
                 continue;
@@ -133,6 +150,16 @@ public final class JunctionController {
             decisions.put(candidate.vehicleId(), JunctionDecision.granted(candidate));
         }
         return Map.copyOf(decisions);
+    }
+
+    /** Physical continuation lane shared by approaches competing for entry space. */
+    private record EntryChannel(String roadId, int laneIndex) {
+        private static EntryChannel of(JunctionApproach approach) {
+            int lastLaneIndex = Math.max(0, approach.toRoad().getLaneCount() - 1);
+            return new EntryChannel(
+                    approach.toRoad().getId(),
+                    Math.min(approach.fromLaneIndex(), lastLaneIndex));
+        }
     }
 
     private boolean conflictsWithCleared(JunctionApproach candidate, List<JunctionApproach> cleared) {

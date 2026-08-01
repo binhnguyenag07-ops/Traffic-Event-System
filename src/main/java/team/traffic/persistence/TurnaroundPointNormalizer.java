@@ -7,7 +7,6 @@ import java.util.Set;
 import team.traffic.domain.network.GeoPoint;
 import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.JunctionMovement;
-import team.traffic.domain.network.LocationType;
 import team.traffic.domain.network.MovementPermission;
 import team.traffic.domain.network.MovementProvenance;
 import team.traffic.domain.network.Road;
@@ -73,7 +72,6 @@ final class TurnaroundPointNormalizer {
                 "Turnaround " + id,
                 interpolate(start.getX(), end.getX(), fractionAlongReferenceRoad),
                 interpolate(start.getY(), end.getY(), fractionAlongReferenceRoad),
-                LocationType.NORMAL,
                 geo == null ? null : geo.latitude(),
                 geo == null ? null : geo.longitude());
 

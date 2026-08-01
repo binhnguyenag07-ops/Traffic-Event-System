@@ -16,9 +16,9 @@ class TurnaroundPointNormalizerTest {
         String json = """
                 {
                   "intersections": [
-                    {"id":"A","name":"A","x":0,"y":0,"locationType":"NORMAL",
+                    {"id":"A","name":"A","x":0,"y":0,
                      "latitude":10.0,"longitude":106.0},
-                    {"id":"B","name":"B","x":100,"y":0,"locationType":"NORMAL",
+                    {"id":"B","name":"B","x":100,"y":0,
                      "latitude":10.0,"longitude":106.01}
                   ],
                   "roads": [

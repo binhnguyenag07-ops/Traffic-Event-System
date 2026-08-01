@@ -29,9 +29,13 @@ import team.traffic.simulation.SimulationStatus;
 public class SimulationController {
     private static final int DEFAULT_DEMAND_SCHEDULE_LIMIT = 250;
     private static final int MAX_DEMAND_SCHEDULE_LIMIT = 1_000;
+    private static final String PACE_PROTOCOL_HEADER = "X-Traffic-Pace-Protocol";
+    private static final String CURRENT_PACE_PROTOCOL = "2";
 
     private final SimulationService simulationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Object paceProtocolLock = new Object();
+    private boolean currentPaceProtocolClaimed;
 
     public SimulationController(SimulationService simulationService) {
         this.simulationService = simulationService;
@@ -213,15 +217,52 @@ public class SimulationController {
             long playbackInterval = body.has("playbackIntervalMs")
                     ? body.get("playbackIntervalMs").asLong()
                     : simulationService.getPlaybackIntervalMillis();
-            simulationService.setParameters(simulationSeconds, playbackInterval);
-            ctx.json(statusResponse());
+            boolean hasExpectedSimulationSeconds = body.has("expectedSimulationSecondsPerTick");
+            boolean hasExpectedPlaybackInterval = body.has("expectedPlaybackIntervalMs");
+            if (hasExpectedSimulationSeconds != hasExpectedPlaybackInterval) {
+                throw new IllegalArgumentException(
+                        "Both expected simulation step and playback interval are required.");
+            }
+            Map<String, Object> response;
+            synchronized (paceProtocolLock) {
+                if (!claimOrAcceptPaceProtocol(ctx)) {
+                    ctx.status(409).json(error(
+                            "Playback control came from an outdated dashboard; reload that tab."));
+                    return;
+                }
+                boolean parametersApplied;
+                if (hasExpectedSimulationSeconds) {
+                    parametersApplied = simulationService.setParametersIfCurrent(
+                            body.get("expectedSimulationSecondsPerTick").asDouble(),
+                            body.get("expectedPlaybackIntervalMs").asLong(),
+                            simulationSeconds,
+                            playbackInterval);
+                } else {
+                    simulationService.setParameters(simulationSeconds, playbackInterval);
+                    parametersApplied = true;
+                }
+                response = statusResponse();
+                response.put("parametersApplied", parametersApplied);
+            }
+            ctx.json(response);
         } catch (Exception exception) {
             ctx.status(400).json(error(exception.getMessage()));
         }
     }
 
     private void getStatus(Context ctx) {
+        synchronized (paceProtocolLock) {
+            claimOrAcceptPaceProtocol(ctx);
+        }
         ctx.json(statusResponse());
+    }
+
+    private boolean claimOrAcceptPaceProtocol(Context ctx) {
+        if (CURRENT_PACE_PROTOCOL.equals(ctx.header(PACE_PROTOCOL_HEADER))) {
+            currentPaceProtocolClaimed = true;
+            return true;
+        }
+        return !currentPaceProtocolClaimed;
     }
 
     private void getSnapshot(Context ctx) {

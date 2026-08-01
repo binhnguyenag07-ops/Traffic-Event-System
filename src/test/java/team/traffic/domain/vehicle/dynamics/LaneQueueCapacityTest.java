@@ -113,6 +113,21 @@ class LaneQueueCapacityTest {
                 .isFalse();
     }
 
+    @Test
+    void anEmptyMicroSegmentAdmitsOneVehicleLongerThanItsStorageLength() {
+        Lane emptyConnector = laneOfLength(0.0105, LANE_WIDTH, List.of());
+
+        assertThat(emptyConnector.canAdmit(bus("first", 0.0)))
+                .as("an empty imported connector must be traversable by one bus")
+                .isTrue();
+
+        Lane occupiedConnector = laneOfLength(
+                0.0105, LANE_WIDTH, List.of(bus("first", 0.5)));
+        assertThat(occupiedConnector.canAdmit(bus("second", 0.0)))
+                .as("the micro segment is not unlimited storage")
+                .isFalse();
+    }
+
     private int howManyFit(java.util.function.BiFunction<String, Double, TrafficParticipant> maker) {
         List<TrafficParticipant> queue = new ArrayList<>();
         for (int index = 0; index < 5_000; index++) {
@@ -126,7 +141,14 @@ class LaneQueueCapacityTest {
     }
 
     private Lane laneOf(double laneWidthMetres, List<TrafficParticipant> vehicles) {
-        Road road = new Road("R", "Road", "P", "A", "B", ROAD_LENGTH_KM, 50, 10_000, 0,
+        return laneOfLength(ROAD_LENGTH_KM, laneWidthMetres, vehicles);
+    }
+
+    private Lane laneOfLength(
+            double roadLengthKm,
+            double laneWidthMetres,
+            List<TrafficParticipant> vehicles) {
+        Road road = new Road("R", "Road", "P", "A", "B", roadLengthKm, 50, 10_000, 0,
                 1, laneWidthMetres, new RoadCondition(0, 0, RoadStatus.OPEN), List.of(),
                 RoadClass.SECONDARY);
         return RoadOccupancy.of(road, vehicles, new RoadDataRoadLayout(), List.of()).lane(0);

@@ -88,6 +88,19 @@ public interface SimulationService {
         throw new UnsupportedOperationException("Simulation parameters are not supported.");
     }
 
+    default boolean setParametersIfCurrent(
+            double expectedSimulationSecondsPerTick,
+            long expectedPlaybackIntervalMillis,
+            double simulationSecondsPerTick,
+            long playbackIntervalMillis) {
+        if (Math.abs(getSimulationSecondsPerTick() - expectedSimulationSecondsPerTick) > 1e-9
+                || getPlaybackIntervalMillis() != expectedPlaybackIntervalMillis) {
+            return false;
+        }
+        setParameters(simulationSecondsPerTick, playbackIntervalMillis);
+        return true;
+    }
+
     default double getSimulationSecondsPerTick() {
         return 10.0;
     }

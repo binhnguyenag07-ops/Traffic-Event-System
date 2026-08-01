@@ -14,7 +14,7 @@ import team.traffic.domain.network.Intersection;
 import team.traffic.domain.network.Building;
 import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.network.BuildingType;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -293,8 +293,8 @@ class DemandBackendIntegrationTest {
     @Test
     void reportsAPlanWhoseLaterLegHasNoDirectedPathInsteadOfSpawningIt() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(road("AB", "A", "B"));
         ResolvedPlace origin = ResolvedPlace.intersection("A");
         TripPlan plan = new TripPlan(
@@ -327,8 +327,8 @@ class DemandBackendIntegrationTest {
 
     private static RoadNetwork bidirectionalNetwork() {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection("A", "A", 0, 0, LocationType.NORMAL));
-        network.addIntersection(new Intersection("B", "B", 1, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection("A", "A", 0, 0));
+        network.addIntersection(new Intersection("B", "B", 1, 0));
         network.addRoad(road("AB", "A", "B"));
         network.addRoad(road("BA", "B", "A"));
         return network;
@@ -338,12 +338,8 @@ class DemandBackendIntegrationTest {
             double homeDrivewayMetres,
             double workDrivewayMetres) {
         RoadNetwork network = new RoadNetwork();
-        network.addIntersection(new Intersection(
-                "A", "A", 106.7000, 10.7700, LocationType.NORMAL,
-                10.7700, 106.7000));
-        network.addIntersection(new Intersection(
-                "B", "B", 106.7000, 10.7710, LocationType.NORMAL,
-                10.7710, 106.7000));
+        network.addIntersection(new Intersection("A", "A", 106.7000, 10.7700, 10.7700, 106.7000));
+        network.addIntersection(new Intersection("B", "B", 106.7000, 10.7710, 10.7710, 106.7000));
         network.addRoad(road("AB", "A", "B"));
         network.addRoad(road("BA", "B", "A"));
         network.addBuilding(new Building(

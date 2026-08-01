@@ -9,7 +9,7 @@ import team.traffic.domain.network.Building;
 import team.traffic.domain.network.BuildingAccessPoint;
 import team.traffic.domain.network.BuildingType;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 import team.traffic.domain.network.Road;
 import team.traffic.domain.network.RoadCondition;
 import team.traffic.domain.network.RoadNetwork;
@@ -92,8 +92,7 @@ class TripScheduleEstimatorTest {
     }
 
     private static void addIntersection(RoadNetwork network, String id) {
-        network.addIntersection(new Intersection(
-                id, id + " junction", 0, 0, LocationType.NORMAL));
+        network.addIntersection(new Intersection(id, id + " junction", 0, 0));
     }
 
     private static Road road(

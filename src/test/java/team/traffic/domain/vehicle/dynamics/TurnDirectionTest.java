@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import team.traffic.domain.network.Intersection;
-import team.traffic.domain.network.LocationType;
+
 
 class TurnDirectionTest {
 
@@ -53,6 +53,6 @@ class TurnDirectionTest {
     }
 
     private static Intersection junction(String id, double x, double y) {
-        return new Intersection(id, id, x, y, LocationType.NORMAL);
+        return new Intersection(id, id, x, y);
     }
 }
