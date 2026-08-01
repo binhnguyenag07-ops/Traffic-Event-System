@@ -1,6 +1,162 @@
 # Implemented Class Diagram
 
-The diagram focuses on the runtime domain after the lane, signal, and event
+This document is a set of deliberate views, not one exhaustive drawing. The
+implementation has 299 main classes; a single diagram of all of them would be
+unreadable and would hide the design instead of showing it. Each view below
+answers one question.
+
+| View | Question it answers |
+|---|---|
+| [Object-oriented design](#object-oriented-design) | Where are the OOP principles and design patterns? |
+| [Runtime domain](#runtime-domain) | What owns state while the simulation runs? |
+| [Lateral movement](#view-lateral-movement-and-sub-lane-filtering) | How does a vehicle move across the road? |
+| [Vehicle state](#view-vehicle-state) | What does a vehicle carry, and why is it split up? |
+| [Demand](#view-demand-generation-and-the-multi-leg-runtime) | Where do vehicles come from? |
+| [Scene geometry](#view-scene-geometry) | How is lane-level geometry derived for rendering? |
+
+## Object-oriented design
+
+This view carries the requirements in specification §5 (OOP), §7 (suggested
+architecture) and §8 (design patterns). Physical detail is deliberately left
+out; the other views cover it.
+
+```mermaid
+classDiagram
+    class PathFindingStrategy {
+        <<interface>>
+        +getName() String
+        +supports(RoutePreference) boolean
+        +findRoute(RoadNetwork, RouteRequest) RouteResult
+    }
+    class BfsPathFindingStrategy
+    class DijkstraPathFindingStrategy
+    class AStarPathFindingStrategy
+    class RoutingStrategyRegistry {
+        +register(PathFindingStrategy)
+        +findForPreference(RoutePreference) Optional~PathFindingStrategy~
+        +findByName(String) Optional~PathFindingStrategy~
+        +getAll() List~PathFindingStrategy~
+    }
+    PathFindingStrategy <|.. BfsPathFindingStrategy
+    PathFindingStrategy <|.. DijkstraPathFindingStrategy
+    PathFindingStrategy <|.. AStarPathFindingStrategy
+    RoutingStrategyRegistry o-- PathFindingStrategy
+
+    class RoutingService {
+        <<interface>>
+        +findRoute(RoadNetwork, RouteRequest) RouteResult
+        +getStrategies() List~PathFindingStrategy~
+        +getAlgorithmStatistics() List~AlgorithmStatistics~
+        +findRouteBetweenBuildings(RoadNetwork, String, String, RoutePreference) BuildingRoutePlan
+    }
+    class RoutingServiceImpl
+    RoutingService <|.. RoutingServiceImpl
+    RoutingServiceImpl --> RoutingStrategyRegistry
+
+    class RoadNetworkService {
+        <<interface>>
+    }
+    class SimulationService {
+        <<interface>>
+    }
+    class VehicleService {
+        <<interface>>
+    }
+    class TrafficEventService {
+        <<interface>>
+    }
+    class StatisticsService {
+        <<interface>>
+    }
+    class RoutingController
+    class SimulationController
+    RoutingController --> RoutingService
+    SimulationController --> SimulationService
+
+    class TrafficEventBus {
+        +subscribe(TrafficEventListener)
+        +unsubscribe(TrafficEventListener)
+        +publish(TrafficEvent)
+    }
+    class TrafficEventListener {
+        <<interface>>
+        +onTrafficEvent(TrafficEvent)
+    }
+    class DynamicReroutingListener
+    TrafficEventBus o-- TrafficEventListener
+    TrafficEventListener <|.. DynamicReroutingListener
+
+    class VehicleFactory {
+        +createVehicle(VehicleType, String, String) Vehicle
+        +configureVehicle(T) T
+    }
+    class Vehicle {
+        <<abstract>>
+    }
+    VehicleFactory ..> Vehicle
+
+    class MapLoader {
+        <<interface>>
+        +load(String) RoadNetwork
+    }
+    class JsonMapLoader
+    class CsvMapLoader
+    class SyntheticMapGenerator
+    MapLoader <|.. JsonMapLoader
+    MapLoader <|.. CsvMapLoader
+```
+
+| Requirement | Pattern | Where |
+|---|---|---|
+| §5 Inheritance — routing algorithms inherit from abstract interfaces | — | `PathFindingStrategy` and its three implementations |
+| §5 Polymorphism — algorithms switched dynamically | Strategy | `RoutingStrategyRegistry.strategyFor(RoutePreference)` |
+| §5 Abstraction — components interact through abstract APIs | — | Controllers depend only on the eight `service/` interfaces |
+| §5 Encapsulation — objects manage their own state | — | `Road`, `VehicleProfile`, `TrafficEvent` validate in their constructors |
+| §8 Strategy — routing algorithms | Strategy | `PathFindingStrategy`; also `CarFollowingModel`, `LaneChangeModel`, `TripDemandModel`, `RoadLayout` |
+| §8 Observer — traffic updates | Observer | `TrafficEventBus` / `TrafficEventListener` |
+| §8 Factory — vehicle generation | Factory | `VehicleFactory` |
+| §8 MVC — GUI separation | MVC-like | React view, Javalin controllers, services, domain model |
+
+`DynamicReroutingListener` is the Observer extension point. Production adaptive
+rerouting is coordinated by `AdaptiveNavigationCoordinator` instead, which adds
+driver information access, latency, cooldowns and stall state; the bus still
+publishes every event transition.
+
+The Singleton pattern is deliberately not used. Dependencies are injected
+through constructors at one composition root (`App`), which keeps every class
+constructible in a test without global state. The specification asks for at
+least two patterns; four are implemented.
+
+### Specification names and implemented names
+
+Specification §6 and §7 suggest names that this implementation renamed as the
+design became more specific. The mapping is:
+
+| Specification | Implemented as | Note |
+|---|---|---|
+| `Graph` | `RoadNetwork` | Directed graph aggregate; a `Road` is one direction of travel |
+| `Road`, `Intersection` | `Road`, `Intersection` | unchanged |
+| `Vehicle`, `Car`, `Bus`, `EmergencyVehicle` | same | plus `Motorcycle`, the optional two-wheeler |
+| `PathFindingStrategy` | same | unchanged |
+| `DijkstraStrategy`, `AStarStrategy` | `DijkstraPathFindingStrategy`, `AStarPathFindingStrategy` | plus `BfsPathFindingStrategy` |
+| `TrafficSimulator`, `TrafficEvent` | same | unchanged |
+| `TrafficController` | `TrafficSignal` + `SignalPlan` + `JunctionController` | split by responsibility: signal state, plan generation, and per-step arbitration |
+| `StatisticsManager` | `StatisticsService` / `StatisticsServiceImpl` | named as a service for consistency with the other seven |
+| `MapLoader` | `MapLoader` interface + `JsonMapLoader`, `CsvMapLoader` | unchanged |
+| `VisualizationEngine` | React frontend + `PhysicalSceneAssembler` | rendering runs in the browser; the backend derives scene geometry only |
+| simulation / algorithm / visualization / utility layers | `simulation/` / `routing/` / `frontend/` / `persistence/` + `service/` | same four responsibilities |
+
+Specification §4.4 lists *Traffic Light Delay* among the possible events.
+Signals are implemented instead as `TrafficSignal`, a junction-owned cyclic
+controller that participates in stop-line arbitration, so vehicles do wait at
+intersections as required. It is not modelled as a `TrafficEvent` because a
+signal is repeating infrastructure rather than a one-off incident on one road,
+and because it must interact with right-of-way. `BreakdownEvent` was added as a
+fourth event type in its place. See [Runtime domain](#runtime-domain).
+
+## Runtime domain
+
+This view focuses on the runtime domain after the lane, signal, and event
 upgrades. API DTOs and persistence data carriers are omitted for readability.
 
 ```mermaid
@@ -56,11 +212,28 @@ classDiagram
         -List~BusStop~ stops
     }
     class EmergencyVehicle
+    class VehicleProfile {
+        <<record>>
+        +lengthMetres double
+        +widthMetres double
+        +maxSpeedKph double
+        +priorityLevel int
+    }
+    class DriverProfile {
+        <<record>>
+        +minimumGapMetres double
+        +reactionTimeSeconds double
+        +imperfection double
+        +politeness double
+        +maxLateralSpeedMps double
+    }
     Vehicle <|-- Car
     Vehicle <|-- Motorcycle
     Vehicle <|-- Bus
     Vehicle <|-- EmergencyVehicle
     Vehicle --> JourneyPhase
+    Vehicle *-- VehicleProfile
+    Vehicle *-- DriverProfile
 
     class TrafficState {
         +occupancyOf(roadId) RoadOccupancy
@@ -154,9 +327,16 @@ to junctions, repeat by phase, and participate in stop-line arbitration. Event
 time is expressed in seconds; integer ticks remain only as deterministic trace
 indexes.
 
-## Added since this diagram was drawn
+`VehicleProfile` describes the machine and is fixed for the life of the
+vehicle; `DriverProfile` describes the person and is varied deterministically
+from the vehicle id and the scenario seed. They are separate because they
+change for different reasons: one is a vehicle model, the other is a behaviour
+calibration.
 
-Lateral movement and sub-lane filtering, in `domain/vehicle/dynamics`:
+## View: lateral movement and sub-lane filtering
+
+In `domain/vehicle/dynamics`. This is what lets a narrow vehicle ride between
+two lanes instead of queueing in one:
 
 ```mermaid
 classDiagram
@@ -190,8 +370,10 @@ classDiagram
     TrafficParticipant ..> LateralExtent
 ```
 
-`Vehicle` state, extracted so values that are only meaningful together live
-together:
+## View: vehicle state
+
+Extracted from `Vehicle` so that values which are only meaningful together live
+together, and are acquired and discarded as one act:
 
 ```mermaid
 classDiagram
@@ -211,7 +393,9 @@ classDiagram
     Vehicle *-- TripRecord
 ```
 
-Demand generation and the resolved multi-leg runtime boundary:
+## View: demand generation and the multi-leg runtime
+
+Where vehicles come from, and how one plan becomes several legs:
 
 ```mermaid
 classDiagram
@@ -251,8 +435,10 @@ list or a future OD matrix. `TripScheduleEstimator` is a read-only directed
 free-flow projection for the schedule API; runtime arrival remains owned by
 `Vehicle` and `TickProcessor`.
 
-Scene geometry, in `domain/scene`, derived from the network for the physical
-view and never stored:
+## View: scene geometry
+
+In `domain/scene`, derived from the network for the physical view and never
+stored:
 
 ```mermaid
 classDiagram
