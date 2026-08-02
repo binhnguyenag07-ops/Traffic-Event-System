@@ -1,7 +1,8 @@
 # Implemented Class Diagram
 
 This document is a set of deliberate views, not one exhaustive drawing. The
-implementation has 299 main classes; a single diagram of all of them would be
+current `src/main/java` tree has 285 top-level Java types (135 classes, 23
+interfaces, 32 enums and 95 records); a single diagram of all of them would be
 unreadable and would hide the design instead of showing it. Each view below
 answers one question.
 
@@ -9,6 +10,7 @@ answers one question.
 |---|---|
 | [Object-oriented design](#object-oriented-design) | Where are the OOP principles and design patterns? |
 | [Runtime domain](#runtime-domain) | What owns state while the simulation runs? |
+| [Adaptive navigation and deadlock](#view-adaptive-navigation-u-turns-and-deadlock) | How are legal reroutes, U-turns and physical deadlock recovery coordinated? |
 | [Lateral movement](#view-lateral-movement-and-sub-lane-filtering) | How does a vehicle move across the road? |
 | [Vehicle state](#view-vehicle-state) | What does a vehicle carry, and why is it split up? |
 | [Demand](#view-demand-generation-and-the-multi-leg-runtime) | Where do vehicles come from? |
@@ -83,6 +85,7 @@ classDiagram
         +onTrafficEvent(TrafficEvent)
     }
     class DynamicReroutingListener
+    <<legacy extension>> DynamicReroutingListener
     TrafficEventBus o-- TrafficEventListener
     TrafficEventListener <|.. DynamicReroutingListener
 
@@ -109,8 +112,8 @@ classDiagram
 | Requirement | Pattern | Where |
 |---|---|---|
 | §5 Inheritance — routing algorithms inherit from abstract interfaces | — | `PathFindingStrategy` and its three implementations |
-| §5 Polymorphism — algorithms switched dynamically | Strategy | `RoutingStrategyRegistry.strategyFor(RoutePreference)` |
-| §5 Abstraction — components interact through abstract APIs | — | Controllers depend only on the eight `service/` interfaces |
+| §5 Polymorphism — algorithms switched dynamically | Strategy | `RoutingStrategyRegistry.findForPreference(RoutePreference)` |
+| §5 Abstraction — components interact through abstract APIs | — | Core use-case controllers use `service/` interfaces; focused scenario/import, experiment and scene controllers also use concrete collaborators |
 | §5 Encapsulation — objects manage their own state | — | `Road`, `VehicleProfile`, `TrafficEvent` validate in their constructors |
 | §8 Strategy — routing algorithms | Strategy | `PathFindingStrategy`; also `CarFollowingModel`, `LaneChangeModel`, `TripDemandModel`, `RoadLayout` |
 | §8 Observer — traffic updates | Observer | `TrafficEventBus` / `TrafficEventListener` |
@@ -119,8 +122,8 @@ classDiagram
 
 `DynamicReroutingListener` is the Observer extension point. Production adaptive
 rerouting is coordinated by `AdaptiveNavigationCoordinator` instead, which adds
-driver information access, latency, cooldowns and stall state; the bus still
-publishes every event transition.
+driver information access, latency, cooldowns and stall state; the event bus
+still publishes every event transition.
 
 The Singleton pattern is deliberately not used. Dependencies are injected
 through constructors at one composition root (`App`), which keeps every class
@@ -251,6 +254,7 @@ classDiagram
     class LaneChangeModel {
         <<interface>>
         +chooseTargetLane(request) int
+        +chooseTarget(request) LateralTarget
     }
     class MobilLaneChangeModel
     class FilteringLaneChangeModel
@@ -328,10 +332,64 @@ time is expressed in seconds; integer ticks remain only as deterministic trace
 indexes.
 
 `VehicleProfile` describes the machine and is fixed for the life of the
-vehicle; `DriverProfile` describes the person and is varied deterministically
-from the vehicle id and the scenario seed. They are separate because they
-change for different reasons: one is a vehicle model, the other is a behaviour
-calibration.
+vehicle. `DriverProfile` describes the person: its motion fields are varied
+deterministically from the vehicle id, while its nested `DriverDecisionProfile`
+is varied from both the vehicle id and the scenario seed. They are separate
+because they change for different reasons: one is a vehicle model, the other is
+a behaviour calibration.
+
+## View: adaptive navigation, U-turns, and deadlock
+
+This view shows the production control path. The Observer bus remains available
+to extensions, but it is not the route-mutation mechanism.
+
+```mermaid
+classDiagram
+    class RoadNetwork
+    class JunctionMovementGraph {
+        +movementsFrom(network, junctionId, incomingRoadId, vehicleType)
+        +isAllowed(...) boolean
+        +setUTurnPolicy(UTurnNetworkPolicy)
+    }
+    RoadNetwork *-- JunctionMovementGraph
+
+    class TickProcessor
+    class AdaptiveNavigationCoordinator {
+        +process(simulationSeconds, network, vehicles, events, state)
+        +metrics() AdaptiveNavigationMetrics
+    }
+    class TrafficInformationService
+    class DriverDecisionPolicy
+    class AdaptiveRouter
+    TickProcessor *-- AdaptiveNavigationCoordinator
+    AdaptiveNavigationCoordinator *-- TrafficInformationService
+    AdaptiveNavigationCoordinator *-- DriverDecisionPolicy
+    AdaptiveNavigationCoordinator *-- AdaptiveRouter
+    AdaptiveRouter --> JunctionMovementGraph
+
+    class VehicleDynamicsEngine
+    class DeadlockCoordinator {
+        +applyTo(TrafficState)
+        +observe(...)
+        +cycles() List~DeadlockCycle~
+    }
+    class DeadlockDetector
+    class DeadlockResolver
+    class WaitForGraph
+    class RecoveryReservation
+    VehicleDynamicsEngine *-- DeadlockCoordinator
+    DeadlockCoordinator *-- DeadlockDetector
+    DeadlockCoordinator *-- DeadlockResolver
+    DeadlockDetector --> WaitForGraph
+    DeadlockResolver --> RecoveryReservation
+```
+
+`JunctionMovementGraph` makes `(incoming road, junction)` part of route state and
+applies vehicle-type-specific U-turn policy. `AdaptiveNavigationCoordinator`
+delivers imperfect information and atomically splices a legal suffix without
+moving the vehicle. `DeadlockCoordinator` confirms persistent wait-for cycles,
+gates new entrants and reserves one real drain path; strict recovery has no
+teleport/despawn branch.
 
 ## View: lateral movement and sub-lane filtering
 

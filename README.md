@@ -39,9 +39,9 @@ The Java backend owns the simulation state, routing, traffic events, demand, and
 The simulator combines the required network, vehicle, routing, event, visualization, and analysis systems:
 
 - Directed road graphs with lane geometry, junction movements, traffic signals, network editing, and JavaScript Object Notation (JSON) or comma-separated values (CSV) import
-- Breadth-First Search (BFS), Dijkstra, and A* routing with distance, time, and congestion-aware costs
+- Breadth-First Search (BFS), Dijkstra, and A* routing with minimum-hop, distance, time, and congestion-aware objectives
 - Cars, motorcycles, buses, and emergency vehicles with lane occupancy, car-following, lane changes, stops, and priority rules
-- Congestion, accidents, breakdowns, and road closures with dynamic route recalculation
+- Congestion, accidents, breakdowns, and road closures with driver-aware adaptive route recalculation
 - Seeded demand, multi-leg trips, dwell times, boundary traffic, and deterministic playback
 - Live statistics, route comparison, frame history, traffic-flow traces, and reproducible algorithm experiments
 
@@ -53,7 +53,7 @@ The implementation covers the functional, object-oriented, visualization, and an
 |---|---|---|
 | Road network | Directed graph operations, road conditions, JSON/CSV loading, export, and synthetic maps | [Architecture](docs/ARCHITECTURE.md) |
 | Vehicle simulation | Multiple vehicle types, independent routes, lane movement, travel history, and arrival handling | [Vehicle flow](docs/VEHICLE_FLOW.md) |
-| Routing and navigation | BFS, Dijkstra, A*, three route objectives, and dynamic route recalculation | [Routing algorithms](docs/ALGORITHM_EXPLANATION.md) |
+| Routing and navigation | BFS, Dijkstra, A*, four route objectives, and adaptive route recalculation | [Routing algorithms](docs/ALGORITHM_EXPLANATION.md) |
 | Traffic events | Congestion, accidents, breakdowns, closures, traffic signals, and event processing | [Application programming interface (API) contract](docs/API_CONTRACT.md) |
 | Simulation engine | Time steps, pause, resume, reset, speed control, event handling, replay, and statistics | [Live demo guide](docs/DEMO_GUIDE.md) |
 | Visualization | Road graph, vehicle movement, route paths, congestion indicators, and statistics panels | [Application preview](#application-preview) |
@@ -171,7 +171,7 @@ The main OOP requirements map to implemented code:
 | Encapsulation | Domain objects validate and manage their state |
 | Inheritance | `Vehicle` and `TrafficEvent` define shared abstract behavior |
 | Polymorphism | Routing strategies and vehicle or event subclasses share abstractions |
-| Abstraction | Controllers use service interfaces; routing uses `PathFindingStrategy` |
+| Abstraction | Core use-case controllers use service interfaces; focused scenario/import, experiment, and scene paths use concrete collaborators; routing uses `PathFindingStrategy` |
 | Strategy | Routing, car-following, lane-changing, and demand policies |
 | Observer | `TrafficEventBus`, `TrafficEventListener`, and simulation snapshot listeners |
 | Factory | `VehicleFactory` creates each supported vehicle type |
@@ -215,7 +215,7 @@ The Java server loads [`district1_typical_day.json`](data/scenarios/district1_ty
 
 | File | Contents |
 |---|---|
-| [`data/maps/district1_network.json`](data/maps/district1_network.json) | Intersections, directed roads, buildings, and land cover |
+| [`data/maps/district1_network.json`](data/maps/district1_network.json) | Intersections, directed roads, movement rules, bus stops, buildings, and land cover |
 | [`data/demand/default_assumptions.json`](data/demand/default_assumptions.json) | Demand curves, vehicle mix, occupancy, and attraction parameters |
 | [`data/scenarios/district1_typical_day.json`](data/scenarios/district1_typical_day.json) | Default simulation scenario |
 | [`data/results/experiment_results.json`](data/results/experiment_results.json) | Checked-in routing experiment results |

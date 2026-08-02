@@ -1,6 +1,7 @@
 # Adaptive navigation, driver awareness, U-turn, and deadlock design
 
-**Status:** implemented on `adaptive-navigation-deadlock` (2026-07-27).
+**Status:** implemented, merged, and enabled by default in the production
+composition root.
 
 The implementation preserves the disabled-mode compatibility path while the
 application enables adaptive traffic by default. Engineering defaults remain
@@ -34,9 +35,9 @@ uncalibrated assumptions, as noted in the configuration section.
 
 ### Verification
 
-- Backend regression: 638 tests, 0 failures/errors/skips.
-- Frontend regression: 16 files, 111 tests; ESLint and the production Vite build
-  pass.
+- The current backend and frontend regression suites, ESLint and production
+  Vite build are the acceptance gates; run the commands in `README.md` rather
+  than relying on a hard-coded test count that changes with later work.
 - Routing computation count, cache hit rate, and mean compute time are recorded
   at runtime instead of assigning an unprofiled absolute millisecond budget.
 
@@ -90,7 +91,7 @@ executing it*.
 These were verified properties before this implementation and explain the
 changes below.
 
-| Area | Current behavior | Consequence |
+| Area | Pre-implementation behavior | Consequence |
 |---|---|---|
 | Local traffic | `TrafficState`, `RoadOccupancy`, and `Lane` can find leaders and active lane obstructions; signal state is available only through junction clearance | Useful facts exist, but there is no single perception snapshot and no explicit reason why a vehicle waited |
 | Dynamic information | `DynamicReroutingListener` receives every active event and immediately reroutes every vehicle whose remaining route contains that road | Every driver is omniscient, equally fast to react, and has no patience, horizon, confidence, or cooldown |
@@ -103,10 +104,10 @@ changes below.
 | U-turn | `TurnDirection` can classify `U_TURN`, but the router has no legal-movement graph and physical scene connectors omit the reverse movement | Routing, dynamics, and rendering do not share one authoritative U-turn contract |
 | Deadlock | Admission and spillback prevention exist, but there is no wait-for graph, persistent no-progress detector, or recovery coordinator | A queue can remain frozen indefinitely without a diagnosis |
 
-The first implementation phase must fix the route-location and waiting-reason
-contracts. Adding only a timeout on top of the current model would repeatedly
-request a route from the wrong anchor and would not distinguish a red light from
-a structural lock.
+The first implementation phase therefore fixed the route-location and
+waiting-reason contracts. Adding only a timeout on top of the former model
+would have repeatedly requested a route from the wrong anchor and would not
+have distinguished a red light from a structural lock.
 
 ## Goals and non-goals
 
@@ -205,7 +206,9 @@ flowchart LR
 
 There are two loops:
 
-- the **motion loop** runs every sub-step (at most one simulated second);
+- the **motion loop** runs every physical sub-step. Normal UI paces keep it at
+  most one simulated second; the engine caps pathological API ticks at 60
+  sub-steps, so an API tick above 60 seconds exceeds that integration bound;
 - the **strategic loop** runs on a configurable cadence, an information delivery,
   a hard-block observation, or a stall deadline.
 
@@ -443,7 +446,7 @@ public record DriverDecisionProfile(
 ```
 
 `InformationAccess` can be `LOCAL_ONLY`, `BROADCAST`, or `CONNECTED_NAVIGATION`.
-`UTurnPolicy` should be:
+`UTurnPolicy` is:
 
 ```text
 NEVER
@@ -937,8 +940,9 @@ physical sub-step:
 15. publish the authoritative renderer frame and diagnostics.
 
 No synchronous event listener mutates routes outside this order.
-`DynamicReroutingListener` is replaced by a listener that queues information
-updates for step 4.
+Production subscribes no replacement routing listener. `TrafficInformationService`
+reads active events and their publication policy inside
+`AdaptiveNavigationCoordinator`, then delivers due notices in step 4.
 
 ## 10. Configuration
 
@@ -1003,8 +1007,8 @@ reroute patience. Runtime variability is seeded and bounded.
 
 ## 11. Observability and API
 
-The simulation should expose enough evidence to debug behavior without drawing
-all internal state on the map.
+The simulation exposes enough evidence to debug behavior without drawing all
+internal state on the map.
 
 Per vehicle:
 
@@ -1035,11 +1039,11 @@ Aggregate metrics:
 - assisted recoveries, always separate;
 - routing computation count, cache hit rate, and time.
 
-`TripRecord` should gain `waitingSeconds` and cause totals. Keep
-`waitingTicks` only as a deprecated compatibility metric until consumers move.
+`TripRecord` carries `waitingSeconds` and cause totals. It also retains
+`waitingTicks` as a compatibility metric for existing API consumers.
 
-For UI, selected-vehicle diagnostics are sufficient. The default map should not
-become cluttered with every driver's sensor rays and route alternatives.
+The UI surfaces diagnostics for the selected vehicle; the default map avoids
+cluttering every vehicle with sensor rays and route alternatives.
 
 ## 12. Tests
 
@@ -1121,7 +1125,9 @@ hardware; record the baseline and set a regression budget from it.
 
 ## 13. Implementation order
 
-This order avoids building behavior on contracts that will immediately change.
+The work was implemented in this order so later behavior did not depend on
+contracts that were about to change. The phase list is retained as an
+implementation record, not as a list of unfinished work.
 
 ### Phase 0 — correctness foundations
 
@@ -1143,7 +1149,8 @@ This order avoids building behavior on contracts that will immediately change.
 - add nested `DriverDecisionProfile`;
 - add `TrafficInformationService`, travel-time snapshots, hysteresis, batching,
   caching, and backoff;
-- replace direct route mutation by `DynamicReroutingListener`.
+- remove production route mutation by `DynamicReroutingListener`; deliver event
+  knowledge and coordinate route changes inside `AdaptiveNavigationCoordinator`.
 
 ### Phase 3 — authoritative manoeuvre graph and U-turn
 
@@ -1176,7 +1183,7 @@ This order avoids building behavior on contracts that will immediately change.
 
 ## Acceptance criteria
 
-The design is implemented only when all of the following are true:
+The implementation is accepted against all of the following criteria:
 
 - a vehicle can explain why it is stationary;
 - information reaches different drivers at different deterministic times;

@@ -28,6 +28,9 @@ public final class ExperimentRunner {
                 .append("A* saves over Dijkstra.\n\n")
                 .append("Seed: `").append(report.seed()).append("`; route requests per scenario: `")
                 .append(report.requestsPerScenario()).append("`.\n\n")
+                .append("The seed fixes requests, route outcomes, costs, and visited-state counts. ")
+                .append("`Avg ms` is a wall-clock measurement and varies with the machine, JVM warm-up, ")
+                .append("and concurrent load.\n\n")
                 .append("| Scenario | Algorithm | Objective | Success | Avg ms | Avg visited | Optimality |\n")
                 .append("|---|---|---|---:|---:|---:|---:|\n");
         for (var scenario : report.scenarios()) {

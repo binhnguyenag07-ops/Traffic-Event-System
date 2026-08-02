@@ -46,19 +46,32 @@ stores it in a `RoutePlan`, which holds the route and how far through it the
 vehicle is. The preference (`CONGESTION_AWARE` by default) picks the strategy —
 BFS, Dijkstra or A\*.
 
-A vehicle with no usable route is `BLOCKED` rather than removed. It is still
-there, still counted, and will move the moment a route exists.
+A vehicle with no usable route is `BLOCKED` rather than removed. It remains
+counted and enters cause-aware retry/backoff; it can move once it has a legal
+route and the next road can physically admit it.
 
-**Rerouting** happens when a `TrafficEvent` closes or blocks a road on the
-remaining path. `DynamicReroutingListener` hears the event and asks the affected
-vehicles to recompute from where they are now. A vehicle already on the blocked
-road finishes its current segment first; it does not teleport off it.
+**Rerouting** is coordinated by `AdaptiveNavigationCoordinator`, not by the
+legacy `DynamicReroutingListener`. On each strategic cadence or cause-specific
+trigger it combines local perception with the events/congestion that have
+actually reached that driver's `DriverKnowledge`. Savings thresholds, latency,
+cooldown and retry backoff can all produce an intentional wait. An accepted
+route replaces only the suffix after the vehicle's exact `RouteAnchor`; current
+road, progress, lane and lateral motion are preserved, so rerouting never
+teleports a vehicle.
+
+Momentary capacity is an admission constraint, not a missing graph edge. A full
+next road keeps the vehicle at the boundary and is retried without launching a
+new whole-graph search every simulated second. `CLOSED`, `BLOCKED` and illegal
+junction movements remain hard routing constraints.
 
 ## 3. One tick
 
-The default tick is 0.5 simulated seconds. If a caller configures a longer
-tick, `VehicleDynamicsEngine` splits it into sub-steps of at most one second
-and runs three phases in each:
+The default tick is 0.5 simulated seconds. `VehicleDynamicsEngine` requests
+one-second-or-shorter sub-steps and caps the work at 60 sub-steps per logical
+tick. The shipped UI uses at most 30 simulated seconds per tick, so every normal
+UI sub-step is at most one second. The API accepts larger positive values; above
+60 seconds the safety cap makes each sub-step longer than one second. Each
+sub-step runs three phases:
 
 1. **Observe.** `TrafficState.capture` records where every vehicle physically
    is, once, before anyone decides anything.
@@ -79,14 +92,17 @@ happen to sit in the list — which is what makes a replay reproducible.
 
 **Along the road.** The Krauss car-following model chooses a speed from the gap
 to the leader, the leader's speed, the driver's reaction time and the desired
-speed. The desired speed is the lower of the posted limit times the driver's
-speed factor, and what the bend ahead allows.
+speed. `Vehicle` derives that desired speed from the lower of the machine and
+posted limits, the driver's speed factor, active event slowdown, and the
+curvature-comfort cap for the bend ahead.
 
 **Across the road.** The lane-change model returns a `LateralTarget` — an offset
 in metres, not just a lane index. The vehicle then slides towards it at a bounded
-lateral speed, so a lane change takes the two or three seconds it should. While
-crossing, it is committed: the model is not asked again until it arrives, or it
-would drift back and forth over the line forever.
+lateral speed over multiple physical sub-steps. Its duration depends on lane
+spacing, target offset and the vehicle-specific driver profile; it is never an
+instantaneous sideways jump. While crossing, it is committed: the model is not
+asked again until it arrives, or it would drift back and forth over the line
+forever.
 
 Who blocks whom is decided by **lateral overlap**, not by a shared lane index.
 That is what lets a motorcycle ride the gap between two lanes.
@@ -115,6 +131,29 @@ A vehicle may only leave a road when the next road has room. Without that check 
 junction would swallow traffic that has nowhere to go, and the queue would never
 back up. Spillback is a consequence of this rule, not a separate feature.
 
+`JunctionMovementGraph` is the common legality contract used by routing,
+junction arbitration and connector rendering. Its state includes the incoming
+road, so turn restrictions and vehicle-type-specific U-turn rules cannot be
+lost. A permitted U-turn follows a real reverse directed road at a junction or
+normalized turnaround point; it is never wrong-way driving, an arbitrary median
+crossing or a sprite rotation in place. Emergency vehicles may receive a more
+permissive inferred U-turn under scenario policy, but they still need a legal
+movement, physical gap and, at a signalled junction, a green phase.
+
+`DeadlockCoordinator` builds a wait-for graph from explicit wait resources,
+excludes timed waits such as a known red release, confirms persistent strongly
+connected cycles, gates new entries and grants one deterministic physical drain
+reservation. Strict recovery never overlaps, teleports or despawns a vehicle;
+a saturated cycle with no legal drain is reported as unresolvable.
+
+### Bus stops
+
+A `BusStop` belongs to one directed road at `positionAlongRoad`, not to a
+junction. A bus serves only mapped stops on its current route and derives dwell
+from passenger capacity. During dwell it remains physically in its lane, so
+followers must wait or pass through another safe lane. Replanning rebuilds the
+remaining mapped-stop list for the new route.
+
 ## 6. Building links, arrival, and removal
 
 For a resolved building trip the backend owns two off-road phases:
@@ -131,9 +170,10 @@ the next leg's origin, so it visibly leaves that building again instead of
 popping onto a road.
 
 On reaching its destination a vehicle becomes `ARRIVED`, releases its road, and
-stays visible for `ARRIVED_RETENTION_SECONDS` (5 s) before being removed — long
-enough to see it finish. Its `TripRecord` (distance, travel time, waiting time,
-reroute count) survives into the completed-trip statistics.
+remains in authoritative snapshots for `ARRIVED_RETENTION_SECONDS` (5 s) before
+being removed. Both renderers hide `ARRIVED` immediately because it no longer
+occupies the road network. Its `TripRecord` (distance, travel time, waiting time,
+reroute and legal-U-turn counts) survives into completed-trip statistics.
 
 ---
 
@@ -275,14 +315,16 @@ For `district1_typical_day.json`, the deterministic snapshot is:
 | Structural generation failures | 0 |
 | Generated motorcycles | 34,219 |
 | Generated cars | 4,161 |
-| Plans spawned during the 06:00–06:05 pre-roll | 300 |
+| Generated buses | 719 |
+| Generated emergency vehicles | 335 |
+| Plans spawned during the 06:00–06:05 pre-roll | 278 |
 | Scripted vehicles | 0 |
 
-Purpose counts are `BUSINESS_INTERNAL` 25, `BUSINESS_OUTBOUND_PROXY` 67,
-`INBOUND_WORK` 18,000, `PRIVATE_INTERNAL` 489,
-`PRIVATE_OUTBOUND_PROXY` 781, `SCHOOL_INTERNAL_ESCORT` 117,
-`SCHOOL_OUTBOUND_ESCORT_PROXY` 161, `THROUGH` 7,199, `VISITOR` 10,800,
-`WORK_INTERNAL` 246, and `WORK_OUTBOUND_PROXY` 633.
+Purpose counts are `BUSINESS_INTERNAL` 28, `BUSINESS_OUTBOUND_PROXY` 68,
+`INBOUND_WORK` 18,720, `PRIVATE_INTERNAL` 1,009,
+`PRIVATE_OUTBOUND_PROXY` 787, `SCHOOL_INTERNAL_ESCORT` 122,
+`SCHOOL_OUTBOUND_ESCORT_PROXY` 158, `THROUGH` 7,194, `VISITOR` 10,080,
+`WORK_INTERNAL` 224, and `WORK_OUTBOUND_PROXY` 1,044.
 
 The first generated plan departs less than one second after 06:00. Initialization
 runs the same one-second-bounded physics for five simulated minutes, discards

@@ -12,7 +12,7 @@ the lane-level physical view. Neither renderer advances the simulation.
 |---|---|
 | Domain | Roads/lane geometry, vehicles, resolved demand plans, signals, routes, positioned events, and statistics records |
 | Routing | Interchangeable BFS, Dijkstra, and A* strategies |
-| Simulation | Seconds-based clock, demand spawning, authoritative building access links, multi-leg/dwell lifecycle, sub-step dynamics, event overlays, immutable renderer-frame replay, diagnostics, and completed-trip history |
+| Simulation | Seconds-based clock, demand spawning, authoritative building access links, multi-leg/dwell lifecycle, sub-step dynamics, adaptive navigation, deadlock detection/recovery, event overlays, immutable renderer-frame replay, diagnostics, and completed-trip history |
 | Services | Use-case boundaries for networks, routing, vehicles, events, simulation, and statistics |
 | API | Javalin controllers, DTOs, static frontend hosting, and the live SSE stream |
 | Persistence | JSON/CSV map loading, complete scenario/demand loading, JSON export, validation, and synthetic grids |
@@ -30,16 +30,20 @@ class, and optional polyline. `RoadLayout` is the narrow read boundary used by
 dynamics. `Junction` is derived from the network; degree-two shape points are
 not treated as controlled intersections.
 
-`VehicleDynamicsEngine` splits each logical tick into sub-steps of at most one
-simulated second. Each sub-step captures immutable `TrafficState`, arbitrates
+`VehicleDynamicsEngine` requests one-second-or-shorter physical sub-steps, capped
+at 60 sub-steps per logical tick. All shipped UI paces stay at or below 30
+simulated seconds per tick and therefore preserve that one-second bound; the API
+accepts larger positive ticks, for which the 60-step safety cap takes priority.
+Each sub-step captures immutable `TrafficState`, arbitrates
 stop-line approaches (including `TrafficSignal` phases), plans all car-following
-and MOBIL lane changes, then commits them. `Motorcycle` selects a dedicated
-low-incentive MOBIL strategy; its compact physical and driver profiles let it
-use safe openings that reject a car without weakening target-follower braking
-safety. Once a lane change is accepted, `LateralMotionModel` advances a signed
-offset continuously towards the target lane centre instead of teleporting
-sideways. That order preserves the existing vehicle-list order-independence
-invariant.
+and lateral changes, then commits them. Cars, buses and emergency vehicles use
+MOBIL; `Motorcycle` selects the dedicated continuous-corridor
+`FilteringLaneChangeModel`. Its compact physical/driver profiles let it use safe
+openings that reject a car without weakening target-follower braking safety.
+Once a lateral change is accepted, `LateralMotionModel` advances a signed offset
+continuously towards the selected lane centre or between-lane target instead of
+teleporting sideways. That order preserves the existing vehicle-list
+order-independence invariant.
 
 At detail cadence `SimulationFrameHistory` captures each post-movement
 sub-step. For large overview ticks the simulator retains at most three
@@ -59,6 +63,21 @@ rerouting is instead coordinated by `AdaptiveNavigationCoordinator`, using
 driver information access and latency, observed congestion, route savings,
 cooldowns, and cause-specific stall state. This distinction matters: event
 publication and route choice are related inputs, not the same mechanism.
+
+`RoadNetwork` also owns the authoritative `JunctionMovementGraph`. Routing uses
+edge state `(incoming road, junction)` and consumes the same legal movements as
+junction arbitration and physical connector geometry. U-turns therefore require
+a real directed reverse road plus a vehicle-type/scenario policy; neither an
+ordinary nor emergency vehicle may invent wrong-way travel or bypass a red
+signal. `BusStop` similarly belongs to one directed road and a fractional
+position, not to every intermediate junction.
+
+`VehicleDynamicsEngine` owns `DeadlockCoordinator`. Explicit wait resources form
+a bipartite wait-for graph; persistent strongly connected cycles are confirmed
+only after timed red/dwell waits are excluded. Strict recovery gates new entries
+and grants one deterministic drain reservation through legal, physically free
+space. It never teleports, overlaps or despawns a vehicle, and reports a closed
+saturated cycle as unresolvable when no legal drain exists.
 
 `MapImportService` validates a complete replacement graph before changing live
 state. `ExperimentService` works on isolated networks and does not mutate the
@@ -124,7 +143,7 @@ Traffic-Event-System/
 |   |-- api/                      server, routes, controllers, DTOs
 |   |-- domain/
 |   |   |-- demand/               sources, place resolution, plans, model strategies
-|   |   |-- network/              roads, intersections, buildings, geo points
+|   |   |-- network/              roads, movements, intersections, bus stops, buildings, geo points
 |   |   |-- vehicle/              hierarchy, dynamics, pose
 |   |   |-- scene/                lane geometry derived for the physical view
 |   |   |-- signal/ event/ routing/ statistics/
@@ -133,7 +152,7 @@ Traffic-Event-System/
 |   |-- persistence/              JSON/CSV loaders, saver, synthetic maps
 |   |-- routing/                  BFS, Dijkstra, A*, registry, route snapshots
 |   |-- service/                  interfaces and implementations
-|   `-- simulation/               simulator, clock, adaptive navigation, frame history, traces
+|   `-- simulation/               simulator, clock, navigation, deadlock, frame history, traces
 |-- src/test/java/team/traffic/   domain, service, API, persistence, routing, simulation tests
 |-- tools/generate_osm_map.py     District 1 OpenStreetMap dataset generator
 |-- pom.xml
@@ -190,7 +209,7 @@ flowchart LR
     Spawner --> Simulator
     Simulator --> Graph["RoadNetwork"]
     Simulator --> Tick["TickProcessor"]
-    Tick --> Dynamics["Lane + Krauss + MOBIL"]
+    Tick --> Dynamics["Lane + Krauss + MOBIL/filtering"]
     Tick --> Signals["TrafficSignal phases"]
     Tick --> Events["TrafficEventCoordinator overlays"]
     Events --> Bus["TrafficEventBus extension"]
@@ -272,7 +291,7 @@ The implemented controls target the actual bottlenecks:
 | Encapsulation | Domain objects validate and manage their own mutable state |
 | Inheritance | `Vehicle` and `TrafficEvent` define shared abstract behavior |
 | Polymorphism | Routing strategies and event/vehicle subclasses are used through abstractions |
-| Abstraction | Controllers depend on service interfaces; routing uses `PathFindingStrategy` |
+| Abstraction | Core use-case controllers depend on service interfaces; scenario import, experiments and scene assembly also use focused concrete collaborators; routing uses `PathFindingStrategy` |
 | Strategy | BFS/Dijkstra/A*, trip-demand models, car-following, lane-changing, and right-of-way policies |
 | Observer | `TrafficEventBus`/`TrafficEventListener` as an event extension point; snapshot listeners feeding SSE |
 | Factory | `VehicleFactory` creates car, motorcycle, bus, and emergency variants |

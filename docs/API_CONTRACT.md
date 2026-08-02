@@ -123,11 +123,11 @@ authoritatively at 15 km/h through `DEPARTING_ORIGIN` and
 `ARRIVING_DESTINATION`; it does not occupy a road during either access link.
 
 `MOTORCYCLE` uses a 2.1 m × 0.75 m physical profile, compact following gaps,
-and `MOTORCYCLE_FILTERING_MOBIL`. It accepts useful adjacent-lane gaps that do
-not fit a car without bypassing target-follower braking checks. Once a maneuver
-is accepted, `lateralOffsetMetres` advances progressively toward the target lane
-centre; renderer frames therefore show the motorcycle between lane centres
-during the lateral movement.
+and `MOTORCYCLE_SUBLANE_FILTERING`. It accepts useful continuous corridors that
+do not fit a car without bypassing target-follower braking checks. Once a
+manoeuvre is accepted, `lateralOffsetMetres` advances progressively toward its
+target offset; renderer frames therefore show the motorcycle between lane
+centres during the lateral movement.
 
 ## Routing, simulation, and diagnostics
 
@@ -242,13 +242,23 @@ response shape is:
   "failedPlanIds": [],
   "hourlyPlanCounts": [/* 24 full-schedule counts, midnight through 23:00 */],
   "purposeCounts": {
-    "INBOUND_WORK": 18000,
-    "THROUGH": 7199,
-    "VISITOR": 10800
+    "BUSINESS_INTERNAL": 28,
+    "BUSINESS_OUTBOUND_PROXY": 68,
+    "INBOUND_WORK": 18720,
+    "PRIVATE_INTERNAL": 1009,
+    "PRIVATE_OUTBOUND_PROXY": 787,
+    "SCHOOL_INTERNAL_ESCORT": 122,
+    "SCHOOL_OUTBOUND_ESCORT_PROXY": 158,
+    "THROUGH": 7194,
+    "VISITOR": 10080,
+    "WORK_INTERNAL": 224,
+    "WORK_OUTBOUND_PROXY": 1044
   },
   "vehicleTypeCounts": {
     "MOTORCYCLE": 34219,
-    "CAR": 4012
+    "CAR": 4161,
+    "BUS": 719,
+    "EMERGENCY": 335
   },
   "estimateBasis": "DIRECTED_FREE_FLOW_SHORTEST_TIME_PLUS_BUILDING_DRIVEWAYS_AND_DWELL",
   "plans": [{
@@ -342,9 +352,9 @@ network geometry.
   "timeOfDay": "06:05",
   "demand": {
     "scheduledTrips": 39434,
-    "spawnedTrips": 300,
+    "spawnedTrips": 278,
     "failedTrips": 0,
-    "pendingTrips": 38218,
+    "pendingTrips": 39156,
     "failedPlanIds": []
   }
 }
@@ -479,8 +489,12 @@ GET /api/simulation/physical-view/state?lat=<origin-lat>&lon=<origin-lon>&radius
 
 The state response has the same `origin`, `radiusMetres`, `timelineId`,
 `frameId`, and `elapsedSeconds`, adds `playbackIntervalMs`, and carries only
-`signals` and `vehicles`. The interval controls interpolation time only; changing
-playback speed does not alter `simulationSecondsPerTick` or the physical model.
+`signals` and `vehicles`. The renderer uses `playbackIntervalMs` as its
+interpolation horizon. Updating that interval alone does not change the
+simulation step, but dashboard pace presets and Physical View entry deliberately
+send both `playbackIntervalMs` and `simulationSecondsPerTick`. That changes the
+numerical integration step/cadence while leaving the dynamics algorithms and
+their units unchanged.
 Static lanes, junctions, land cover and buildings therefore cross the wire and
 enter Pixi once per timeline instead of being rebuilt with every state poll. A
 changed `timelineId` causes the client to reload the complete geometry.

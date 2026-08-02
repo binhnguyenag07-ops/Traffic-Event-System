@@ -182,8 +182,11 @@ The HOUTRANS 2002 trip-rate table is reproduced in Appendix 1 of
 The former-District-1 split table and hourly figures are in
 [JICA, HOUTRANS Volume 2, Main Text](https://openjicareport.jica.go.jp/pdf/11764636_02.pdf).
 The cordon base of 18,000 vehicles/day per side, scenario scale `1.0`, cordon
-20/50/30 allocation, dwell ranges, and
-`COMMUTE_AM`/`SCHOOL_AM`/`VISITOR_DAYTIME` curves remain synthetic assumptions.
+18/50/28/2/2 allocation (through/work/visitor/medical/bus), the 900-plan/day
+hospital-operations source, dwell ranges, and the purpose-specific curves remain
+synthetic assumptions. The medical, transit and hospital flows deliberately add
+emergency vehicles and buses; they are not inferred from the historical
+motorcycle/car stock ratio.
 
 The chosen runtime size is an explicit microscopic sample. HOUTRANS reported
 2.323 million daily non-walking trip ends for the former District 1 in 2002;
@@ -447,7 +450,7 @@ The file/HTTP demand shape is `demandSources`, not a nested
         {
           "id": "visitor",
           "purpose": "VISITOR",
-          "share": 0.30,
+          "share": 0.28,
           "vehicleMix": [
             {"type": "MOTORCYCLE", "share": 0.8955},
             {"type": "CAR", "share": 0.1045}

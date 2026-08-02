@@ -1,5 +1,5 @@
 {
-  "generatedAt" : "2026-07-30T16:18:32.410351200Z",
+  "generatedAt" : "2026-08-02T11:05:21.173310400Z",
   "seed" : 42,
   "requestsPerScenario" : 30,
   "scenarios" : [ {
@@ -14,7 +14,7 @@
       "successes" : 26,
       "failures" : 4,
       "successRate" : 86.66666666666667,
-      "averageComputationTimeMillis" : 1.933026923076923,
+      "averageComputationTimeMillis" : 2.2619153846153845,
       "averageVisitedNodes" : 270.7307692307692,
       "averageRouteCost" : 13.23076923076923,
       "averagePathOptimality" : 100.0
@@ -25,7 +25,7 @@
       "successes" : 26,
       "failures" : 4,
       "successRate" : 86.66666666666667,
-      "averageComputationTimeMillis" : 0.8702846153846154,
+      "averageComputationTimeMillis" : 1.0048384615384616,
       "averageVisitedNodes" : 238.80769230769232,
       "averageRouteCost" : 0.02395334615384615,
       "averagePathOptimality" : 100.0
@@ -36,7 +36,7 @@
       "successes" : 26,
       "failures" : 4,
       "successRate" : 86.66666666666667,
-      "averageComputationTimeMillis" : 0.4830846153846154,
+      "averageComputationTimeMillis" : 0.4843769230769231,
       "averageVisitedNodes" : 80.46153846153847,
       "averageRouteCost" : 0.02395334615384615,
       "averagePathOptimality" : 100.0
@@ -53,7 +53,7 @@
       "successes" : 23,
       "failures" : 7,
       "successRate" : 76.66666666666667,
-      "averageComputationTimeMillis" : 0.5794608695652174,
+      "averageComputationTimeMillis" : 0.6370434782608695,
       "averageVisitedNodes" : 288.8695652173913,
       "averageRouteCost" : 13.26086956521739,
       "averagePathOptimality" : 100.0
@@ -64,7 +64,7 @@
       "successes" : 23,
       "failures" : 7,
       "successRate" : 76.66666666666667,
-      "averageComputationTimeMillis" : 0.6700913043478262,
+      "averageComputationTimeMillis" : 0.852908695652174,
       "averageVisitedNodes" : 293.7391304347826,
       "averageRouteCost" : 0.025150398550724637,
       "averagePathOptimality" : 100.0
@@ -75,7 +75,7 @@
       "successes" : 23,
       "failures" : 7,
       "successRate" : 76.66666666666667,
-      "averageComputationTimeMillis" : 0.3509086956521739,
+      "averageComputationTimeMillis" : 0.30115652173913043,
       "averageVisitedNodes" : 103.69565217391305,
       "averageRouteCost" : 0.025150398550724637,
       "averagePathOptimality" : 100.0
@@ -92,7 +92,7 @@
       "successes" : 21,
       "failures" : 9,
       "successRate" : 70.0,
-      "averageComputationTimeMillis" : 0.6337285714285714,
+      "averageComputationTimeMillis" : 0.5288238095238095,
       "averageVisitedNodes" : 281.85714285714283,
       "averageRouteCost" : 16.714285714285715,
       "averagePathOptimality" : 100.0
@@ -103,7 +103,7 @@
       "successes" : 21,
       "failures" : 9,
       "successRate" : 70.0,
-      "averageComputationTimeMillis" : 0.37247619047619046,
+      "averageComputationTimeMillis" : 0.40472857142857144,
       "averageVisitedNodes" : 280.0,
       "averageRouteCost" : 0.03303654497354497,
       "averagePathOptimality" : 100.0
@@ -114,7 +114,7 @@
       "successes" : 21,
       "failures" : 9,
       "successRate" : 70.0,
-      "averageComputationTimeMillis" : 0.27904761904761904,
+      "averageComputationTimeMillis" : 0.3007142857142857,
       "averageVisitedNodes" : 172.42857142857142,
       "averageRouteCost" : 0.03303654497354497,
       "averagePathOptimality" : 100.0
@@ -131,7 +131,7 @@
       "successes" : 30,
       "failures" : 0,
       "successRate" : 100.0,
-      "averageComputationTimeMillis" : 0.8123033333333333,
+      "averageComputationTimeMillis" : 0.91146,
       "averageVisitedNodes" : 566.2,
       "averageRouteCost" : 11.066666666666666,
       "averagePathOptimality" : 100.0
@@ -142,7 +142,7 @@
       "successes" : 30,
       "failures" : 0,
       "successRate" : 100.0,
-      "averageComputationTimeMillis" : 0.6334833333333333,
+      "averageComputationTimeMillis" : 0.6642866666666667,
       "averageVisitedNodes" : 566.2,
       "averageRouteCost" : 0.22133333333333333,
       "averagePathOptimality" : 100.0
@@ -153,7 +153,7 @@
       "successes" : 30,
       "failures" : 0,
       "successRate" : 100.0,
-      "averageComputationTimeMillis" : 0.12655,
+      "averageComputationTimeMillis" : 0.15771333333333332,
       "averageVisitedNodes" : 98.53333333333333,
       "averageRouteCost" : 0.22133333333333333,
       "averagePathOptimality" : 100.0

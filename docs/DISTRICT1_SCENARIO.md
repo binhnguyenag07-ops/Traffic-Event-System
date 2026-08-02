@@ -212,10 +212,10 @@ average density.
 The defensible historical order-of-magnitude envelope used here is therefore
 0.4–0.7 million vehicle legs/day, with 0.6 million as a presentation midpoint.
 The bundled run creates 71,267 explicit legs, or about one simulated agent leg
-per 8.6 midpoint legs. This keeps roughly 300 due vehicles in the first
+per 8.4 midpoint legs. It spawns 278 due plans in the first
 five-minute pre-roll and thousands of resolvable agents through the day without
 claiming a one-to-one reconstruction. Runtime metrics are **not** multiplied by
-8.6; they report only simulated agents.
+8.4; they report only simulated agents.
 
 TCVN 13592:2022 permits a peak-hour volume of 10–15% of daily traffic only as a
 fallback when no study is available. This is useful as a broad
@@ -249,7 +249,8 @@ modeling, not calibration.
 The following remain **SYNTHETIC ASSUMPTIONS**:
 
 - 18,000 `vehiclesPerDay` at each of two modeled cordons;
-- cordon 20/50/30 flow shares;
+- cordon 18/50/28/2/2 through/work/visitor/medical/bus flow shares;
+- the 3% resident health allocation and 900-plan/day hospital-operations source;
 - `scale = 1.0`;
 - the 300-second pre-roll length;
 - `automaticCollisionEvents = false` because no crash-frequency model is
@@ -372,10 +373,11 @@ All resident flows use the citywide registered-stock motorcycle/car ratio
 | `resident-work-outbound` | 0.257002 | `COMMUTE_AM` | perimeter gateway, 10–11 h, return | HOUTRANS purpose × outbound split; gateway/curve/dwell synthetic |
 | `resident-school-internal` | 0.047460 | `SCHOOL_AM` | school, 5–15 min, return | HOUTRANS purpose × internal split; curve/dwell synthetic |
 | `resident-school-outbound` | 0.065540 | `SCHOOL_AM` | perimeter gateway, 5–15 min, return | HOUTRANS purpose × outbound split; gateway/curve/dwell synthetic |
-| `resident-private-internal` | 0.201320 | HOUTRANS digitized proxy | commercial/hospital/other, 0.5–3 h, return | HOUTRANS purpose × internal split and historical curve |
+| `resident-private-internal` | 0.171320 | HOUTRANS digitized proxy | commercial/other, 0.5–3 h, return | HOUTRANS purpose × internal split, less the explicit health allocation |
 | `resident-private-outbound` | 0.301980 | HOUTRANS digitized proxy | perimeter gateway, 0.5–3 h, return | HOUTRANS purpose × outbound split; gateway/dwell synthetic |
 | `resident-business-internal` | 0.010556 | HOUTRANS digitized proxy | office/commercial, 0.5–2 h, return | HOUTRANS purpose × internal split and historical curve |
 | `resident-business-outbound` | 0.025844 | HOUTRANS digitized proxy | perimeter gateway, 0.5–2 h, return | HOUTRANS purpose × outbound split; gateway/dwell synthetic |
+| `resident-health-internal` | 0.030000 | `DAYTIME` | hospital, 0.5–2 h, return | synthetic split from the historical private-internal share |
 
 The shares total 1.0. Seeded stochastic rounding still applies to each
 origin/flow/hour cell; the deterministic output table below, rather than a
@@ -386,18 +388,35 @@ hand-summed expectation, is the acceptance count.
 Each cordon declares the same synthetic production of 18,000 vehicles/day at
 `scale = 1.0`.
 
-| Flow per cordon | Share | Motorcycle / car | Curve | Chain |
-|---|---:|---:|---|---|
-| through | 0.20 | 0.8955 / 0.1045 | HOUTRANS digitized proxy | entry → opposite exit |
-| inbound work | 0.50 | 0.8955 / 0.1045 | `COMMUTE_AM` | entry → office/commercial, dwell 8–10 h → any exit |
-| visitor | 0.30 | 0.8955 / 0.1045 | `VISITOR_DAYTIME` | entry → tourism core, dwell 1–3 h → any exit |
+| Flow per cordon | Share | Vehicle mix | Curve | Chain |
+|---|---:|---|---|---|
+| through | 0.18 | motorcycle/car `0.8955 / 0.1045` | HOUTRANS digitized proxy | entry → opposite exit |
+| inbound work | 0.50 | motorcycle/car `0.8955 / 0.1045` | `COMMUTE_AM` | entry → office/commercial, dwell 8–10 h → any exit |
+| visitor | 0.28 | motorcycle/car `0.8955 / 0.1045` | `VISITOR_DAYTIME` | entry → tourism core, dwell 1–3 h → any exit |
+| inbound medical | 0.02 | motorcycle/car/emergency `0.60 / 0.25 / 0.15` | `FLAT` | entry → hospital, dwell 10–60 min → same-side exit |
+| transit bus | 0.02 | bus `1.0` | `DAYTIME` | entry → opposite exit |
 
-The common vehicle ratio is a **RESEARCH-INFORMED PROXY**. Cordon production,
-20/50/30 shares, `COMMUTE_AM`/`VISITOR_DAYTIME`, dwell, and exact gateway/POI
+The common motorcycle/car ratio is a **RESEARCH-INFORMED PROXY**. Cordon production,
+18/50/28/2/2 shares, `COMMUTE_AM`/`VISITOR_DAYTIME`, dwell, and exact gateway/POI
 allocation are **SYNTHETIC ASSUMPTIONS**. The HOUTRANS digitized curve supplies
-only the through-flow time shape; its 0.20 volume share is not observed. The
+only the through-flow time shape; its 0.18 volume share is not observed. The
 combined 36,000 modeled cordon plan starts are a computational sample, not the
 2017/2019 Thủ Thiêm count copied into two invented gates.
+
+### Hospital operations source
+
+The fourth demand source starts at mapped `HOSPITAL` buildings and declares 900
+plans/day. Its flows are all **SYNTHETIC ASSUMPTIONS**:
+
+| Flow | Share | Vehicle mix | Curve | Chain |
+|---|---:|---|---|---|
+| ambulance callout | 0.25 | emergency `1.0` | `FLAT` | hospital → residential/other, dwell 5–15 min → origin hospital |
+| staff outbound | 0.45 | motorcycle/car `0.8955 / 0.1045` | `DOUBLE_PEAK` | hospital → any perimeter exit |
+| internal transfer | 0.30 | motorcycle/car/emergency `0.80 / 0.15 / 0.05` | `DAYTIME` | hospital → hospital, dwell 15–60 min → origin hospital |
+
+These flows make buses and emergency vehicles visible in the ordinary demand
+run without pretending that a transit timetable, ambulance-call dataset or
+hospital staffing survey was calibrated.
 
 ## Reachability and failure semantics
 
@@ -445,8 +464,10 @@ For the committed map, parameter catalog, scenario, algorithm and seed:
 | Structural generation failures | 0 |
 | Generated motorcycles | 34,219 |
 | Generated cars | 4,161 |
+| Generated buses | 719 |
+| Generated emergency vehicles | 335 |
 | First generated departure | less than 1 s after 06:00 |
-| Plans spawned by the first interactive frame | 300 |
+| Plans spawned by the first interactive frame | 278 |
 | First interactive clock | 06:05 |
 | Scripted vehicles | 0 |
 
@@ -454,17 +475,17 @@ Purpose counts:
 
 | Purpose | Plans |
 |---|---:|
-| `BUSINESS_INTERNAL` | 25 |
-| `BUSINESS_OUTBOUND_PROXY` | 67 |
-| `INBOUND_WORK` | 18,000 |
-| `PRIVATE_INTERNAL` | 489 |
-| `PRIVATE_OUTBOUND_PROXY` | 781 |
-| `SCHOOL_INTERNAL_ESCORT` | 117 |
-| `SCHOOL_OUTBOUND_ESCORT_PROXY` | 161 |
-| `THROUGH` | 7,199 |
-| `VISITOR` | 10,800 |
-| `WORK_INTERNAL` | 246 |
-| `WORK_OUTBOUND_PROXY` | 633 |
+| `BUSINESS_INTERNAL` | 28 |
+| `BUSINESS_OUTBOUND_PROXY` | 68 |
+| `INBOUND_WORK` | 18,720 |
+| `PRIVATE_INTERNAL` | 1,009 |
+| `PRIVATE_OUTBOUND_PROXY` | 787 |
+| `SCHOOL_INTERNAL_ESCORT` | 122 |
+| `SCHOOL_OUTBOUND_ESCORT_PROXY` | 158 |
+| `THROUGH` | 7,194 |
+| `VISITOR` | 10,080 |
+| `WORK_INTERNAL` | 224 |
+| `WORK_OUTBOUND_PROXY` | 1,044 |
 
 The generated vehicle-instance result is 86.8% motorcycles
 (`34,219 / 39,434`), with 4,161 cars, 719 buses and 335 emergency vehicles. It
@@ -472,7 +493,7 @@ falls below the 89.6% stock proxy because buses and ambulances come from
 dedicated transit and hospital flows instead of that ratio. It is
 a seeded output of the citywide registered-stock proxy, not an observed traffic
 mode share. There is no scripted traffic: the populated 06:05 state is produced
-by the first 300 scheduled plans running through normal physics, and every
+by the first 278 due plans running through normal physics, and every
 vehicle maps to one listed demand plan.
 
 Regression tests intentionally pin these values. A map, parameter, curve,

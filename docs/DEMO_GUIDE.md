@@ -15,10 +15,11 @@ The normal launch loads and initializes **Central District 1 - 24-hour Weekday
 Proxy**. Its demand horizon starts at 06:00 with seed `20260728` and 39,434
 deterministic demand plans / 71,267 vehicle legs. Initialization executes five
 minutes of ordinary microscopic dynamics, so the first interactive frame is
-06:05 with 300 due plans already spawned. It has no separately scripted
+06:05 with 278 due plans already spawned. It has no separately scripted
 warm-start traffic. The scenario covers research-informed historical resident
-internal/outbound proxies plus synthetic through, inbound-work, and visitor
-cordon flows across the central study window.
+internal/outbound proxies plus synthetic through, inbound-work, visitor,
+medical, transit-bus, and hospital-operation flows across the central study
+window.
 
 The typical-day run begins with zero incidents and disables spontaneous
 collision-event generation because it has no calibrated crash-frequency model.
@@ -59,7 +60,8 @@ Select **Balanced · 10 sim s/s** for a slower aggregate walkthrough. Opening
 Physical View switches to **Live camera · 1 sim s/s**: four 0.25-second
 authoritative ticks per wall second. It does not replay the day, seek the clock,
 or run close-up turns with 30-second overview ticks. Closing the camera restores
-the previous macro pace.
+the previous macro pace only while that tab still owns the live-camera pace; a
+newer pace selected by another current client is preserved.
 
 ## Recommended walkthrough
 
@@ -104,7 +106,7 @@ the previous macro pace.
 
 7. Inspect `GET /api/simulation/status` and the Performance panel. Relate
    `scheduledTrips`, `spawnedTrips`, `pendingTrips`, and `failedPlanIds` to the
-   seeded demand. The 06:05 starting fleet came from the first 300 due plans,
+   seeded demand. The 06:05 starting fleet came from the first 278 due plans,
    not an untraceable warm-start list. Every vehicle can be matched to one plan
    through the paged `GET /api/simulation/demand/schedule`.
 
@@ -132,25 +134,35 @@ the previous macro pace.
 11. At a degree-three-or-more junction, use
     `GET /api/simulation/signals` to show cyclic phases. A red approach remains
     on its incoming road at the stop line; an emergency vehicle added through
-    the manual fleet form can receive preemption. Signals in the physical view
-    come from the same authoritative frame the vehicles obey.
+    the manual fleet form must also wait for green. Emergency priority orders
+    otherwise legal competing movements; it does not preempt or bypass a red
+    phase. Signals in the physical view come from the same authoritative frame
+    the vehicles obey.
 
-12. Add a BUS through the manual fleet form, then inspect it at an intermediate
-    route junction. Its capacity-derived dwell occurs at the stop line while it
-    remains a lane occupant, so another lane can continue to move.
+12. To demonstrate bus dwell deterministically, choose an existing generated
+    BUS or manual route that crosses a `busStops` road in
+    `data/maps/district1_network.json`; an arbitrary bus route may contain no
+    mapped stop. The bus brakes at that stop's `positionAlongRoad` and holds for
+    its capacity-derived dwell while remaining a lane occupant. A bus stop is
+    not an intermediate junction or a traffic-signal stop line.
 
 13. Query replay and diagnostics after several steps:
 
     ```text
     GET /api/simulation/trace
     GET /api/simulation/trace/frames
-    GET /api/simulation/trace/frames/at?elapsedSeconds=5
-    GET /api/simulation/trace/ticks/{tick}
-    GET /api/simulation/trace/vehicles/{vehicleId}?fromTick=0&toTick=20
+    GET /api/simulation/trace/frames/at?elapsedSeconds={a retained recordedSeconds value}
+    GET /api/simulation/trace/ticks/{a retained tick}
+    GET /api/simulation/trace/vehicles/{vehicleId}?fromTick={firstTick}&toTick={lastTick}
     GET /api/simulation/trace/flow
     GET /api/simulation/trace/fundamental
     GET /api/simulation/trace/roads/{roadId}/time-space
     ```
+
+    Initialization discards the 06:00–06:05 pre-roll history, so the first
+    retained default-scenario frame has `elapsedSeconds=300`, `tick=300`, and
+    `frameId=0`. Read the actual range and ids from the first two endpoints
+    instead of querying elapsed second 5 or ticks 0–20.
 
 14. In the physical view, pan and zoom across the already loaded full-network
     geometry. Static lanes, junctions, buildings, and land cover load once per
@@ -164,10 +176,11 @@ the previous macro pace.
     Add `?physical=<lat>,<lon>` to the URL to open directly at a known junction.
 
 15. Let a vehicle arrive. It follows the authoritative destination access link
-    into the building, remains in frame state briefly, then disappears
-    while completed-trip statistics remain available. Finish by comparing
-    routing algorithms and opening **Experiments** for deterministic scenarios
-    and the large-grid A* search reduction.
+    into the building. The backend retains its `ARRIVED` state briefly for
+    lifecycle/history consistency, but both maps hide it as soon as it is off
+    the road network; completed-trip statistics remain available. Finish by
+    comparing routing algorithms and opening **Experiments** for deterministic
+    scenarios and the large-grid A* search reduction.
 
 ## Troubleshooting during the presentation
 

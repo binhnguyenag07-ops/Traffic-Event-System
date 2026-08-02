@@ -6,10 +6,11 @@
 // they are dropped in. That means artwork can be sourced gradually without ever
 // leaving the app in a broken state.
 //
-// Files live under `frontend/public/assets/...`, so they are served as-is and
-// need no build step. See `docs/ASSETS.md` for what to download and the sizes
-// each slot expects. Vehicles use transparent PNGs; opaque tiled textures use
-// JPEGs to avoid paying PNG's much larger transfer cost.
+// Files live under `frontend/public/assets/...`. Vite serves them directly in
+// development; a packaged `frontend/dist`/JAR must be rebuilt after an asset is
+// added. See `docs/ASSETS.md` for what to download and the sizes each slot
+// expects. Vehicles use transparent PNGs; opaque tiled textures use JPEGs to
+// avoid paying PNG's much larger transfer cost.
 
 const BASE = 'assets'
 

@@ -5,8 +5,9 @@ to get it.
 
 **Nothing here is required.** The renderer draws its own shape for any slot that
 is empty, so the view works with no assets at all and improves one file at a
-time. Add a file, reload, and it appears — there is no build step and no code
-change.
+time. No code change is needed. A Vite development server sees a new public
+asset on reload; the packaged demo must rebuild the frontend/JAR so the new file
+is copied into the embedded distribution.
 
 ## Where files go
 
@@ -43,9 +44,10 @@ The paths are declared in `frontend/src/physical/assetManifest.js`. To add a
 slot, add it there; the loader picks it up automatically.
 
 Vehicle sprites use PNG because they need transparency. Opaque textures use
-JPEG to keep the shipped artwork small. The runtime artwork is 512 px and
-colour-normalised; full-resolution source material does not belong in
-`public/`.
+JPEG to keep the shipped artwork small. Generated roof/surface textures are
+512 px and colour-normalised; several retained land textures are 1024 px, and
+cropped vehicle sprites keep their useful native dimensions. Full-resolution
+source archives do not belong in `public/`.
 
 ## Vehicles — 4 files
 
